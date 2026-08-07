@@ -1,10 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { localDateKey } from "@/lib/dates";
 
 type ChallengeRow = {
   id: string;
   title: string;
   prompt: string;
-  options: unknown;
+  options: string[];
   challenge_type: string;
   difficulty: number;
   confidence_required: boolean;
@@ -25,6 +27,34 @@ type ResponseRow = {
   created_at: string;
 };
 
+type MappingRow = {
+  challenge_id: string;
+  skill_id: string;
+};
+
+type SelectionReason =
+  | "weakest_measured"
+  | "second_weakest_measured"
+  | "ai_verification"
+  | "spaced_reinforcement"
+  | "unassessed_exploration"
+  | "adaptive_variety"
+  | "fallback";
+
+type PlannedChallenge = {
+  challenge: ChallengeRow;
+  selectionReason: SelectionReason;
+  targetSkillId: string | null;
+};
+
+export type DailyTrainingSession = {
+  id: string | null;
+  sessionDate: string;
+  status: "in_progress" | "completed";
+  challenges: ChallengeRow[];
+  answeredChallengeIds: string[];
+};
+
 const CHALLENGE_FIELDS =
   "id,title,prompt,options,challenge_type,difficulty,confidence_required";
 
@@ -32,21 +62,11 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-/**
- * Shrink noisy early scores back toward the neutral 50 baseline.
- * With only one or two observations, we should not pretend a raw score is a
- * reliable estimate of capability. As reliability rises, the effective score
- * converges toward the observed score.
- */
 function effectiveScore(row: ScoreRow) {
   const reliability = clamp(Number(row.reliability ?? 0), 0, 1);
   return 50 + (Number(row.score) - 50) * reliability;
 }
 
-/**
- * Small deterministic hash so a user's daily set is stable across refreshes,
- * while still changing from day to day.
- */
 function hash(text: string) {
   let h = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
@@ -90,6 +110,7 @@ async function fetchChallenges(
   ids: string[],
 ): Promise<ChallengeRow[]> {
   if (!ids.length) return [];
+
   const { data, error } = await supabase
     .from("challenges")
     .select(CHALLENGE_FIELDS)
@@ -107,6 +128,7 @@ async function fetchMappedPool(
   excludedIds: Set<string>,
 ) {
   const mappingsBySkill = new Map<string, Set<string>>();
+
   if (!skillIds.length) {
     return { pool: [] as ChallengeRow[], mappingsBySkill };
   }
@@ -119,40 +141,39 @@ async function fetchMappedPool(
 
   if (mappingError) throw mappingError;
 
-  for (const mapping of mappings ?? []) {
+  const typedMappings = (mappings ?? []) as MappingRow[];
+
+  for (const mapping of typedMappings) {
     const existing = mappingsBySkill.get(mapping.skill_id) ?? new Set<string>();
     existing.add(mapping.challenge_id);
     mappingsBySkill.set(mapping.skill_id, existing);
   }
 
   const mappedIds = [
-    ...new Set((mappings ?? []).map((mapping) => mapping.challenge_id)),
+    ...new Set(typedMappings.map((mapping) => mapping.challenge_id)),
   ].filter((id) => !excludedIds.has(id));
 
   const pool = await fetchChallenges(supabase, mappedIds);
   return { pool, mappingsBySkill };
 }
 
-/**
- * Five-question MVP daily-session composition:
- *
- *  1. Reinforce the lowest current *measured* capability.
- *  2. Reinforce the second-lowest current *measured* capability.
- *  3. Include an AI-output audit where possible.
- *  4. Revisit an older incorrect / low-confidence response (spaced practice).
- *  5. Explore an as-yet unassessed skill; once coverage is complete, use a
- *     varied adaptive challenge instead.
- *
- * Important measurement rule: attempts=0 is "unassessed", not "weak".
- * Early raw scores are also reliability-shrunk toward 50 so one answer cannot
- * be treated as a strong capability diagnosis.
- */
-export async function getDailyChallenges(
+function targetWeakSkillForChallenge(
+  challengeId: string,
+  measured: ScoreRow[],
+  mappingsBySkill: Map<string, Set<string>>,
+) {
+  return (
+    measured.find((row) => mappingsBySkill.get(row.skill_id)?.has(challengeId))
+      ?.skill_id ?? null
+  );
+}
+
+async function buildDailyPlan(
   supabase: SupabaseClient,
   userId: string,
-  count = 5,
-) {
-  const day = new Date().toISOString().slice(0, 10);
+  count: number,
+  day: string,
+): Promise<PlannedChallenge[]> {
   const seed = `${userId}:${day}`;
 
   const [
@@ -195,7 +216,7 @@ export async function getDailyChallenges(
   const history = (responseData ?? []) as ResponseRow[];
   const recentIds = new Set(history.slice(0, 12).map((row) => row.challenge_id));
   const used = new Set<string>();
-  const selected: ChallengeRow[] = [];
+  const plan: PlannedChallenge[] = [];
 
   const measuredIds = measured.slice(0, 4).map((row) => row.skill_id);
   const { pool: weakPool, mappingsBySkill } = await fetchMappedPool(
@@ -210,27 +231,40 @@ export async function getDailyChallenges(
         .reduce((sum, row) => sum + effectiveScore(row), 0) /
       Math.min(4, measured.length)
     : 50;
-  const targetDifficulty = clamp(Math.round(averageEffectiveScore + 5), 25, 80);
 
-  // Slots 1-2: weakest measured skills only. Unassessed skills never enter here.
+  const targetDifficulty = clamp(
+    Math.round(averageEffectiveScore + 5),
+    25,
+    80,
+  );
+
   for (let index = 0; index < Math.min(2, measured.length, count); index += 1) {
     const skill = measured[index];
     const ids = mappingsBySkill.get(skill.skill_id) ?? new Set<string>();
     const pool = weakPool.filter((challenge) => ids.has(challenge.id));
+
     const picked = takeOne(
       pool,
       used,
       clamp(Math.round(effectiveScore(skill) + 5), 25, 80),
       `${seed}:weak:${index}`,
     );
-    if (picked) selected.push(picked);
+
+    if (picked) {
+      plan.push({
+        challenge: picked,
+        selectionReason:
+          index === 0 ? "weakest_measured" : "second_weakest_measured",
+        targetSkillId: skill.skill_id,
+      });
+    }
   }
 
-  // Slot 3: AI-output verification practice, preferably also tied to a weak skill.
-  if (selected.length < count) {
+  if (plan.length < count) {
     const weakAiPool = weakPool.filter(
       (challenge) => challenge.challenge_type === "ai_answer_audit",
     );
+
     let picked = takeOne(
       weakAiPool,
       used,
@@ -246,113 +280,344 @@ export async function getDailyChallenges(
         .eq("is_diagnostic", false)
         .eq("challenge_type", "ai_answer_audit")
         .limit(50);
+
       if (aiError) throw aiError;
+
       picked = takeOne(
-        ((aiData ?? []) as ChallengeRow[]).filter((row) => !recentIds.has(row.id)),
+        ((aiData ?? []) as ChallengeRow[]).filter(
+          (row) => !recentIds.has(row.id),
+        ),
         used,
         targetDifficulty,
         `${seed}:ai-any`,
       );
     }
-    if (picked) selected.push(picked);
+
+    if (picked) {
+      plan.push({
+        challenge: picked,
+        selectionReason: "ai_verification",
+        targetSkillId: targetWeakSkillForChallenge(
+          picked.id,
+          measured,
+          mappingsBySkill,
+        ),
+      });
+    }
   }
 
-  // Slot 4: spaced reinforcement of an older mistake / low-confidence response.
-  if (selected.length < count) {
+  if (plan.length < count) {
     const spacedIds: string[] = [];
     const seen = new Set<string>();
+
     for (const row of history.slice(12)) {
       if (seen.has(row.challenge_id)) continue;
       seen.add(row.challenge_id);
-      if (!row.is_correct || (row.confidence !== null && row.confidence <= 50)) {
+
+      if (
+        !row.is_correct ||
+        (row.confidence !== null && Number(row.confidence) <= 50)
+      ) {
         spacedIds.push(row.challenge_id);
       }
     }
 
-    const spacedPool = await fetchChallenges(supabase, spacedIds.slice(0, 40));
+    const spacedPool = await fetchChallenges(
+      supabase,
+      spacedIds.slice(0, 40),
+    );
+
     const picked = takeOne(
       spacedPool,
       used,
       targetDifficulty,
       `${seed}:spaced`,
     );
-    if (picked) selected.push(picked);
+
+    if (picked) {
+      plan.push({
+        challenge: picked,
+        selectionReason: "spaced_reinforcement",
+        targetSkillId: targetWeakSkillForChallenge(
+          picked.id,
+          measured,
+          mappingsBySkill,
+        ),
+      });
+    }
   }
 
-  // Exploration slot: deliberately gain coverage of an unassessed capability.
-  if (selected.length < count && unassessed.length) {
+  if (plan.length < count && unassessed.length) {
     const explorationOrder = [...unassessed].sort(
-      (a, b) => hash(`${seed}:explore:${a.skill_id}`) - hash(`${seed}:explore:${b.skill_id}`),
+      (a, b) =>
+        hash(`${seed}:explore:${a.skill_id}`) -
+        hash(`${seed}:explore:${b.skill_id}`),
     );
-    const explorationSkillIds = explorationOrder.map((row) => row.skill_id);
-    const { pool: explorationPool, mappingsBySkill: explorationMappings } =
-      await fetchMappedPool(supabase, explorationSkillIds, recentIds);
+
+    const explorationSkillIds = explorationOrder.map(
+      (row) => row.skill_id,
+    );
+
+    const {
+      pool: explorationPool,
+      mappingsBySkill: explorationMappings,
+    } = await fetchMappedPool(
+      supabase,
+      explorationSkillIds,
+      recentIds,
+    );
 
     for (const skill of explorationOrder) {
-      const ids = explorationMappings.get(skill.skill_id) ?? new Set<string>();
-      const pool = explorationPool.filter((challenge) => ids.has(challenge.id));
+      const ids =
+        explorationMappings.get(skill.skill_id) ?? new Set<string>();
+      const pool = explorationPool.filter((challenge) =>
+        ids.has(challenge.id),
+      );
+
       const picked = takeOne(
         pool,
         used,
         50,
         `${seed}:explore:${skill.skill_id}`,
       );
+
       if (picked) {
-        selected.push(picked);
+        plan.push({
+          challenge: picked,
+          selectionReason: "unassessed_exploration",
+          targetSkillId: skill.skill_id,
+        });
         break;
       }
     }
   }
 
-  // Fill remaining slots from measured weak-skill practice, favouring type variety.
-  while (selected.length < count) {
-    const usedTypes = new Set(selected.map((challenge) => challenge.challenge_type));
-    const variedWeak = weakPool.filter(
-      (challenge) => !used.has(challenge.id) && !usedTypes.has(challenge.challenge_type),
+  while (plan.length < count) {
+    const usedTypes = new Set(
+      plan.map((item) => item.challenge.challenge_type),
     );
+
+    const variedWeak = weakPool.filter(
+      (challenge) =>
+        !used.has(challenge.id) &&
+        !usedTypes.has(challenge.challenge_type),
+    );
+
     const picked =
       takeOne(
         variedWeak,
         used,
         targetDifficulty,
-        `${seed}:variety:${selected.length}`,
+        `${seed}:variety:${plan.length}`,
       ) ??
       takeOne(
         weakPool,
         used,
         targetDifficulty,
-        `${seed}:weak-fill:${selected.length}`,
+        `${seed}:weak-fill:${plan.length}`,
       );
 
     if (!picked) break;
-    selected.push(picked);
+
+    plan.push({
+      challenge: picked,
+      selectionReason: "adaptive_variety",
+      targetSkillId: targetWeakSkillForChallenge(
+        picked.id,
+        measured,
+        mappingsBySkill,
+      ),
+    });
   }
 
-  // Final safety fallback: any published, non-diagnostic, non-recent content.
-  if (selected.length < count) {
+  if (plan.length < count) {
     const { data: fallbackData, error: fallbackError } = await supabase
       .from("challenges")
       .select(CHALLENGE_FIELDS)
       .eq("is_published", true)
       .eq("is_diagnostic", false)
       .limit(100);
+
     if (fallbackError) throw fallbackError;
 
     const fallbackPool = ((fallbackData ?? []) as ChallengeRow[]).filter(
       (row) => !recentIds.has(row.id),
     );
 
-    while (selected.length < count) {
+    while (plan.length < count) {
       const picked = takeOne(
         fallbackPool,
         used,
         targetDifficulty,
-        `${seed}:fallback:${selected.length}`,
+        `${seed}:fallback:${plan.length}`,
       );
+
       if (!picked) break;
-      selected.push(picked);
+
+      plan.push({
+        challenge: picked,
+        selectionReason: "fallback",
+        targetSkillId: null,
+      });
     }
   }
 
-  return selected.slice(0, count);
+  return plan.slice(0, count);
+}
+
+async function loadSession(
+  supabase: SupabaseClient,
+  userId: string,
+  session: {
+    id: string;
+    session_date: string;
+    status: "in_progress" | "completed";
+  },
+): Promise<DailyTrainingSession> {
+  const [
+    { data: assignments, error: assignmentsError },
+    { data: responses, error: responsesError },
+  ] = await Promise.all([
+    supabase
+      .from("training_session_challenges")
+      .select(
+        "challenge_id,position,selection_reason,target_skill_id",
+      )
+      .eq("session_id", session.id)
+      .order("position"),
+    supabase
+      .from("user_responses")
+      .select("challenge_id")
+      .eq("user_id", userId)
+      .eq("session_key", session.id),
+  ]);
+
+  if (assignmentsError) throw assignmentsError;
+  if (responsesError) throw responsesError;
+
+  const challengeIds = (assignments ?? []).map(
+    (row) => row.challenge_id,
+  );
+
+  const challenges = await fetchChallenges(supabase, challengeIds);
+  const byId = new Map(challenges.map((challenge) => [challenge.id, challenge]));
+
+  const orderedChallenges = (assignments ?? [])
+    .map((row) => byId.get(row.challenge_id))
+    .filter((challenge): challenge is ChallengeRow => Boolean(challenge));
+
+  return {
+    id: session.id,
+    sessionDate: session.session_date,
+    status: session.status,
+    challenges: orderedChallenges,
+    answeredChallengeIds: (responses ?? []).map(
+      (row) => row.challenge_id,
+    ),
+  };
+}
+
+export async function getOrCreateDailyTrainingSession(
+  supabase: SupabaseClient,
+  userId: string,
+  count = 5,
+): Promise<DailyTrainingSession> {
+  const day = localDateKey();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("training_sessions")
+    .select("id,session_date,status")
+    .eq("user_id", userId)
+    .eq("session_date", day)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  if (existing) {
+    return loadSession(
+      supabase,
+      userId,
+      existing as {
+        id: string;
+        session_date: string;
+        status: "in_progress" | "completed";
+      },
+    );
+  }
+
+  const plan = await buildDailyPlan(supabase, userId, count, day);
+
+  if (!plan.length) {
+    return {
+      id: null,
+      sessionDate: day,
+      status: "in_progress",
+      challenges: [],
+      answeredChallengeIds: [],
+    };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: created, error: createError } = await admin
+    .from("training_sessions")
+    .insert({
+      user_id: userId,
+      session_date: day,
+      status: "in_progress",
+    })
+    .select("id,session_date,status")
+    .single();
+
+  if (createError) {
+    if (createError.code === "23505") {
+      const { data: raced, error: racedError } = await supabase
+        .from("training_sessions")
+        .select("id,session_date,status")
+        .eq("user_id", userId)
+        .eq("session_date", day)
+        .single();
+
+      if (racedError) throw racedError;
+
+      return loadSession(
+        supabase,
+        userId,
+        raced as {
+          id: string;
+          session_date: string;
+          status: "in_progress" | "completed";
+        },
+      );
+    }
+
+    throw createError;
+  }
+
+  const assignmentRows = plan.map((item, index) => ({
+    session_id: created.id,
+    position: index + 1,
+    challenge_id: item.challenge.id,
+    selection_reason: item.selectionReason,
+    target_skill_id: item.targetSkillId,
+  }));
+
+  const { error: assignmentError } = await admin
+    .from("training_session_challenges")
+    .insert(assignmentRows);
+
+  if (assignmentError) {
+    await admin.from("training_sessions").delete().eq("id", created.id);
+    throw assignmentError;
+  }
+
+  return loadSession(
+    supabase,
+    userId,
+    created as {
+      id: string;
+      session_date: string;
+      status: "in_progress" | "completed";
+    },
+  );
 }

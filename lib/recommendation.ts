@@ -27,11 +27,6 @@ type ResponseRow = {
   created_at: string;
 };
 
-type MappingRow = {
-  challenge_id: string;
-  skill_id: string;
-};
-
 type SelectionReason =
   | "weakest_measured"
   | "second_weakest_measured"
@@ -58,6 +53,8 @@ export type DailyTrainingSession = {
 const CHALLENGE_FIELDS =
   "id,title,prompt,options,challenge_type,difficulty,confidence_required";
 
+const AI_AUDIT_TYPE = "ai_answer_audit";
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -69,10 +66,12 @@ function effectiveScore(row: ScoreRow) {
 
 function hash(text: string) {
   let h = 2166136261;
+
   for (let i = 0; i < text.length; i += 1) {
     h ^= text.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
+
   return h >>> 0;
 }
 
@@ -84,25 +83,124 @@ function rankCandidates(
   return [...rows].sort((a, b) => {
     const difficultyA = Math.abs(a.difficulty - targetDifficulty);
     const difficultyB = Math.abs(b.difficulty - targetDifficulty);
-    if (difficultyA !== difficultyB) return difficultyA - difficultyB;
+
+    if (difficultyA !== difficultyB) {
+      return difficultyA - difficultyB;
+    }
+
     return hash(`${seed}:${a.id}`) - hash(`${seed}:${b.id}`);
   });
 }
 
-function takeOne(
+function typeCounts(plan: PlannedChallenge[]) {
+  const counts = new Map<string, number>();
+
+  for (const item of plan) {
+    counts.set(
+      item.challenge.challenge_type,
+      (counts.get(item.challenge.challenge_type) ?? 0) + 1,
+    );
+  }
+
+  return counts;
+}
+
+function targetSkillCounts(plan: PlannedChallenge[]) {
+  const counts = new Map<string, number>();
+
+  for (const item of plan) {
+    if (!item.targetSkillId) continue;
+
+    counts.set(
+      item.targetSkillId,
+      (counts.get(item.targetSkillId) ?? 0) + 1,
+    );
+  }
+
+  return counts;
+}
+
+function chooseDiverseChallenge(
   rows: ChallengeRow[],
-  used: Set<string>,
+  usedChallengeIds: Set<string>,
+  plan: PlannedChallenge[],
   targetDifficulty: number,
   seed: string,
+  options?: {
+    avoidAiAudit?: boolean;
+    requireType?: string;
+    allowRepeatedType?: boolean;
+  },
 ) {
-  const ranked = rankCandidates(
-    rows.filter((row) => !used.has(row.id)),
-    targetDifficulty,
-    seed,
+  const available = rows.filter(
+    (row) => !usedChallengeIds.has(row.id),
   );
-  const picked = ranked[0];
-  if (picked) used.add(picked.id);
-  return picked;
+
+  if (!available.length) return undefined;
+
+  const counts = typeCounts(plan);
+  const requireType = options?.requireType;
+  const avoidAiAudit = options?.avoidAiAudit ?? false;
+  const allowRepeatedType = options?.allowRepeatedType ?? false;
+
+  const required = requireType
+    ? available.filter((row) => row.challenge_type === requireType)
+    : available;
+
+  if (!required.length) return undefined;
+
+  const preferred = required.filter((row) => {
+    const currentTypeCount = counts.get(row.challenge_type) ?? 0;
+
+    if (!allowRepeatedType && currentTypeCount > 0) return false;
+    if (avoidAiAudit && row.challenge_type === AI_AUDIT_TYPE) return false;
+
+    return true;
+  });
+
+  if (preferred.length) {
+    return rankCandidates(preferred, targetDifficulty, seed)[0];
+  }
+
+  const uniqueTypeFallback = required.filter(
+    (row) => (counts.get(row.challenge_type) ?? 0) === 0,
+  );
+
+  if (uniqueTypeFallback.length) {
+    return rankCandidates(
+      uniqueTypeFallback,
+      targetDifficulty,
+      `${seed}:unique-fallback`,
+    )[0];
+  }
+
+  /*
+   * Only relax the type-diversity rule if no distinct challenge type is
+   * available. Even then, cap any one type at two appearances in a
+   * five-question session.
+   */
+  const maxTwoOfType = required.filter(
+    (row) => (counts.get(row.challenge_type) ?? 0) < 2,
+  );
+
+  if (maxTwoOfType.length) {
+    return rankCandidates(
+      maxTwoOfType,
+      targetDifficulty,
+      `${seed}:repeat-fallback`,
+    )[0];
+  }
+
+  return undefined;
+}
+
+function addPlanItem(
+  plan: PlannedChallenge[],
+  usedChallengeIds: Set<string>,
+  item: PlannedChallenge,
+) {
+  plan.push(item);
+  usedChallengeIds.add(item.challenge.id);
 }
 
 async function fetchChallenges(
@@ -119,7 +217,26 @@ async function fetchChallenges(
     .eq("is_diagnostic", false);
 
   if (error) throw error;
+
   return (data ?? []) as ChallengeRow[];
+}
+
+async function fetchGeneralPool(
+  supabase: SupabaseClient,
+  excludedIds: Set<string>,
+) {
+  const { data, error } = await supabase
+    .from("challenges")
+    .select(CHALLENGE_FIELDS)
+    .eq("is_published", true)
+    .eq("is_diagnostic", false)
+    .limit(200);
+
+  if (error) throw error;
+
+  return ((data ?? []) as ChallengeRow[]).filter(
+    (row) => !excludedIds.has(row.id),
+  );
 }
 
 async function fetchMappedPool(
@@ -130,31 +247,45 @@ async function fetchMappedPool(
   const mappingsBySkill = new Map<string, Set<string>>();
 
   if (!skillIds.length) {
-    return { pool: [] as ChallengeRow[], mappingsBySkill };
+    return {
+      pool: [] as ChallengeRow[],
+      mappingsBySkill,
+    };
   }
 
   const { data: mappings, error: mappingError } = await supabase
     .from("challenge_skill_mapping")
     .select("challenge_id,skill_id")
     .in("skill_id", skillIds)
-    .limit(400);
+    .limit(600);
 
   if (mappingError) throw mappingError;
 
-  const typedMappings = (mappings ?? []) as MappingRow[];
+  for (const mapping of mappings ?? []) {
+    const existing =
+      mappingsBySkill.get(mapping.skill_id) ?? new Set<string>();
 
-  for (const mapping of typedMappings) {
-    const existing = mappingsBySkill.get(mapping.skill_id) ?? new Set<string>();
     existing.add(mapping.challenge_id);
     mappingsBySkill.set(mapping.skill_id, existing);
   }
 
   const mappedIds = [
-    ...new Set(typedMappings.map((mapping) => mapping.challenge_id)),
+    ...new Set((mappings ?? []).map((mapping) => mapping.challenge_id)),
   ].filter((id) => !excludedIds.has(id));
 
   const pool = await fetchChallenges(supabase, mappedIds);
+
   return { pool, mappingsBySkill };
+}
+
+function mappedChallengesForSkill(
+  pool: ChallengeRow[],
+  mappingsBySkill: Map<string, Set<string>>,
+  skillId: string,
+) {
+  const ids = mappingsBySkill.get(skillId) ?? new Set<string>();
+
+  return pool.filter((challenge) => ids.has(challenge.id));
 }
 
 function targetWeakSkillForChallenge(
@@ -163,8 +294,9 @@ function targetWeakSkillForChallenge(
   mappingsBySkill: Map<string, Set<string>>,
 ) {
   return (
-    measured.find((row) => mappingsBySkill.get(row.skill_id)?.has(challengeId))
-      ?.skill_id ?? null
+    measured.find((row) =>
+      mappingsBySkill.get(row.skill_id)?.has(challengeId),
+    )?.skill_id ?? null
   );
 }
 
@@ -198,28 +330,48 @@ async function buildDailyPlan(
       .select("challenge_id,is_correct,confidence,created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(100),
+      .limit(150),
   ]);
 
   if (measuredError) throw measuredError;
   if (unassessedError) throw unassessedError;
   if (responseError) throw responseError;
 
-  const measured = ((measuredData ?? []) as ScoreRow[]).sort((a, b) => {
-    const effectiveDiff = effectiveScore(a) - effectiveScore(b);
-    if (effectiveDiff !== 0) return effectiveDiff;
-    if (a.attempts !== b.attempts) return a.attempts - b.attempts;
-    return a.skill_id.localeCompare(b.skill_id);
-  });
+  const measured = ((measuredData ?? []) as ScoreRow[]).sort(
+    (a, b) => {
+      const scoreDifference =
+        effectiveScore(a) - effectiveScore(b);
+
+      if (scoreDifference !== 0) return scoreDifference;
+      if (a.attempts !== b.attempts) return a.attempts - b.attempts;
+
+      return a.skill_id.localeCompare(b.skill_id);
+    },
+  );
 
   const unassessed = (unassessedData ?? []) as ScoreRow[];
   const history = (responseData ?? []) as ResponseRow[];
-  const recentIds = new Set(history.slice(0, 12).map((row) => row.challenge_id));
-  const used = new Set<string>();
+
+  /*
+   * Recent-question avoidance is deliberately separate from spaced
+   * repetition. The most recent twelve questions are protected from
+   * immediate reuse; older mistakes can become spaced-review candidates.
+   */
+  const recentIds = new Set(
+    history.slice(0, 12).map((row) => row.challenge_id),
+  );
+
+  const usedChallengeIds = new Set<string>();
   const plan: PlannedChallenge[] = [];
 
-  const measuredIds = measured.slice(0, 4).map((row) => row.skill_id);
-  const { pool: weakPool, mappingsBySkill } = await fetchMappedPool(
+  const measuredIds = measured.slice(0, 6).map(
+    (row) => row.skill_id,
+  );
+
+  const {
+    pool: measuredPool,
+    mappingsBySkill: measuredMappings,
+  } = await fetchMappedPool(
     supabase,
     measuredIds,
     recentIds,
@@ -228,8 +380,10 @@ async function buildDailyPlan(
   const averageEffectiveScore = measured.length
     ? measured
         .slice(0, 4)
-        .reduce((sum, row) => sum + effectiveScore(row), 0) /
-      Math.min(4, measured.length)
+        .reduce(
+          (sum, row) => sum + effectiveScore(row),
+          0,
+        ) / Math.min(4, measured.length)
     : 50;
 
   const targetDifficulty = clamp(
@@ -238,85 +392,164 @@ async function buildDailyPlan(
     80,
   );
 
-  for (let index = 0; index < Math.min(2, measured.length, count); index += 1) {
+  /*
+   * Slots 1 and 2: train the two lowest measured capabilities.
+   *
+   * We deliberately avoid an AI Answer Audit here when another suitable
+   * exercise type exists. That preserves an AI-verification slot without
+   * allowing the whole session to collapse into one exercise format.
+   */
+  for (
+    let index = 0;
+    index < Math.min(2, measured.length, count);
+    index += 1
+  ) {
     const skill = measured[index];
-    const ids = mappingsBySkill.get(skill.skill_id) ?? new Set<string>();
-    const pool = weakPool.filter((challenge) => ids.has(challenge.id));
 
-    const picked = takeOne(
-      pool,
-      used,
-      clamp(Math.round(effectiveScore(skill) + 5), 25, 80),
-      `${seed}:weak:${index}`,
+    const pool = mappedChallengesForSkill(
+      measuredPool,
+      measuredMappings,
+      skill.skill_id,
     );
 
-    if (picked) {
-      plan.push({
-        challenge: picked,
-        selectionReason:
-          index === 0 ? "weakest_measured" : "second_weakest_measured",
-        targetSkillId: skill.skill_id,
-      });
-    }
+    const picked = chooseDiverseChallenge(
+      pool,
+      usedChallengeIds,
+      plan,
+      clamp(
+        Math.round(effectiveScore(skill) + 5),
+        25,
+        80,
+      ),
+      `${seed}:weak:${index}`,
+      {
+        avoidAiAudit: true,
+      },
+    );
+
+    if (!picked) continue;
+
+    addPlanItem(plan, usedChallengeIds, {
+      challenge: picked,
+      selectionReason:
+        index === 0
+          ? "weakest_measured"
+          : "second_weakest_measured",
+      targetSkillId: skill.skill_id,
+    });
   }
 
-  if (plan.length < count) {
-    const weakAiPool = weakPool.filter(
-      (challenge) => challenge.challenge_type === "ai_answer_audit",
+  /*
+   * Slot 3: ensure the session contains an AI-output verification task.
+   *
+   * If one of the two weak-skill slots had no alternative and already had
+   * to use an AI Answer Audit, we do not force a second one. Instead we use
+   * the next measured capability with a distinct exercise type.
+   */
+  const alreadyHasAiAudit = plan.some(
+    (item) =>
+      item.challenge.challenge_type === AI_AUDIT_TYPE,
+  );
+
+  if (plan.length < count && !alreadyHasAiAudit) {
+    const { data: aiData, error: aiError } = await supabase
+      .from("challenges")
+      .select(CHALLENGE_FIELDS)
+      .eq("is_published", true)
+      .eq("is_diagnostic", false)
+      .eq("challenge_type", AI_AUDIT_TYPE)
+      .limit(100);
+
+    if (aiError) throw aiError;
+
+    const aiPool = ((aiData ?? []) as ChallengeRow[]).filter(
+      (row) => !recentIds.has(row.id),
     );
 
-    let picked = takeOne(
-      weakAiPool,
-      used,
+    const picked = chooseDiverseChallenge(
+      aiPool,
+      usedChallengeIds,
+      plan,
       targetDifficulty,
-      `${seed}:ai-weak`,
+      `${seed}:ai`,
+      {
+        requireType: AI_AUDIT_TYPE,
+        allowRepeatedType: false,
+      },
     );
-
-    if (!picked) {
-      const { data: aiData, error: aiError } = await supabase
-        .from("challenges")
-        .select(CHALLENGE_FIELDS)
-        .eq("is_published", true)
-        .eq("is_diagnostic", false)
-        .eq("challenge_type", "ai_answer_audit")
-        .limit(50);
-
-      if (aiError) throw aiError;
-
-      picked = takeOne(
-        ((aiData ?? []) as ChallengeRow[]).filter(
-          (row) => !recentIds.has(row.id),
-        ),
-        used,
-        targetDifficulty,
-        `${seed}:ai-any`,
-      );
-    }
 
     if (picked) {
-      plan.push({
+      addPlanItem(plan, usedChallengeIds, {
         challenge: picked,
         selectionReason: "ai_verification",
         targetSkillId: targetWeakSkillForChallenge(
           picked.id,
           measured,
-          mappingsBySkill,
+          measuredMappings,
         ),
       });
     }
+  } else if (plan.length < count && measured.length > 2) {
+    for (const skill of measured.slice(2, 6)) {
+      const targetCounts = targetSkillCounts(plan);
+
+      if ((targetCounts.get(skill.skill_id) ?? 0) > 0) {
+        continue;
+      }
+
+      const pool = mappedChallengesForSkill(
+        measuredPool,
+        measuredMappings,
+        skill.skill_id,
+      );
+
+      const picked = chooseDiverseChallenge(
+        pool,
+        usedChallengeIds,
+        plan,
+        clamp(
+          Math.round(effectiveScore(skill) + 5),
+          25,
+          80,
+        ),
+        `${seed}:third-measured:${skill.skill_id}`,
+        {
+          avoidAiAudit: false,
+        },
+      );
+
+      if (!picked) continue;
+
+      addPlanItem(plan, usedChallengeIds, {
+        challenge: picked,
+        selectionReason: "adaptive_variety",
+        targetSkillId: skill.skill_id,
+      });
+
+      break;
+    }
   }
 
+  /*
+   * Slot 4 preference: spaced reinforcement.
+   *
+   * A repeat is only used when it is old enough to be outside the recent
+   * protection window and was previously wrong or answered with low
+   * confidence. We still prefer a challenge type not already used today.
+   */
   if (plan.length < count) {
     const spacedIds: string[] = [];
     const seen = new Set<string>();
 
     for (const row of history.slice(12)) {
       if (seen.has(row.challenge_id)) continue;
+
       seen.add(row.challenge_id);
 
       if (
         !row.is_correct ||
-        (row.confidence !== null && Number(row.confidence) <= 50)
+        (row.confidence !== null &&
+          Number(row.confidence) <= 50)
       ) {
         spacedIds.push(row.challenge_id);
       }
@@ -324,29 +557,35 @@ async function buildDailyPlan(
 
     const spacedPool = await fetchChallenges(
       supabase,
-      spacedIds.slice(0, 40),
+      spacedIds.slice(0, 60),
     );
 
-    const picked = takeOne(
+    const picked = chooseDiverseChallenge(
       spacedPool,
-      used,
+      usedChallengeIds,
+      plan,
       targetDifficulty,
       `${seed}:spaced`,
     );
 
     if (picked) {
-      plan.push({
+      addPlanItem(plan, usedChallengeIds, {
         challenge: picked,
         selectionReason: "spaced_reinforcement",
         targetSkillId: targetWeakSkillForChallenge(
           picked.id,
           measured,
-          mappingsBySkill,
+          measuredMappings,
         ),
       });
     }
   }
 
+  /*
+   * If there is no eligible spaced-review item, deliberately sample one
+   * capability we have not measured yet. This is exploration, not a claim
+   * that the capability is weak.
+   */
   if (plan.length < count && unassessed.length) {
     const explorationOrder = [...unassessed].sort(
       (a, b) =>
@@ -368,97 +607,107 @@ async function buildDailyPlan(
     );
 
     for (const skill of explorationOrder) {
-      const ids =
-        explorationMappings.get(skill.skill_id) ?? new Set<string>();
-      const pool = explorationPool.filter((challenge) =>
-        ids.has(challenge.id),
+      const pool = mappedChallengesForSkill(
+        explorationPool,
+        explorationMappings,
+        skill.skill_id,
       );
 
-      const picked = takeOne(
+      const picked = chooseDiverseChallenge(
         pool,
-        used,
+        usedChallengeIds,
+        plan,
         50,
         `${seed}:explore:${skill.skill_id}`,
       );
 
-      if (picked) {
-        plan.push({
-          challenge: picked,
-          selectionReason: "unassessed_exploration",
-          targetSkillId: skill.skill_id,
-        });
-        break;
-      }
+      if (!picked) continue;
+
+      addPlanItem(plan, usedChallengeIds, {
+        challenge: picked,
+        selectionReason: "unassessed_exploration",
+        targetSkillId: skill.skill_id,
+      });
+
+      break;
     }
   }
 
-  while (plan.length < count) {
-    const usedTypes = new Set(
-      plan.map((item) => item.challenge.challenge_type),
+  /*
+   * Final adaptive fill: prefer a new exercise type and, where possible,
+   * a measured capability not already targeted in this session.
+   */
+  if (plan.length < count) {
+    const generalPool = await fetchGeneralPool(
+      supabase,
+      recentIds,
     );
 
-    const variedWeak = weakPool.filter(
-      (challenge) =>
-        !used.has(challenge.id) &&
-        !usedTypes.has(challenge.challenge_type),
+    const targetCounts = targetSkillCounts(plan);
+
+    const untargetedMeasured = measured.filter(
+      (skill) =>
+        (targetCounts.get(skill.skill_id) ?? 0) === 0,
     );
 
-    const picked =
-      takeOne(
-        variedWeak,
-        used,
-        targetDifficulty,
-        `${seed}:variety:${plan.length}`,
-      ) ??
-      takeOne(
-        weakPool,
-        used,
-        targetDifficulty,
-        `${seed}:weak-fill:${plan.length}`,
+    let added = false;
+
+    for (const skill of untargetedMeasured) {
+      const pool = mappedChallengesForSkill(
+        measuredPool,
+        measuredMappings,
+        skill.skill_id,
       );
 
-    if (!picked) break;
+      const picked = chooseDiverseChallenge(
+        pool,
+        usedChallengeIds,
+        plan,
+        clamp(
+          Math.round(effectiveScore(skill) + 5),
+          25,
+          80,
+        ),
+        `${seed}:measured-fill:${skill.skill_id}`,
+      );
 
-    plan.push({
-      challenge: picked,
-      selectionReason: "adaptive_variety",
-      targetSkillId: targetWeakSkillForChallenge(
-        picked.id,
-        measured,
-        mappingsBySkill,
-      ),
-    });
-  }
+      if (!picked) continue;
 
-  if (plan.length < count) {
-    const { data: fallbackData, error: fallbackError } = await supabase
-      .from("challenges")
-      .select(CHALLENGE_FIELDS)
-      .eq("is_published", true)
-      .eq("is_diagnostic", false)
-      .limit(100);
+      addPlanItem(plan, usedChallengeIds, {
+        challenge: picked,
+        selectionReason: "adaptive_variety",
+        targetSkillId: skill.skill_id,
+      });
 
-    if (fallbackError) throw fallbackError;
+      added = true;
 
-    const fallbackPool = ((fallbackData ?? []) as ChallengeRow[]).filter(
-      (row) => !recentIds.has(row.id),
-    );
+      if (plan.length >= count) break;
+    }
 
     while (plan.length < count) {
-      const picked = takeOne(
-        fallbackPool,
-        used,
+      const picked = chooseDiverseChallenge(
+        generalPool,
+        usedChallengeIds,
+        plan,
         targetDifficulty,
-        `${seed}:fallback:${plan.length}`,
+        `${seed}:general-fill:${plan.length}`,
       );
 
       if (!picked) break;
 
-      plan.push({
+      addPlanItem(plan, usedChallengeIds, {
         challenge: picked,
-        selectionReason: "fallback",
-        targetSkillId: null,
+        selectionReason: added
+          ? "adaptive_variety"
+          : "fallback",
+        targetSkillId: targetWeakSkillForChallenge(
+          picked.id,
+          measured,
+          measuredMappings,
+        ),
       });
+
+      added = true;
     }
   }
 
@@ -499,12 +748,26 @@ async function loadSession(
     (row) => row.challenge_id,
   );
 
-  const challenges = await fetchChallenges(supabase, challengeIds);
-  const byId = new Map(challenges.map((challenge) => [challenge.id, challenge]));
+  const challenges = await fetchChallenges(
+    supabase,
+    challengeIds,
+  );
+
+  const byId = new Map(
+    challenges.map((challenge) => [
+      challenge.id,
+      challenge,
+    ]),
+  );
 
   const orderedChallenges = (assignments ?? [])
     .map((row) => byId.get(row.challenge_id))
-    .filter((challenge): challenge is ChallengeRow => Boolean(challenge));
+    .filter(
+      (
+        challenge,
+      ): challenge is ChallengeRow =>
+        Boolean(challenge),
+    );
 
   return {
     id: session.id,
@@ -524,12 +787,13 @@ export async function getOrCreateDailyTrainingSession(
 ): Promise<DailyTrainingSession> {
   const day = localDateKey();
 
-  const { data: existing, error: existingError } = await supabase
-    .from("training_sessions")
-    .select("id,session_date,status")
-    .eq("user_id", userId)
-    .eq("session_date", day)
-    .maybeSingle();
+  const { data: existing, error: existingError } =
+    await supabase
+      .from("training_sessions")
+      .select("id,session_date,status")
+      .eq("user_id", userId)
+      .eq("session_date", day)
+      .maybeSingle();
 
   if (existingError) throw existingError;
 
@@ -545,7 +809,12 @@ export async function getOrCreateDailyTrainingSession(
     );
   }
 
-  const plan = await buildDailyPlan(supabase, userId, count, day);
+  const plan = await buildDailyPlan(
+    supabase,
+    userId,
+    count,
+    day,
+  );
 
   if (!plan.length) {
     return {
@@ -559,24 +828,26 @@ export async function getOrCreateDailyTrainingSession(
 
   const admin = createAdminClient();
 
-  const { data: created, error: createError } = await admin
-    .from("training_sessions")
-    .insert({
-      user_id: userId,
-      session_date: day,
-      status: "in_progress",
-    })
-    .select("id,session_date,status")
-    .single();
+  const { data: created, error: createError } =
+    await admin
+      .from("training_sessions")
+      .insert({
+        user_id: userId,
+        session_date: day,
+        status: "in_progress",
+      })
+      .select("id,session_date,status")
+      .single();
 
   if (createError) {
     if (createError.code === "23505") {
-      const { data: raced, error: racedError } = await supabase
-        .from("training_sessions")
-        .select("id,session_date,status")
-        .eq("user_id", userId)
-        .eq("session_date", day)
-        .single();
+      const { data: raced, error: racedError } =
+        await supabase
+          .from("training_sessions")
+          .select("id,session_date,status")
+          .eq("user_id", userId)
+          .eq("session_date", day)
+          .single();
 
       if (racedError) throw racedError;
 
@@ -594,20 +865,26 @@ export async function getOrCreateDailyTrainingSession(
     throw createError;
   }
 
-  const assignmentRows = plan.map((item, index) => ({
-    session_id: created.id,
-    position: index + 1,
-    challenge_id: item.challenge.id,
-    selection_reason: item.selectionReason,
-    target_skill_id: item.targetSkillId,
-  }));
+  const assignmentRows = plan.map(
+    (item, index) => ({
+      session_id: created.id,
+      position: index + 1,
+      challenge_id: item.challenge.id,
+      selection_reason: item.selectionReason,
+      target_skill_id: item.targetSkillId,
+    }),
+  );
 
   const { error: assignmentError } = await admin
     .from("training_session_challenges")
     .insert(assignmentRows);
 
   if (assignmentError) {
-    await admin.from("training_sessions").delete().eq("id", created.id);
+    await admin
+      .from("training_sessions")
+      .delete()
+      .eq("id", created.id);
+
     throw assignmentError;
   }
 

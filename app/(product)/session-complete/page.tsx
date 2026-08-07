@@ -1,0 +1,3 @@
+import Link from "next/link";
+import { requireUser } from "@/lib/auth";
+export default async function Complete(){const {user,supabase}=await requireUser();const {data}=await supabase.from("profiles").select("xp,current_streak").eq("id",user.id).single();return <><div className="kicker">Session complete</div><h1>Good thinking compounds.</h1><div className="grid grid-2"><div className="card"><div className="kicker">Total XP</div><div className="stat">{data?.xp??0}</div></div><div className="card"><div className="kicker">Current streak</div><div className="stat">{data?.current_streak??0} days</div></div></div><p style={{marginTop:20}}><Link className="button" href="/dashboard">Back to dashboard</Link></p></>}

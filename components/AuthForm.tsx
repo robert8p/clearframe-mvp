@@ -14,31 +14,84 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
 
   async function submit(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setError(""); setMessage("");
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
     const supabase = createClient();
+
     if (mode === "signup") {
       const { data, error } = await supabase.auth.signUp({
-        email, password, options: { data: { full_name: name } },
+        email,
+        password,
+        options: { data: { full_name: name } },
       });
-      if (error) setError(error.message);
-      else if (!data.session) setMessage("Account created. Check your email to confirm, then sign in.");
-      else { router.push("/onboarding"); router.refresh(); }
+
+      if (error) {
+        setError(error.message);
+      } else if (!data.session) {
+        setMessage("Account created. Check your email to confirm, then sign in.");
+      } else {
+        router.push("/onboarding");
+        router.refresh();
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-      else { router.push("/dashboard"); router.refresh(); }
+
+      if (error) {
+        setError(error.message);
+      } else {
+        router.push("/dashboard");
+        router.refresh();
+      }
     }
+
     setBusy(false);
   }
 
   return (
-    <form onSubmit={submit}>
-      {mode === "signup" && <><label>Name</label><input className="input" value={name} onChange={e=>setName(e.target.value)} required /></>}
-      <label>Email</label><input className="input" type="email" value={email} onChange={e=>setEmail(e.target.value)} required />
-      <label>Password</label><input className="input" type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} required />
-      {error && <p style={{color:"var(--danger)"}}>{error}</p>}
-      {message && <p style={{color:"var(--success)"}}>{message}</p>}
-      <button className="button" style={{width:"100%", marginTop:18}} disabled={busy}>{busy ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}</button>
+    <form onSubmit={submit} className="section-stack">
+      {mode === "signup" && (
+        <div>
+          <label>Name</label>
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </div>
+      )}
+
+      <div>
+        <label>Email</label>
+        <input
+          className="input"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <label>Password</label>
+        <input
+          className="input"
+          type="password"
+          minLength={8}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+      </div>
+
+      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
+      {message && <p style={{ color: "var(--success)" }}>{message}</p>}
+
+      <button className="button" style={{ width: "100%", marginTop: 8 }} disabled={busy}>
+        {busy ? "Working…" : mode === "signup" ? "Start your journey" : "Sign in"}
+      </button>
     </form>
   );
 }

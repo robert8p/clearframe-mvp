@@ -44,12 +44,8 @@ export function ChallengeRunner({
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [startedAt, setStartedAt] = useState(() => Date.now());
-  const [runtimeSessionId] = useState(
-    () => sessionId ?? createRuntimeSessionId(),
-  );
-  const [answered, setAnswered] = useState(
-    () => new Set(initialAnsweredChallengeIds),
-  );
+  const [runtimeSessionId] = useState(() => sessionId ?? createRuntimeSessionId());
+  const [answered, setAnswered] = useState(() => new Set(initialAnsweredChallengeIds));
 
   const router = useRouter();
   const challenge = challenges[index];
@@ -71,11 +67,7 @@ export function ChallengeRunner({
         },
       }),
     });
-  }, [
-    mode,
-    runtimeSessionId,
-    initialAnsweredChallengeIds.length,
-  ]);
+  }, [mode, runtimeSessionId, initialAnsweredChallengeIds.length]);
 
   useEffect(() => {
     if (!challenge) return;
@@ -98,9 +90,7 @@ export function ChallengeRunner({
     return (
       <section className="card">
         <h2>No challenges available</h2>
-        <p className="muted">
-          Run the seed migration, then refresh this page.
-        </p>
+        <p className="muted">Run the seed migration, then refresh this page.</p>
       </section>
     );
   }
@@ -144,24 +134,18 @@ export function ChallengeRunner({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        eventName:
-          mode === "diagnostic" ? "diagnostic_completed" : "session_completed",
+        eventName: mode === "diagnostic" ? "diagnostic_completed" : "session_completed",
         properties: { session_id: runtimeSessionId },
       }),
     });
 
-    router.push(
-      mode === "diagnostic"
-        ? "/diagnostic/results"
-        : "/session-complete",
-    );
+    router.push(mode === "diagnostic" ? "/diagnostic/results" : "/session-complete");
     router.refresh();
   }
 
   function next() {
     const nextIndex = challenges.findIndex(
-      (candidate, candidateIndex) =>
-        candidateIndex > index && !answered.has(candidate.id),
+      (candidate, candidateIndex) => candidateIndex > index && !answered.has(candidate.id),
     );
 
     if (nextIndex === -1) {
@@ -177,48 +161,42 @@ export function ChallengeRunner({
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: "0 auto" }}>
-      <div className="topbar">
+    <div className="training-wrap">
+      <div className="challenge-head">
         <div>
           <div className="kicker">
             {mode} · {index + 1} of {challenges.length}
           </div>
+          <h1 style={{ fontSize: 34, marginBottom: 6 }}>Stay sharp.</h1>
         </div>
-        <span className="pill">
-          Difficulty {challenge.difficulty}/100
-        </span>
+        <div className="inline-list">
+          <span className="pill">Difficulty {challenge.difficulty}/100</span>
+          <span className="pill">Progress {progress}%</span>
+        </div>
       </div>
 
       <div className="progress" style={{ marginBottom: 20 }}>
         <span style={{ width: `${progress}%` }} />
       </div>
 
-      <section className="card">
-        <div className="kicker">
-          {challenge.challenge_type.replaceAll("_", " ")}
+      <section className="card challenge-card">
+        <div className="challenge-stage">
+          <span className="pill">{challenge.challenge_type.replaceAll("_", " ")}</span>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Focus on reasoning quality, not speed.
+          </span>
         </div>
 
-        <h2 style={{ fontSize: 26, marginTop: 8 }}>
-          {challenge.title}
-        </h2>
-
-        <p style={{ fontSize: 17 }}>{challenge.prompt}</p>
+        <h2 style={{ fontSize: 29, marginTop: 14 }}>{challenge.title}</h2>
+        <p className="challenge-question">{challenge.prompt}</p>
 
         <div>
           {challenge.options.map((option, optionIndex) => {
             let className = "option";
 
             if (selected === optionIndex) className += " selected";
-            if (result && optionIndex === result.correctIndex) {
-              className += " correct";
-            }
-            if (
-              result &&
-              selected === optionIndex &&
-              !result.correct
-            ) {
-              className += " incorrect";
-            }
+            if (result && optionIndex === result.correctIndex) className += " correct";
+            if (result && selected === optionIndex && !result.correct) className += " incorrect";
 
             return (
               <button
@@ -227,30 +205,26 @@ export function ChallengeRunner({
                 key={optionIndex}
                 onClick={() => setSelected(optionIndex)}
               >
-                <strong>
-                  {String.fromCharCode(65 + optionIndex)}.
-                </strong>{" "}
-                {option}
+                <strong>{String.fromCharCode(65 + optionIndex)}.</strong> {option}
               </button>
             );
           })}
         </div>
 
         {challenge.confidence_required && !result && (
-          <div style={{ marginTop: 18 }}>
-            <label>
-              How confident are you? {confidence}%
-            </label>
+          <div style={{ marginTop: 20 }}>
+            <div className="slider-caption">
+              <label style={{ margin: 0 }}>How confident are you?</label>
+              <span className="pill">{confidence}%</span>
+            </div>
             <input
-              style={{ width: "100%" }}
+              style={{ width: "100%", marginTop: 12 }}
               type="range"
               min="20"
               max="100"
               step="10"
               value={confidence}
-              onChange={(event) =>
-                setConfidence(Number(event.target.value))
-              }
+              onChange={(event) => setConfidence(Number(event.target.value))}
             />
           </div>
         )}
@@ -258,7 +232,7 @@ export function ChallengeRunner({
         {!result ? (
           <button
             className="button"
-            style={{ marginTop: 20 }}
+            style={{ marginTop: 22 }}
             disabled={selected === null || busy}
             onClick={submit}
           >
@@ -266,7 +240,7 @@ export function ChallengeRunner({
           </button>
         ) : (
           <div
-            style={{ marginTop: 22 }}
+            style={{ marginTop: 24 }}
             onMouseEnter={() => {
               void fetch("/api/event", {
                 method: "POST",
@@ -282,31 +256,25 @@ export function ChallengeRunner({
             }}
           >
             <div className="callout">
-              <strong>
-                {result.correct ? "Correct" : "Not quite"}.
-              </strong>{" "}
-              {result.explanation}
+              <strong>{result.correct ? "Correct" : "Not quite"}.</strong> {result.explanation}
             </div>
 
             <h3>Thinking principle</h3>
             <p>{result.thinkingPrinciple}</p>
 
-            <h3>AI-era application</h3>
+            <h3>AI-age application</h3>
             <p className="muted">{result.application}</p>
 
             {result.errorPattern && !result.correct && (
               <p>
                 <span className="pill">
-                  Likely pattern:{" "}
-                  {result.errorPattern.replaceAll("_", " ")}
+                  Likely pattern: {result.errorPattern.replaceAll("_", " ")}
                 </span>
               </p>
             )}
 
             <button className="button" onClick={next}>
-              {answered.size >= challenges.length
-                ? "See results"
-                : "Next challenge"}
+              {answered.size >= challenges.length ? "See results" : "Next challenge"}
             </button>
           </div>
         )}

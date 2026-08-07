@@ -13,6 +13,8 @@ type ChallengeRow = {
 type ScoreRow = {
   skill_id: string;
   score: number;
+  reliability: number;
+  attempts: number;
   last_seen_at: string | null;
 };
 
@@ -31,9 +33,19 @@ function clamp(value: number, min: number, max: number) {
 }
 
 /**
+ * Shrink noisy early scores back toward the neutral 50 baseline.
+ * With only one or two observations, we should not pretend a raw score is a
+ * reliable estimate of capability. As reliability rises, the effective score
+ * converges toward the observed score.
+ */
+function effectiveScore(row: ScoreRow) {
+  const reliability = clamp(Number(row.reliability ?? 0), 0, 1);
+  return 50 + (Number(row.score) - 50) * reliability;
+}
+
+/**
  * Small deterministic hash so a user's daily set is stable across refreshes,
- * while still changing from day to day. This avoids needing database-side
- * random ordering and makes interrupted sessions less surprising.
+ * while still changing from day to day.
  */
 function hash(text: string) {
   let h = 2166136261;
@@ -89,18 +101,51 @@ async function fetchChallenges(
   return (data ?? []) as ChallengeRow[];
 }
 
+async function fetchMappedPool(
+  supabase: SupabaseClient,
+  skillIds: string[],
+  excludedIds: Set<string>,
+) {
+  const mappingsBySkill = new Map<string, Set<string>>();
+  if (!skillIds.length) {
+    return { pool: [] as ChallengeRow[], mappingsBySkill };
+  }
+
+  const { data: mappings, error: mappingError } = await supabase
+    .from("challenge_skill_mapping")
+    .select("challenge_id,skill_id")
+    .in("skill_id", skillIds)
+    .limit(400);
+
+  if (mappingError) throw mappingError;
+
+  for (const mapping of mappings ?? []) {
+    const existing = mappingsBySkill.get(mapping.skill_id) ?? new Set<string>();
+    existing.add(mapping.challenge_id);
+    mappingsBySkill.set(mapping.skill_id, existing);
+  }
+
+  const mappedIds = [
+    ...new Set((mappings ?? []).map((mapping) => mapping.challenge_id)),
+  ].filter((id) => !excludedIds.has(id));
+
+  const pool = await fetchChallenges(supabase, mappedIds);
+  return { pool, mappingsBySkill };
+}
+
 /**
  * Five-question MVP daily-session composition:
- *  1-2. Reinforce the two weakest measured skills.
- *  3.   Include an AI-output audit where possible.
- *  4.   Revisit a previous incorrect / low-confidence item once it is no
- *       longer recent (spaced reinforcement). If none exists yet, backfill
- *       from weak-skill practice.
- *  5.   Add a varied challenge, still biased toward weak skills and an
- *       appropriate difficulty.
  *
- * The selector excludes the 12 most recently answered challenge IDs from
- * normal selection. A spaced-repetition item may come from older history.
+ *  1. Reinforce the lowest current *measured* capability.
+ *  2. Reinforce the second-lowest current *measured* capability.
+ *  3. Include an AI-output audit where possible.
+ *  4. Revisit an older incorrect / low-confidence response (spaced practice).
+ *  5. Explore an as-yet unassessed skill; once coverage is complete, use a
+ *     varied adaptive challenge instead.
+ *
+ * Important measurement rule: attempts=0 is "unassessed", not "weak".
+ * Early raw scores are also reliability-shrunk toward 50 so one answer cannot
+ * be treated as a strong capability diagnosis.
  */
 export async function getDailyChallenges(
   supabase: SupabaseClient,
@@ -110,78 +155,78 @@ export async function getDailyChallenges(
   const day = new Date().toISOString().slice(0, 10);
   const seed = `${userId}:${day}`;
 
-  const [{ data: scoreData, error: scoreError }, { data: responseData, error: responseError }] =
-    await Promise.all([
-      supabase
-        .from("user_skill_scores")
-        .select("skill_id,score,last_seen_at")
-        .eq("user_id", userId)
-        .order("score")
-        .limit(4),
-      supabase
-        .from("user_responses")
-        .select("challenge_id,is_correct,confidence,created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(100),
-    ]);
+  const [
+    { data: measuredData, error: measuredError },
+    { data: unassessedData, error: unassessedError },
+    { data: responseData, error: responseError },
+  ] = await Promise.all([
+    supabase
+      .from("user_skill_scores")
+      .select("skill_id,score,reliability,attempts,last_seen_at")
+      .eq("user_id", userId)
+      .gt("attempts", 0)
+      .limit(50),
+    supabase
+      .from("user_skill_scores")
+      .select("skill_id,score,reliability,attempts,last_seen_at")
+      .eq("user_id", userId)
+      .eq("attempts", 0)
+      .limit(50),
+    supabase
+      .from("user_responses")
+      .select("challenge_id,is_correct,confidence,created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(100),
+  ]);
 
-  if (scoreError) throw scoreError;
+  if (measuredError) throw measuredError;
+  if (unassessedError) throw unassessedError;
   if (responseError) throw responseError;
 
-  const weak = (scoreData ?? []) as ScoreRow[];
+  const measured = ((measuredData ?? []) as ScoreRow[]).sort((a, b) => {
+    const effectiveDiff = effectiveScore(a) - effectiveScore(b);
+    if (effectiveDiff !== 0) return effectiveDiff;
+    if (a.attempts !== b.attempts) return a.attempts - b.attempts;
+    return a.skill_id.localeCompare(b.skill_id);
+  });
+
+  const unassessed = (unassessedData ?? []) as ScoreRow[];
   const history = (responseData ?? []) as ResponseRow[];
   const recentIds = new Set(history.slice(0, 12).map((row) => row.challenge_id));
-  const weakIds = weak.map((row) => row.skill_id);
   const used = new Set<string>();
   const selected: ChallengeRow[] = [];
 
-  // Slightly above the weakest demonstrated level, but never extreme.
-  const averageWeakScore = weak.length
-    ? weak.reduce((sum, row) => sum + Number(row.score), 0) / weak.length
+  const measuredIds = measured.slice(0, 4).map((row) => row.skill_id);
+  const { pool: weakPool, mappingsBySkill } = await fetchMappedPool(
+    supabase,
+    measuredIds,
+    recentIds,
+  );
+
+  const averageEffectiveScore = measured.length
+    ? measured
+        .slice(0, 4)
+        .reduce((sum, row) => sum + effectiveScore(row), 0) /
+      Math.min(4, measured.length)
     : 50;
-  const targetDifficulty = clamp(Math.round(averageWeakScore + 5), 25, 80);
+  const targetDifficulty = clamp(Math.round(averageEffectiveScore + 5), 25, 80);
 
-  let weakPool: ChallengeRow[] = [];
-  const mappingsBySkill = new Map<string, Set<string>>();
-
-  if (weakIds.length) {
-    const { data: mappings, error: mappingError } = await supabase
-      .from("challenge_skill_mapping")
-      .select("challenge_id,skill_id")
-      .in("skill_id", weakIds)
-      .limit(250);
-
-    if (mappingError) throw mappingError;
-
-    for (const mapping of mappings ?? []) {
-      const existing = mappingsBySkill.get(mapping.skill_id) ?? new Set<string>();
-      existing.add(mapping.challenge_id);
-      mappingsBySkill.set(mapping.skill_id, existing);
-    }
-
-    const mappedIds = [
-      ...new Set((mappings ?? []).map((mapping) => mapping.challenge_id)),
-    ].filter((id) => !recentIds.has(id));
-
-    weakPool = await fetchChallenges(supabase, mappedIds);
-  }
-
-  // Slots 1-2: distinct weakest-skill reinforcement where content exists.
-  for (let index = 0; index < Math.min(2, weak.length, count); index += 1) {
-    const skill = weak[index];
+  // Slots 1-2: weakest measured skills only. Unassessed skills never enter here.
+  for (let index = 0; index < Math.min(2, measured.length, count); index += 1) {
+    const skill = measured[index];
     const ids = mappingsBySkill.get(skill.skill_id) ?? new Set<string>();
     const pool = weakPool.filter((challenge) => ids.has(challenge.id));
     const picked = takeOne(
       pool,
       used,
-      clamp(Math.round(Number(skill.score) + 5), 25, 80),
+      clamp(Math.round(effectiveScore(skill) + 5), 25, 80),
       `${seed}:weak:${index}`,
     );
     if (picked) selected.push(picked);
   }
 
-  // Slot 3: AI-output verification practice, preferably also from a weak skill.
+  // Slot 3: AI-output verification practice, preferably also tied to a weak skill.
   if (selected.length < count) {
     const weakAiPool = weakPool.filter(
       (challenge) => challenge.challenge_type === "ai_answer_audit",
@@ -212,7 +257,7 @@ export async function getDailyChallenges(
     if (picked) selected.push(picked);
   }
 
-  // Slot 4: spaced reinforcement of an older mistake / low-confidence answer.
+  // Slot 4: spaced reinforcement of an older mistake / low-confidence response.
   if (selected.length < count) {
     const spacedIds: string[] = [];
     const seen = new Set<string>();
@@ -234,7 +279,32 @@ export async function getDailyChallenges(
     if (picked) selected.push(picked);
   }
 
-  // Fill remaining slots from weak-skill practice, favouring type variety.
+  // Exploration slot: deliberately gain coverage of an unassessed capability.
+  if (selected.length < count && unassessed.length) {
+    const explorationOrder = [...unassessed].sort(
+      (a, b) => hash(`${seed}:explore:${a.skill_id}`) - hash(`${seed}:explore:${b.skill_id}`),
+    );
+    const explorationSkillIds = explorationOrder.map((row) => row.skill_id);
+    const { pool: explorationPool, mappingsBySkill: explorationMappings } =
+      await fetchMappedPool(supabase, explorationSkillIds, recentIds);
+
+    for (const skill of explorationOrder) {
+      const ids = explorationMappings.get(skill.skill_id) ?? new Set<string>();
+      const pool = explorationPool.filter((challenge) => ids.has(challenge.id));
+      const picked = takeOne(
+        pool,
+        used,
+        50,
+        `${seed}:explore:${skill.skill_id}`,
+      );
+      if (picked) {
+        selected.push(picked);
+        break;
+      }
+    }
+  }
+
+  // Fill remaining slots from measured weak-skill practice, favouring type variety.
   while (selected.length < count) {
     const usedTypes = new Set(selected.map((challenge) => challenge.challenge_type));
     const variedWeak = weakPool.filter(

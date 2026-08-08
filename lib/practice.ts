@@ -1,89 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { audienceMatches, isAudienceSegment } from "@/lib/audience";
+import { audienceDifficultyTarget, audienceMatches, isAudienceSegment } from "@/lib/audience";
+import { contentContextScore, contextProfileFromRow } from "@/lib/context-profile";
 import type { Challenge } from "@/lib/types";
 
 type PracticeSession = { id: string; challenges: Challenge[]; answeredChallengeIds: string[] };
-const FIELDS = "id,title,prompt,options,challenge_type,interaction_type,interaction_config,difficulty,confidence_required,audience_segments,scenario_context";
-
-function hash(text: string) {
-  let value = 2166136261;
-  for (let index = 0; index < text.length; index += 1) { value ^= text.charCodeAt(index); value = Math.imul(value, 16777619); }
-  return value >>> 0;
-}
-function promptKey(value: string) { return value.trim().toLowerCase().replace(/\s+/g, " "); }
-
-async function loadPractice(admin: ReturnType<typeof createAdminClient>, userId: string, sessionId: string): Promise<PracticeSession> {
-  const [{ data: assignments, error: assignmentError }, { data: responses, error: responseError }] = await Promise.all([
-    admin.from("practice_session_challenges").select("challenge_id,position").eq("session_id", sessionId).order("position"),
-    admin.from("user_responses").select("challenge_id").eq("user_id", userId).eq("session_key", sessionId),
-  ]);
-  if (assignmentError) throw assignmentError;
-  if (responseError) throw responseError;
-  const ids: string[] = (assignments ?? []).map((row: { challenge_id: string }) => row.challenge_id);
-  const { data: challenges, error } = ids.length ? await admin.from("challenges").select(FIELDS).in("id", ids).eq("is_published", true) : { data: [], error: null };
-  if (error) throw error;
-  const byId = new Map(((challenges ?? []) as Challenge[]).map((challenge) => [challenge.id, challenge]));
-  return { id: sessionId, challenges: ids.map((id) => byId.get(id)).filter((value): value is Challenge => Boolean(value)), answeredChallengeIds: (responses ?? []).map((row: { challenge_id: string }) => row.challenge_id) };
-}
-
-export async function getOrCreatePracticeSession(supabase: SupabaseClient, userId: string, skillSlug: string, count = 3): Promise<PracticeSession | null> {
-  const admin = createAdminClient();
-  const [{ data: profile }, { data: skill }] = await Promise.all([
-    supabase.from("profiles").select("audience_segment").eq("id", userId).single(),
-    supabase.from("skills").select("id,slug").eq("slug", skillSlug).single(),
-  ]);
-  if (!skill || !isAudienceSegment(profile?.audience_segment)) return null;
-  const audience = profile.audience_segment;
-
-  const { data: existing } = await admin.from("practice_sessions").select("id").eq("user_id", userId).eq("skill_id", skill.id).eq("status", "in_progress").order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (existing?.id) return loadPractice(admin, userId, existing.id);
-
-  const [{ data: mappings }, { data: history }] = await Promise.all([
-    admin.from("challenge_skill_mapping").select("challenge_id").eq("skill_id", skill.id).limit(1000),
-    admin.from("user_responses").select("challenge_id").eq("user_id", userId).limit(5000),
-  ]);
-  const mappedIds = (mappings ?? []).map((row: { challenge_id: string }) => row.challenge_id);
-  if (!mappedIds.length) return null;
-
-  const { data: challengeRows, error: challengeError } = await admin.from("challenges").select(FIELDS).in("id", mappedIds).eq("is_published", true).eq("is_diagnostic", false).limit(1000);
-  if (challengeError) throw challengeError;
-  const all = (challengeRows ?? []) as Challenge[];
-  const seenIds = new Set((history ?? []).map((row: { challenge_id: string }) => row.challenge_id));
-  const promptById = new Map(all.map((challenge) => [challenge.id, promptKey(challenge.prompt)]));
-  const seenPrompts = new Set<string>();
-  for (const id of seenIds) {
-    const key = promptById.get(id);
-    if (key) seenPrompts.add(key);
-  }
-
-  const eligible = all.filter((challenge) => audienceMatches(challenge.audience_segments, audience));
-  const audienceSpecific = eligible.filter((challenge) => challenge.audience_segments?.includes(audience));
-  const basePool = audienceSpecific.length >= count ? audienceSpecific : eligible;
-  const fresh = basePool.filter((challenge) => !seenIds.has(challenge.id) && !seenPrompts.has(promptKey(challenge.prompt)));
-  const candidates = [...(fresh.length >= count ? fresh : basePool)].sort((a, b) => {
-    const seenA = seenPrompts.has(promptKey(a.prompt)) ? 1 : 0;
-    const seenB = seenPrompts.has(promptKey(b.prompt)) ? 1 : 0;
-    return seenA - seenB || hash(`${userId}:${skillSlug}:${a.id}`) - hash(`${userId}:${skillSlug}:${b.id}`);
-  });
-
-  const picked: Challenge[] = [];
-  const usedPrompts = new Set<string>();
-  for (const challenge of candidates) {
-    const key = promptKey(challenge.prompt);
-    if (usedPrompts.has(key)) continue;
-    usedPrompts.add(key);
-    picked.push(challenge);
-    if (picked.length >= count) break;
-  }
-  if (!picked.length) return null;
-
-  const { data: created, error } = await admin.from("practice_sessions").insert({ user_id: userId, skill_id: skill.id, status: "in_progress" }).select("id").single();
-  if (error || !created?.id) throw error ?? new Error("Could not create practice session");
-  const { error: assignmentError } = await admin.from("practice_session_challenges").insert(picked.map((challenge, index) => ({ session_id: created.id, challenge_id: challenge.id, position: index + 1 })));
-  if (assignmentError) {
-    await admin.from("practice_sessions").delete().eq("id", created.id);
-    throw assignmentError;
-  }
-  return loadPractice(admin, userId, created.id);
-}
+const FIELDS = "id,title,prompt,options,challenge_type,interaction_type,interaction_config,difficulty,confidence_required,audience_segments,scenario_context,scenario_category,function_tags,industry_tags,goal_tags,complexity_level";
+function hash(text:string){let value=2166136261;for(let index=0;index<text.length;index+=1){value^=text.charCodeAt(index);value=Math.imul(value,16777619)}return value>>>0}
+function promptKey(value:string){return value.trim().toLowerCase().replace(/\s+/g," ")}
+function scenarioKey(challenge:Challenge){return(challenge.scenario_category||challenge.scenario_context)?.trim().toLowerCase().replace(/\s+/g," ")??null}
+function familyPriority(challenge:Challenge){return challenge.challenge_type==="audience_depth"?4:challenge.challenge_type==="audience_scenario"?3:challenge.challenge_type==="ai_answer_audit"?2:challenge.challenge_type==="story_mcq"?1:0}
+async function loadPractice(admin:ReturnType<typeof createAdminClient>,userId:string,sessionId:string):Promise<PracticeSession>{const[{data:assignments,error:assignmentError},{data:responses,error:responseError}]=await Promise.all([admin.from("practice_session_challenges").select("challenge_id,position").eq("session_id",sessionId).order("position"),admin.from("user_responses").select("challenge_id").eq("user_id",userId).eq("session_key",sessionId)]);if(assignmentError)throw assignmentError;if(responseError)throw responseError;const ids:string[]=(assignments??[]).map((row:{challenge_id:string})=>row.challenge_id);const{data:challenges,error}=ids.length?await admin.from("challenges").select(FIELDS).in("id",ids).eq("is_published",true):{data:[],error:null};if(error)throw error;const byId=new Map(((challenges??[])as Challenge[]).map(challenge=>[challenge.id,challenge]));return{id:sessionId,challenges:ids.map(id=>byId.get(id)).filter((value):value is Challenge=>Boolean(value)),answeredChallengeIds:(responses??[]).map((row:{challenge_id:string})=>row.challenge_id)}}
+export async function getOrCreatePracticeSession(supabase:SupabaseClient,userId:string,skillSlug:string,count=3):Promise<PracticeSession|null>{const admin=createAdminClient();const[{data:profile},{data:skill}]=await Promise.all([supabase.from("profiles").select("audience_segment,function_area,industry,primary_goal,study_stage,role_focus,responsibility_scope,organisation_scale").eq("id",userId).single(),supabase.from("skills").select("id,slug").eq("slug",skillSlug).single()]);if(!skill||!isAudienceSegment(profile?.audience_segment))return null;const audience=profile.audience_segment,context=contextProfileFromRow(profile);const{data:existing}=await admin.from("practice_sessions").select("id").eq("user_id",userId).eq("skill_id",skill.id).eq("status","in_progress").order("created_at",{ascending:false}).limit(1).maybeSingle();if(existing?.id)return loadPractice(admin,userId,existing.id);const[{data:mappings},{data:history},{data:score}]=await Promise.all([admin.from("challenge_skill_mapping").select("challenge_id").eq("skill_id",skill.id).limit(1000),admin.from("user_responses").select("challenge_id").eq("user_id",userId).limit(10000),admin.from("user_skill_scores").select("score,reliability").eq("user_id",userId).eq("skill_id",skill.id).maybeSingle()]);const mappedIds=(mappings??[]).map((row:{challenge_id:string})=>row.challenge_id);if(!mappedIds.length)return null;const{data:challengeRows,error:challengeError}=await admin.from("challenges").select(FIELDS).in("id",mappedIds).eq("is_published",true).eq("is_diagnostic",false).limit(1000);if(challengeError)throw challengeError;const all=(challengeRows??[])as Challenge[],seenIds=new Set((history??[]).map((row:{challenge_id:string})=>row.challenge_id)),promptById=new Map(all.map(challenge=>[challenge.id,promptKey(challenge.prompt)])),seenPrompts=new Set<string>();for(const id of seenIds){const key=promptById.get(id);if(key)seenPrompts.add(key)}const eligible=all.filter(challenge=>audienceMatches(challenge.audience_segments,audience)),audienceSpecific=eligible.filter(challenge=>challenge.audience_segments?.includes(audience)),basePool=audienceSpecific.length>=count?audienceSpecific:eligible,fresh=basePool.filter(challenge=>!seenIds.has(challenge.id)&&!seenPrompts.has(promptKey(challenge.prompt))),pool=fresh.length>=count?fresh:basePool,measured=score?50+(Number(score.score)-50)*Number(score.reliability??0):50,target=audienceDifficultyTarget(audience,measured);const candidates=[...pool].sort((a,b)=>{const seenA=seenPrompts.has(promptKey(a.prompt))?1:0,seenB=seenPrompts.has(promptKey(b.prompt))?1:0;if(seenA!==seenB)return seenA-seenB;const ca=contentContextScore(a,audience,context),cb=contentContextScore(b,audience,context);if(ca!==cb)return cb-ca;const qa=familyPriority(a),qb=familyPriority(b);if(qa!==qb)return qb-qa;return Math.abs(a.difficulty-target)-Math.abs(b.difficulty-target)||hash(`${userId}:${skillSlug}:${a.id}`)-hash(`${userId}:${skillSlug}:${b.id}`)});const picked:Challenge[]=[],usedPrompts=new Set<string>(),usedScenarios=new Set<string>();for(const challenge of candidates){const key=promptKey(challenge.prompt),scenario=scenarioKey(challenge);if(usedPrompts.has(key))continue;if(scenario&&usedScenarios.has(scenario)&&candidates.length>count)continue;usedPrompts.add(key);if(scenario)usedScenarios.add(scenario);picked.push(challenge);if(picked.length>=count)break}if(picked.length<count){for(const challenge of candidates){if(picked.some(item=>item.id===challenge.id))continue;const key=promptKey(challenge.prompt);if(usedPrompts.has(key))continue;usedPrompts.add(key);picked.push(challenge);if(picked.length>=count)break}}if(!picked.length)return null;const{data:created,error}=await admin.from("practice_sessions").insert({user_id:userId,skill_id:skill.id,status:"in_progress"}).select("id").single();if(error||!created?.id)throw error??new Error("Could not create practice session");const{error:assignmentError}=await admin.from("practice_session_challenges").insert(picked.map((challenge,index)=>({session_id:created.id,challenge_id:challenge.id,position:index+1})));if(assignmentError){await admin.from("practice_sessions").delete().eq("id",created.id);throw assignmentError}return loadPractice(admin,userId,created.id)}

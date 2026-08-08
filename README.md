@@ -1,3 +1,9 @@
+# Cogni MVP v0.5.1
+
+Production URL: https://gocogni.vercel.app
+
+This build fixes the v0.5.0 PostCSS syntax failure caused by literal `\n` tokens in `app/globals.css`.
+
 # Cogni
 
 **Production URL:** https://gocogni.vercel.app

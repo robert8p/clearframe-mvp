@@ -1,0 +1,4 @@
+-- Applied to production as migration: audience_depth_personalisation.
+-- Adds optional contextual profile fields; function/industry/goal content metadata; complexity levels;
+-- hybrid diagnostic roles; relevance feedback fields; metadata indexes; and 25 audience-applied diagnostic items.
+-- The production migration was applied through Supabase before this repository commit. See the project migration history for the exact executed SQL.

@@ -1,18 +1,4 @@
 import { requireUser } from "@/lib/auth";
 import { AudienceSelector } from "@/components/AudienceSelector";
 import { isAudienceSegment } from "@/lib/audience";
-
-export default async function AudienceOnboardingPage() {
-  const { user, supabase } = await requireUser();
-  const { data: profile } = await supabase.from("profiles").select("audience_segment").eq("id", user.id).single();
-  const current = isAudienceSegment(profile?.audience_segment) ? profile.audience_segment : null;
-
-  return (
-    <div className="cg-mobile-page cg-audience-onboarding">
-      <div className="cg-kicker">Make Cogni yours</div>
-      <h1 className="cg-screen-title">Where are you in your journey?</h1>
-      <p className="cg-audience-intro">Cogni uses this to make your training relevant to the decisions you actually face.</p>
-      <AudienceSelector initialValue={current} nextHref="/onboarding" />
-    </div>
-  );
-}
+export default async function AudienceOnboardingPage(){const{user,supabase}=await requireUser();const{data:profile}=await supabase.from("profiles").select("audience_segment").eq("id",user.id).single();const current=isAudienceSegment(profile?.audience_segment)?profile.audience_segment:null;return <div className="cg-mobile-page cg-audience-onboarding"><div className="cg-kicker">Make Cogni yours</div><h1 className="cg-screen-title">Where are you in your journey?</h1><p className="cg-audience-intro">Cogni uses this to choose the kinds of decisions, examples and complexity that fit your current stage. You can change it later without losing your history.</p><AudienceSelector initialValue={current} nextHref="/onboarding/context" /></div>}

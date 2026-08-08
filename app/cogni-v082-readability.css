@@ -1,0 +1,146 @@
+/* Cogni v0.8.2 — readability pass
+   Keeps the compact mobile aesthetic while removing sub-11px UI copy
+   from learner-facing surfaces and improving reading rhythm. */
+
+body{font-size:15px}
+small{line-height:1.45}
+
+/* Global navigation, labels and supporting copy */
+.cg-logo-copy small{font-size:12px}
+.cg-kicker,.kicker{font-size:11px;line-height:1.35}
+.cg-pill,.pill,.cg-streak,.cg-admin-shortcut{font-size:12px}
+.cg-bottom-nav a{font-size:11px;font-weight:650}
+.cg-mobile-header p{font-size:14px;line-height:1.5}
+.cg-goal-row p{font-size:13px}
+.cg-section-head a{font-size:13px;font-weight:650}
+.cg-course-copy span{font-size:13px;line-height:1.45}
+.cg-play{font-size:12px}
+.cg-topic-card strong{font-size:13px;line-height:1.4}
+.cg-topic-card span{font-size:12px}
+.cg-buddy-card p{font-size:14px;line-height:1.5}
+label{font-size:14px}
+.cg-search-fake{font-size:14px}
+
+/* Skills and progress */
+.cg-skill-head{font-size:14px}
+.cg-skill-copy small{font-size:12px}
+.cg-master-row>span{font-size:12px}
+.cg-result-stats small{font-size:12px}
+.cg-profile-head p{font-size:14px}
+.cg-profile-stats small{font-size:11px;line-height:1.35}
+.cg-form-message{font-size:13px}
+.cg-profile-links a{font-size:14px}
+.cg-signout-note{font-size:12px;line-height:1.45}
+.cg-achievement-card p{font-size:13px;line-height:1.45}
+.cg-page-intro{font-size:14px;line-height:1.5}
+.cg-back-link{font-size:12px;font-weight:650}
+.cg-success-banner{font-size:12px}
+.cg-skill-hero p{font-size:13px;line-height:1.5}
+.cg-skill-detail-stats small{font-size:11px}
+.cg-skill-detail-stats strong{font-size:13px}
+.cg-bullet-cards>div>span{font-size:12px}
+.cg-bullet-cards p{font-size:13px;line-height:1.5}
+.cg-pattern-row strong{font-size:13px}
+.cg-pattern-row small{font-size:11px}
+
+/* Daily question experience */
+.cg-question-meta{font-size:11px;line-height:1.35;letter-spacing:.1em}
+.cg-question-prompt{font-size:17px;line-height:1.55}
+.option{font-size:15px;line-height:1.45;padding-top:13px;padding-bottom:13px}
+.cg-option-letter{font-size:13px}
+.cg-confidence small{font-size:11px}
+.cg-lesson-chip{font-size:14px;line-height:1.5}
+.cg-feedback-hero span{font-size:11px}
+.cg-xp-pop{font-size:13px}
+.cg-feedback-explanation{font-size:14px;line-height:1.55}
+.cg-live-skill-updates span{font-size:11px}
+.cg-live-skill-updates strong{font-size:13px}
+.cg-momentum-line{font-size:12px}
+.cg-momentum-line strong{font-size:13px}
+.cg-streak-pop{font-size:12px}
+
+/* Mixed-format questions */
+.cg-format-banner strong{font-size:13px}
+.cg-format-banner small{font-size:11px}
+.cg-check-box{font-size:12px}
+.cg-ranked-item>span{font-size:12px}
+.cg-ranked-item strong{font-size:13px}
+.cg-ranked-item small{font-size:11px}
+.cg-rank-pool button{font-size:12px;line-height:1.4}
+.cg-correct-order b{font-size:11px}
+.cg-correct-order span{font-size:12px}
+.cg-classification-card>strong{font-size:13px}
+.cg-category-buttons button{font-size:11px}
+.cg-triage-card strong{font-size:13px}
+
+/* Daily lesson */
+.cg-lesson-topline strong,.cg-lesson-topline>span{font-size:12px}
+.cg-lesson-story-card>p{font-size:15px;line-height:1.65}
+.cg-reflection-box label{font-size:11px}
+.cg-lesson-reveal span{font-size:11px}
+.cg-lesson-reveal strong{font-size:13px;line-height:1.55}
+.cg-lesson-footnote{font-size:11px;line-height:1.45}
+
+/* Audience-aware onboarding and context */
+.cg-audience-intro{font-size:15px;line-height:1.55}
+.cg-audience-copy strong{font-size:14px}
+.cg-audience-copy span,.cg-audience-copy small{font-size:12px;line-height:1.45}
+.cg-audience-check{font-size:12px}
+.cg-audience-note{font-size:12px;line-height:1.5}
+.cg-context-callout small{font-size:11px}
+.cg-context-callout strong{font-size:14px}
+.cg-context-callout p{font-size:12px;line-height:1.45}
+.cg-context-callout>a{font-size:12px;font-weight:650}
+.cg-context-pill{font-size:11px;font-weight:650}
+.cg-context-strip{font-size:11px;line-height:1.45}
+
+/* Session results and insight surfaces */
+.cg-calibration-card p,.cg-personal-insight-card p{font-size:14px;line-height:1.55}
+.cg-calibration-stats small{font-size:11px}
+.cg-session-skill>div:first-child strong{font-size:13px}
+.cg-session-skill>div:first-child small{font-size:11px}
+.cg-delta{font-size:11px}
+.cg-clean-session strong{font-size:13px}
+.cg-clean-session p{font-size:12px;line-height:1.45}
+.cg-session-footer-card strong{font-size:14px}
+
+/* Public/auth surfaces */
+.cg-public-features p{font-size:14px}
+.cg-phone-status{font-size:13px}
+.cg-phone-welcome p{font-size:14px}
+.cg-phone-signin{font-size:13px}
+.cg-auth-benefits span{font-size:13px}
+.cg-auth-switch{font-size:13px}
+.cg-profile-intro{font-size:14px}
+.cg-profile-hero p{font-size:14px}
+.cg-profile-fact>span{font-size:11px}
+.cg-profile-fact>strong{font-size:14px}
+.cg-profile-fact>small{font-size:11px}
+.cg-pattern-card p{font-size:14px}
+.cg-pattern-action{font-size:12px}
+.cg-focus-step>span{font-size:11px}
+.cg-focus-step>strong{font-size:13px}
+
+/* Admin remains dense, but no essential text should be microscopic */
+.table{font-size:13px}
+.table th{font-size:11px}
+.cg-admin-audience-picks button{font-size:11px}
+.cg-admin-preview small{font-size:11px}
+.cg-admin-preview strong{font-size:13px}
+.cg-admin-preview p{font-size:12px}
+.cg-table-sub{font-size:11px}
+.cg-admin-preview-options>div>span{font-size:11px}
+.cg-admin-preview-options p{font-size:12px}
+.cg-admin-detail-list small{font-size:11px}
+.cg-admin-detail-list strong{font-size:13px}
+.cg-answer-preview{font-size:12px}
+.cg-table-open{font-size:11px}
+
+/* Maintain compact layouts on narrow phones by allowing wrapping rather than shrinking text. */
+@media(max-width:420px){
+  .cg-topic-grid{gap:8px}
+  .cg-topic-card{padding:11px;min-height:138px}
+  .cg-topic-card strong{font-size:12px}
+  .cg-audience-card{padding:12px}
+  .cg-question-prompt{font-size:17px}
+}

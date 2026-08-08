@@ -9,7 +9,7 @@ export default async function SkillsPage() {
     <div className="cg-mobile-page">
       <div className="cg-kicker">Explore</div>
       <h1 className="cg-screen-title">Skills</h1>
-      <p className="cg-page-intro">Open any skill to see what it means, how strong the evidence is, and what to practise next.</p>
+      <p className="cg-page-intro">Open a skill to see your current score, how much evidence it is based on, and what to practise next.</p>
       <SkillsExplorer rows={(data ?? []) as never[]} />
     </div>
   );

@@ -55,7 +55,7 @@ export function AudienceSelector({
       setSavedValue(selected);
 
       if (compact) {
-        setMessage("Learning context saved. Future lessons and sessions will use it.");
+        setMessage("Learning context saved. Future lessons and questions will use it.");
         router.refresh();
         return;
       }
@@ -92,10 +92,10 @@ export function AudienceSelector({
         })}
       </div>
       <button type="button" className="cg-button cg-full" disabled={!selected || busy || (compact && !changed)} onClick={save}>
-        {busy ? "Saving your context…" : compact ? changed ? "Save learning context" : "Learning context saved" : "Personalise my Cogni →"}
+        {busy ? "Saving…" : compact ? changed ? "Save learning context" : "Learning context saved" : "Use this learning context →"}
       </button>
       {message && <p className="cg-form-message" aria-live="polite">{message}</p>}
-      <p className="cg-audience-note">This changes the situations and decision complexity Cogni uses—not how intelligent it assumes you are.</p>
+      <p className="cg-audience-note">This changes the situations and complexity of your training. It does not assume one group is smarter than another.</p>
     </section>
   );
 }

@@ -32,12 +32,12 @@ export default async function SkillDetailPage({ params, searchParams }: { params
   const specificLessons = lessons.filter((lesson: { audience_segments?: string[] }) => lesson.audience_segments?.includes(audience));
   const recommendedLesson = specificLessons[0] ?? lessons[0] ?? null;
 
-  const guidance = SKILL_GUIDANCE[slug] ?? { why: skill.description, mistakes: ["Stopping before the decision-critical uncertainty is resolved"], ai: "Use this skill to evaluate AI output rather than simply accepting or rejecting it." };
+  const guidance = SKILL_GUIDANCE[slug] ?? { why: skill.description, mistakes: ["Stopping before an important uncertainty is resolved"], ai: "Use this skill to check AI output rather than simply accepting or rejecting it." };
   const attempts = Number(score?.attempts ?? 0);
   const reliability = Number(score?.reliability ?? 0);
   const measured = attempts > 0;
   const recent = recentResponses ?? [];
-  const recentAccuracy = recent.length ? Math.round(recent.reduce((sum: number, row: any) => sum + Number(row.score_fraction ?? (row.is_correct ? 1 : 0)), 0) / recent.length * 100) : null;
+  const recentScore = recent.length ? Math.round(recent.reduce((sum: number, row: any) => sum + Number(row.score_fraction ?? (row.is_correct ? 1 : 0)), 0) / recent.length * 100) : null;
   const oldestUpdate = updateRows?.[updateRows.length - 1];
   const newestUpdate = updateRows?.[0];
   const trend = oldestUpdate && newestUpdate ? Number((Number(newestUpdate.score_after) - Number(oldestUpdate.score_before)).toFixed(1)) : null;
@@ -48,29 +48,29 @@ export default async function SkillDetailPage({ params, searchParams }: { params
   return (
     <div className="cg-mobile-page">
       <Link href="/skills" className="cg-back-link">← All skills</Link>
-      {query.practised === "1" && <div className="cg-success-banner">✦ Practice banked. Your Development Score now reflects the new evidence.</div>}
+      {query.practised === "1" && <div className="cg-success-banner">✦ Practice saved. Your skill score now includes these answers.</div>}
       <div className="cg-kicker">Skill detail</div>
       <h1 className="cg-screen-title">{skill.name}</h1>
       <p className="cg-page-intro">{skill.description}</p>
 
       <section className="cg-card cg-skill-hero">
         <div className="cg-ring big" style={{ ["--progress" as string]: `${(measured ? Number(score?.score ?? 50) : 0) * 3.6}deg` }}><span>{measured ? Math.round(Number(score?.score)) : "?"}</span></div>
-        <div><div className="cg-kicker">Development Score</div><h2>{measured ? `${Math.round(Number(score?.score))}/100` : "Not measured yet"}</h2><p>{measured ? `${attempts} observations • evidence confidence ${Math.round(reliability * 100)}%` : "Cogni needs observed answers before making a development claim."}</p></div>
+        <div><div className="cg-kicker">Skill score</div><h2>{measured ? `${Math.round(Number(score?.score))}/100` : "Not measured yet"}</h2><p>{measured ? `${attempts} answers • evidence level ${Math.round(reliability * 100)}%` : "Answer a few questions on this skill before Cogni shows a score."}</p></div>
       </section>
 
       <div className="cg-skill-detail-stats">
-        <div><small>Recent alignment</small><strong>{recentAccuracy === null ? "—" : `${recentAccuracy}%`}</strong></div>
-        <div><small>Observed trend</small><strong>{trend === null ? "Early" : `${trend > 0 ? "+" : ""}${trend}`}</strong></div>
-        <div><small>Context</small><strong>{audienceLabel}</strong></div>
+        <div><small>Recent score</small><strong>{recentScore === null ? "—" : `${recentScore}%`}</strong></div>
+        <div><small>Change over time</small><strong>{trend === null ? "Early" : `${trend > 0 ? "+" : ""}${trend}`}</strong></div>
+        <div><small>Learning context</small><strong>{audienceLabel}</strong></div>
       </div>
 
-      <section className="cg-card"><div className="cg-kicker">Why it matters</div><h2>Human judgement in the AI age</h2><p>{guidance.why}</p><div className="cg-lesson-chip"><strong>AI-age application</strong><span>{guidance.ai}</span></div></section>
+      <section className="cg-card"><div className="cg-kicker">Why it matters</div><h2>Why this skill matters with AI</h2><p>{guidance.why}</p><div className="cg-lesson-chip"><strong>With AI</strong><span>{guidance.ai}</span></div></section>
 
-      <section className="cg-card"><div className="cg-kicker">Common traps</div><h2>What to watch for</h2><div className="cg-bullet-cards">{guidance.mistakes.map((mistake) => <div key={mistake}><span>!</span><p>{mistake}</p></div>)}</div></section>
+      <section className="cg-card"><div className="cg-kicker">Common mistakes</div><h2>What to watch for</h2><div className="cg-bullet-cards">{guidance.mistakes.map((mistake) => <div key={mistake}><span>!</span><p>{mistake}</p></div>)}</div></section>
 
-      <section className="cg-card"><div className="cg-kicker">Your evidence</div><h2>Detected patterns</h2>{topPatterns.length ? <div className="cg-pattern-list">{topPatterns.map(([pattern, count]) => { const copy = patternCopy(pattern); return <div className="cg-pattern-row" key={pattern}><div><strong>{copy?.label ?? pattern.replaceAll("_", " ")}</strong><small>{copy?.action ?? "Use the next practice set to test this pattern again."}</small></div><span className="cg-pill">×{count}</span></div>; })}</div> : <p>No repeated reasoning-error pattern is established for this skill yet. More observations are required.</p>}</section>
+      <section className="cg-card"><div className="cg-kicker">What Cogni has noticed</div><h2>Thinking patterns</h2>{topPatterns.length ? <div className="cg-pattern-list">{topPatterns.map(([pattern, count]) => { const copy = patternCopy(pattern); return <div className="cg-pattern-row" key={pattern}><div><strong>{copy?.label ?? pattern.replaceAll("_", " ")}</strong><small>{copy?.action ?? "Use the next practice set to see whether this pattern appears again."}</small></div><span className="cg-pill">×{count}</span></div>; })}</div> : <p>No repeated thinking pattern is clear for this skill yet. More answers will make this clearer.</p>}</section>
 
-      {recommendedLesson && <section className="cg-card"><div className="cg-kicker">Recommended lesson</div><h2>{recommendedLesson.title}</h2><p>{recommendedLesson.subtitle}</p><small>Selected for {audienceLabel.toLowerCase()} context.</small></section>}
+      {recommendedLesson && <section className="cg-card"><div className="cg-kicker">Recommended lesson</div><h2>{recommendedLesson.title}</h2><p>{recommendedLesson.subtitle}</p><small>Chosen for your {audienceLabel.toLowerCase()} learning context.</small></section>}
 
       <Link href={`/practice/${slug}`} className="cg-button cg-full">Practise {skill.name} →</Link>
       <Link href="/progress" className="cg-button secondary cg-full">View overall progress</Link>

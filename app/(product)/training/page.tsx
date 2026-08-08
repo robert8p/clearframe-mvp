@@ -16,24 +16,9 @@ export default async function TrainingPage() {
   if (!isAudienceSegment(profile?.audience_segment)) redirect("/onboarding/audience");
   const diagnostic = await getDiagnosticProgress(supabase, user.id);
   if (!diagnostic.completedSessionKey) redirect("/onboarding");
-
   const session = await getOrCreateDailyTrainingSession(supabase, user.id, 5);
   if (session.id && session.status !== "completed" && !(await isDailyLessonComplete(supabase, user.id))) redirect("/lesson");
-
-  if (!session.id || session.challenges.length === 0) {
-    return (
-      <div className="cg-mobile-page cg-state-view">
-        <div className="cg-state-icon">↻</div>
-        <div className="cg-kicker">Daily challenge</div>
-        <h1 className="cg-screen-title">Today’s questions aren’t ready.</h1>
-        <p>Cogni couldn’t assemble a suitable set right now. Nothing has been lost.</p>
-        <Link className="cg-button cg-full" href="/dashboard">Back to Home</Link>
-        <Link className="cg-button secondary cg-full" href="/support">Get help</Link>
-      </div>
-    );
-  }
-
+  if (!session.id || session.challenges.length === 0) return <div className="cg-mobile-page cg-state-view"><div className="cg-state-icon">↻</div><div className="cg-kicker">Today’s questions</div><h1 className="cg-screen-title">Today’s questions aren’t ready.</h1><p>Cogni couldn’t put together a suitable set right now. Nothing has been lost.</p><Link className="cg-button cg-full" href="/dashboard">Back to Home</Link><Link className="cg-button secondary cg-full" href="/support">Get help</Link></div>;
   if (session.status === "completed" || session.answeredChallengeIds.length >= session.challenges.length) redirect("/session-complete");
-
   return <ChallengeRunner challenges={session.challenges as Challenge[]} mode="training" sessionId={session.id} initialAnsweredChallengeIds={session.answeredChallengeIds} />;
 }

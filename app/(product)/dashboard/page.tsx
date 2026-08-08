@@ -62,54 +62,43 @@ export default async function DashboardPage() {
         <div className="cg-kicker">Daily goal</div>
         <div className="cg-goal-row">
           <div className="cg-ring" style={{ ["--progress" as string]: `${dailyProgress * 3.6}deg` }}><span>{dailyProgress}%</span></div>
-          <div><h2>{dailyComplete ? "Goal complete — keep going if you want" : lessonDone ? "Lesson done — time to practise" : `A ${audience?.shortLabel ?? "personalised"} lesson is ready`}</h2><p>{lessonDone ? "✓ Lesson" : "1 lesson"} • {answered} / {assigned} questions</p></div>
+          <div><h2>{dailyComplete ? "Goal complete — keep going if you want" : lessonDone ? "Lesson done — time for today’s questions" : `A ${audience?.shortLabel ?? "personalised"} lesson is ready`}</h2><p>{lessonDone ? "✓ Lesson" : "1 lesson"} • {answered} / {assigned} questions</p></div>
         </div>
         <div className="progress" aria-label={`${dailyProgress}% of today's learning complete`}><span style={{ width: `${dailyProgress}%` }} /></div>
-        {dailyComplete && (
-          <div className="cg-daily-actions">
-            <Link href={extraTrainingHref} className="cg-button">Keep training</Link>
-            <Link href="/session-complete" className="cg-button secondary">Review today</Link>
-          </div>
-        )}
+        {dailyComplete && <div className="cg-daily-actions"><Link href={extraTrainingHref} className="cg-button">Keep training</Link><Link href="/session-complete" className="cg-button secondary">Review today</Link></div>}
       </section>
 
       <section className="cg-section-head"><h2>{dailyComplete ? "Today’s session" : "Continue learning"}</h2><Link href={continueHref}>{dailyComplete ? "Review" : "Open"}</Link></section>
       <Link href={continueHref} className="cg-course-card" aria-label={dailyComplete ? "Review today's learning" : "Open today's learning"}>
         <div className="cg-course-icon">{lessonDone ? "◎" : "✦"}</div>
-        <div className="cg-course-copy"><strong>{dailyComplete ? "Today complete" : lessonDone ? "Daily judgement challenge" : "Today’s mini lesson"}</strong><span>{dailyComplete ? "Review your result and learning signals" : lessonDone ? `${Math.max(assigned - answered, 0)} questions left` : `Built around ${audience?.label.toLowerCase()} decisions`}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
+        <div className="cg-course-copy"><strong>{dailyComplete ? "Today complete" : lessonDone ? "Today’s questions" : "Today’s mini lesson"}</strong><span>{dailyComplete ? "Review your results and explanations" : lessonDone ? `${Math.max(assigned - answered, 0)} questions left` : `Built around ${audience?.label.toLowerCase()} decisions`}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
         <div className="cg-play" aria-hidden="true">▶</div>
       </Link>
 
       {dailyComplete && (
         <section className="cg-card cg-extra-training-card">
-          <div className="cg-kicker">Optional extra training</div>
-          <h2>{weakestSkill?.name ? `Sharpen ${weakestSkill.name}` : "Keep building judgement"}</h2>
-          <p>Your daily goal is complete. Extra practice is optional and uses fresh questions from your current highest-value development area.</p>
-          <Link href={extraTrainingHref} className="cg-button cg-full">Train another 3 questions</Link>
+          <div className="cg-kicker">Optional extra practice</div>
+          <h2>{weakestSkill?.name ? `Practise ${weakestSkill.name}` : "Keep practising"}</h2>
+          <p>Your daily goal is complete. If you want to continue, Cogni will give you 3 fresh questions on the skill that would help you most right now.</p>
+          <Link href={extraTrainingHref} className="cg-button cg-full">Practise 3 more questions</Link>
         </section>
       )}
 
-      <section className="cg-section-head"><h2>Priority skills</h2><Link href="/skills">View all</Link></section>
+      <section className="cg-section-head"><h2>Skills to focus on</h2><Link href="/skills">View all</Link></section>
       <div className="cg-topic-grid">
         {recentSkills.map((row: any, index: number) => {
           const skill = skillInfo(row.skills);
-          return (
-            <Link href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} className="cg-topic-card" key={skill?.slug ?? index}>
-              <div className="cg-topic-icon">{index + 1}</div>
-              <strong>{skill?.name ?? "Skill"}</strong>
-              <span>{Math.round(row.score)}%</span>
-            </Link>
-          );
+          return <Link href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} className="cg-topic-card" key={skill?.slug ?? index}><div className="cg-topic-icon">{index + 1}</div><strong>{skill?.name ?? "Skill"}</strong><span>{Math.round(row.score)}/100</span></Link>;
         })}
       </div>
 
       <CoachCard />
 
       <section className="cg-card cg-focus-card">
-        <div className="cg-kicker">Highest-value focus</div>
-        <h2>{weakestSkill?.name ?? "Keep building evidence"}</h2>
-        <p>{weakest ? `Current Development Score ${Math.round(weakest.score)} with ${Math.round((weakest.reliability ?? 0) * 100)}% evidence confidence.` : "Cogni will refine your focus as more observed evidence accumulates."}</p>
-        <Link href={dailyComplete ? extraTrainingHref : continueHref} className="cg-button cg-full">{dailyComplete ? "Train this skill" : !lessonDone ? "Start today’s lesson" : answered ? "Continue challenge" : "Start challenge"}</Link>
+        <div className="cg-kicker">Best next skill to work on</div>
+        <h2>{weakestSkill?.name ?? "Keep practising"}</h2>
+        <p>{weakest ? `Current skill score ${Math.round(weakest.score)}/100. Evidence level ${Math.round((weakest.reliability ?? 0) * 100)}%.` : "Cogni will make this recommendation clearer as you answer more questions."}</p>
+        <Link href={dailyComplete ? extraTrainingHref : continueHref} className="cg-button cg-full">{dailyComplete ? "Practise this skill" : !lessonDone ? "Start today’s lesson" : answered ? "Continue questions" : "Start questions"}</Link>
       </section>
     </div>
   );

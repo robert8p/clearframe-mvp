@@ -5,31 +5,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 function skillInfo(value: any) { return Array.isArray(value) ? value[0] : value; }
 
-type ReviewChallenge = {
-  id: string;
-  title: string;
-  prompt: string;
-  options: string[];
-  interaction_type: string;
-  interaction_config: Record<string, unknown> | null;
-};
-type ReviewKey = {
-  challenge_id: string;
-  correct_index: number | null;
-  correct_answer: unknown;
-  explanation: string;
-  thinking_principle: string;
-};
-type ResponseRow = {
-  challenge_id: string;
-  selected_index: number | null;
-  response_payload: unknown;
-  is_correct: boolean;
-  score_fraction: number | string | null;
-  confidence: number | null;
-  response_time_ms: number | null;
-  created_at: string;
-};
+function formatType(type: string) {
+  return ({
+    single_choice: "Choose one",
+    multi_select: "Choose all that apply",
+    ranking: "Put in order",
+    classification: "Sort into groups",
+    triage: "What would you do?",
+  } as Record<string, string>)[type] ?? "Question";
+}
+
+type ReviewChallenge = { id: string; title: string; prompt: string; options: string[]; interaction_type: string; interaction_config: Record<string, unknown> | null };
+type ReviewKey = { challenge_id: string; correct_index: number | null; correct_answer: unknown; explanation: string; thinking_principle: string };
+type ResponseRow = { challenge_id: string; selected_index: number | null; response_payload: unknown; is_correct: boolean; score_fraction: number | string | null; confidence: number | null; response_time_ms: number | null; created_at: string };
 
 function categoryLabel(challenge: ReviewChallenge, value: string) {
   const categories = Array.isArray(challenge.interaction_config?.categories) ? challenge.interaction_config?.categories as { id?: string; label?: string }[] : [];
@@ -49,18 +37,18 @@ function formatAnswer(challenge: ReviewChallenge, value: unknown, fallbackIndex:
   }
   if (type === "ranking") {
     const indices = Array.isArray(value) ? value.map(Number).filter(Number.isInteger) : [];
-    return indices.length ? indices.map((index, position) => `${position + 1}. ${options[index] ?? "Item"}`).join("\n") : "No ranking recorded";
+    return indices.length ? indices.map((index, position) => `${position + 1}. ${options[index] ?? "Item"}`).join("\n") : "No order recorded";
   }
   if (type === "classification" && value && typeof value === "object" && !Array.isArray(value)) {
     const mapping = value as Record<string, string>;
     const lines = Object.entries(mapping).map(([index, category]) => `${options[Number(index)] ?? `Item ${Number(index) + 1}`} → ${categoryLabel(challenge, category)}`);
-    return lines.length ? lines.join("\n") : "No classifications recorded";
+    return lines.length ? lines.join("\n") : "No groups recorded";
   }
   return "Answer recorded";
 }
 
 function formatCorrectAnswer(challenge: ReviewChallenge, key: ReviewKey | undefined) {
-  if (!key) return "Answer key unavailable";
+  if (!key) return "Best answer unavailable";
   const type = challenge.interaction_type ?? "single_choice";
   if (type === "single_choice" || type === "triage") return formatAnswer(challenge, key.correct_index, key.correct_index);
   return formatAnswer(challenge, key.correct_answer);
@@ -82,26 +70,19 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   ]);
 
   const rows = (responses ?? []) as ResponseRow[];
-  const alignment = rows.length ? Math.round(rows.reduce((sum, row) => sum + Number(row.score_fraction ?? (row.is_correct ? 1 : 0)), 0) / rows.length * 100) : null;
+  const recentScore = rows.length ? Math.round(rows.reduce((sum, row) => sum + Number(row.score_fraction ?? (row.is_correct ? 1 : 0)), 0) / rows.length * 100) : null;
   const confidenceValues = rows.map((row) => row.confidence).filter((value): value is number => typeof value === "number");
   const avgConfidence = confidenceValues.length ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length) : null;
   const dayCounts = Array.from({ length: 7 }, (_, offset) => {
     const d = new Date(Date.now() - (6 - offset) * 86400000);
     const key = localDateKey(d);
-    return {
-      key,
-      label: d.toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "Europe/London" }),
-      fullLabel: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", timeZone: "Europe/London" }),
-      count: rows.filter((row) => localDateKey(new Date(row.created_at)) === key).length,
-    };
+    return { key, label: d.toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "Europe/London" }), fullLabel: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", timeZone: "Europe/London" }), count: rows.filter((row) => localDateKey(new Date(row.created_at)) === key).length };
   });
   const maxCount = Math.max(1, ...dayCounts.map((day) => day.count));
   const selectedDay = dayCounts.find((day) => day.key === params.day) ?? null;
   const selectedResponses = selectedDay ? rows.filter((row) => localDateKey(new Date(row.created_at)) === selectedDay.key) : [];
-  const summaryTitle = alignment === null ? "Your evidence starts here." : alignment >= 80 ? "Strong recent alignment." : alignment >= 60 ? "Useful momentum." : "Good evidence to train from.";
-  const summaryCopy = alignment === null
-    ? "Complete a lesson and challenge to start building your recent progress view."
-    : `${rows.length} recent answer${rows.length === 1 ? "" : "s"}${avgConfidence === null ? "." : ` with average confidence of ${avgConfidence}%.`}`;
+  const summaryTitle = recentScore === null ? "Your progress starts here." : recentScore >= 80 ? "Strong recent results." : recentScore >= 60 ? "Good progress." : "Useful results to learn from.";
+  const summaryCopy = recentScore === null ? "Complete a lesson and some questions to start building your progress view." : `${rows.length} recent answer${rows.length === 1 ? "" : "s"}${avgConfidence === null ? "." : ` with average confidence of ${avgConfidence}%.`}`;
 
   const challengeById = new Map<string, ReviewChallenge>();
   const keyById = new Map<string, ReviewKey>();
@@ -121,8 +102,8 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
       <div className="cg-kicker">Progress</div>
       <h1 className="cg-screen-title">Your progress</h1>
 
-      <section className={`cg-card cg-progress-summary ${alignment === null ? "empty" : ""}`}>
-        <div className="cg-ring big" style={{ ["--progress" as string]: `${(alignment ?? 0) * 3.6}deg` }}><span>{alignment === null ? "—" : `${alignment}%`}</span></div>
+      <section className={`cg-card cg-progress-summary ${recentScore === null ? "empty" : ""}`}>
+        <div className="cg-ring big" style={{ ["--progress" as string]: `${(recentScore ?? 0) * 3.6}deg` }}><span>{recentScore === null ? "—" : `${recentScore}%`}</span></div>
         <div><h2>{summaryTitle}</h2><p>{summaryCopy}</p></div>
       </section>
 
@@ -130,15 +111,8 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         <div className="cg-section-head flush"><h2>Weekly activity</h2><span className="cg-pill">{rows.length} answers</span></div>
         <div className="cg-week-bars" aria-label="Answers completed over the last seven days">
           {dayCounts.map((day) => (
-            <Link
-              className={`cg-week-col-link ${selectedDay?.key === day.key ? "active" : ""}`}
-              key={day.key}
-              href={`/progress?day=${day.key}#day-review`}
-              aria-label={`${day.fullLabel}: ${day.count} answer${day.count === 1 ? "" : "s"}. Review this day.`}
-              aria-current={selectedDay?.key === day.key ? "true" : undefined}
-            >
-              <div className="cg-week-track"><span style={{ height: `${day.count ? Math.max(8, day.count / maxCount * 100) : 0}%` }} /></div>
-              <small>{day.label}</small>
+            <Link className={`cg-week-col-link ${selectedDay?.key === day.key ? "active" : ""}`} key={day.key} href={`/progress?day=${day.key}#day-review`} aria-label={`${day.fullLabel}: ${day.count} answer${day.count === 1 ? "" : "s"}. Review this day.`} aria-current={selectedDay?.key === day.key ? "true" : undefined}>
+              <div className="cg-week-track"><span style={{ height: `${day.count ? Math.max(8, day.count / maxCount * 100) : 0}%` }} /></div><small>{day.label}</small>
             </Link>
           ))}
         </div>
@@ -158,26 +132,19 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
                 if (!challenge) return null;
                 const key = keyById.get(response.challenge_id);
                 const fraction = Number(response.score_fraction ?? (response.is_correct ? 1 : 0));
-                const status = response.is_correct ? "Correct" : fraction >= 0.5 ? `${Math.round(fraction * 100)}% aligned` : "Learning signal";
+                const status = response.is_correct ? "Correct" : fraction >= 0.5 ? `${Math.round(fraction * 100)}% score` : "Worth reviewing";
                 const statusClass = response.is_correct ? "good" : fraction >= 0.5 ? "partial" : "learning";
                 const yourAnswer = formatAnswer(challenge, response.response_payload, response.selected_index);
                 const bestAnswer = formatCorrectAnswer(challenge, key);
                 const answerTime = formatTime(response.response_time_ms);
                 return (
                   <article className="cg-card cg-review-card" key={`${response.challenge_id}-${response.created_at}-${index}`}>
-                    <div className="cg-review-topline"><span className={`cg-review-status ${statusClass}`}>{status}</span><span className="cg-pill">{challenge.interaction_type.replaceAll("_", " ")}</span></div>
-                    <h3>{challenge.title}</h3>
-                    <p>{challenge.prompt}</p>
-                    <div className="cg-review-answer-grid">
-                      <div className="cg-review-answer yours"><small>Your answer</small><strong>{yourAnswer}</strong></div>
-                      <div className="cg-review-answer best"><small>Best answer</small><strong>{bestAnswer}</strong></div>
-                    </div>
-                    <div className="cg-review-meta">
-                      {typeof response.confidence === "number" && <span className="cg-pill">Confidence {response.confidence}%</span>}
-                      {answerTime && <span className="cg-pill">Answered in {answerTime}</span>}
-                    </div>
+                    <div className="cg-review-topline"><span className={`cg-review-status ${statusClass}`}>{status}</span><span className="cg-pill">{formatType(challenge.interaction_type)}</span></div>
+                    <h3>{challenge.title}</h3><p>{challenge.prompt}</p>
+                    <div className="cg-review-answer-grid"><div className="cg-review-answer yours"><small>Your answer</small><strong>{yourAnswer}</strong></div><div className="cg-review-answer best"><small>Best answer</small><strong>{bestAnswer}</strong></div></div>
+                    <div className="cg-review-meta">{typeof response.confidence === "number" && <span className="cg-pill">Confidence {response.confidence}%</span>}{answerTime && <span className="cg-pill">Answered in {answerTime}</span>}</div>
                     {key?.explanation && <div className="cg-review-explanation"><strong>Why</strong><p>{key.explanation}</p></div>}
-                    {key?.thinking_principle && <div className="cg-review-explanation"><strong>Thinking principle</strong><p>{key.thinking_principle}</p></div>}
+                    {key?.thinking_principle && <div className="cg-review-explanation"><strong>Key idea</strong><p>{key.thinking_principle}</p></div>}
                   </article>
                 );
               })}
@@ -186,12 +153,12 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         </section>
       )}
 
-      <section className="cg-section-head"><h2>Strongest measured skills</h2><Link href="/skills">See all</Link></section>
+      <section className="cg-section-head"><h2>Strongest skills so far</h2><Link href="/skills">See all</Link></section>
       <div className="cg-master-list">
         {(scores ?? []).length ? (scores ?? []).map((row: any, index: number) => {
           const skill = skillInfo(row.skills);
-          return <Link href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} className="cg-master-row" key={skill?.slug ?? index}><div className="cg-course-icon">{index + 1}</div><div className="cg-course-copy"><strong>{skill?.name ?? "Skill"}</strong><div className="progress"><span style={{ width: `${Math.round(row.score)}%` }} /></div><small>{Math.round((row.reliability ?? 0) * 100)}% evidence confidence</small></div><span>{Math.round(row.score)}% ›</span></Link>;
-        }) : <section className="cg-card"><p>No measured skills yet. Complete your diagnostic to establish the first evidence.</p><Link href="/diagnostic" className="cg-button cg-full">Open diagnostic</Link></section>}
+          return <Link href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} className="cg-master-row" key={skill?.slug ?? index}><div className="cg-course-icon">{index + 1}</div><div className="cg-course-copy"><strong>{skill?.name ?? "Skill"}</strong><div className="progress"><span style={{ width: `${Math.round(row.score)}%` }} /></div><small>Evidence level {Math.round((row.reliability ?? 0) * 100)}%</small></div><span>{Math.round(row.score)}/100 ›</span></Link>;
+        }) : <section className="cg-card"><p>No skill scores yet. Complete your starting check to create your first profile.</p><Link href="/diagnostic" className="cg-button cg-full">Open starting check</Link></section>}
       </div>
     </div>
   );

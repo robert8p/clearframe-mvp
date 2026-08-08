@@ -30,8 +30,8 @@ export function SkillsExplorer({ rows }: { rows: Row[] }) {
       </label>
       <div className="badge-row" role="group" aria-label="Filter skills">
         <button type="button" className={`cg-pill ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>All {rows.length}</button>
-        <button type="button" className={`cg-pill ${filter === "measured" ? "active" : ""}`} onClick={() => setFilter("measured")}>Measured {measured}</button>
-        <button type="button" className={`cg-pill ${filter === "unmeasured" ? "active" : ""}`} onClick={() => setFilter("unmeasured")}>Unmeasured {unmeasured}</button>
+        <button type="button" className={`cg-pill ${filter === "measured" ? "active" : ""}`} onClick={() => setFilter("measured")}>Started {measured}</button>
+        <button type="button" className={`cg-pill ${filter === "unmeasured" ? "active" : ""}`} onClick={() => setFilter("unmeasured")}>Not yet tested {unmeasured}</button>
       </div>
       <div className="cg-skill-list">
         {visible.map((row, index) => {
@@ -41,9 +41,9 @@ export function SkillsExplorer({ rows }: { rows: Row[] }) {
             <Link className="cg-skill-card cg-skill-link" href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} key={skill?.slug ?? index}>
               <div className="cg-skill-icon">{measuredRow ? Math.round(row.score) : "?"}</div>
               <div className="cg-skill-copy">
-                <div className="cg-skill-head"><strong>{skill?.name ?? "Skill"}</strong><span>{measuredRow ? `${Math.round(row.score)}/100` : "Unmeasured"}</span></div>
-                <div className="progress" aria-label={measuredRow ? `Development Score ${Math.round(row.score)} out of 100` : "Not measured"}><span style={{ width: `${measuredRow ? Math.round(row.score) : 0}%` }} /></div>
-                <small>{measuredRow ? `Evidence confidence ${Math.round(row.reliability * 100)}%` : "Cogni will explore this capability in future sessions."}</small>
+                <div className="cg-skill-head"><strong>{skill?.name ?? "Skill"}</strong><span>{measuredRow ? `${Math.round(row.score)}/100` : "Not yet tested"}</span></div>
+                <div className="progress" aria-label={measuredRow ? `Skill score ${Math.round(row.score)} out of 100` : "Not yet tested"}><span style={{ width: `${measuredRow ? Math.round(row.score) : 0}%` }} /></div>
+                <small>{measuredRow ? `Evidence level ${Math.round(row.reliability * 100)}%` : "You’ll see this skill in future sessions."}</small>
               </div>
               <span className="cg-card-chevron" aria-hidden="true">›</span>
             </Link>

@@ -4,7 +4,7 @@ export const AUDIENCE_SEGMENTS = [
     label: "University student",
     shortLabel: "University",
     icon: "🎓",
-    description: "Build sharper academic and everyday judgement",
+    description: "Build stronger thinking for study and everyday decisions",
     complexityAnchor: 42,
   },
   {
@@ -12,7 +12,7 @@ export const AUDIENCE_SEGMENTS = [
     label: "Graduate / early career",
     shortLabel: "Graduate / early career",
     icon: "🚀",
-    description: "Develop the judgement that accelerates your first years at work",
+    description: "Build confidence with early-career decisions and evidence",
     complexityAnchor: 48,
   },
   {
@@ -28,7 +28,7 @@ export const AUDIENCE_SEGMENTS = [
     label: "Management",
     shortLabel: "Management",
     icon: "🧭",
-    description: "Improve judgement across people, priorities and decisions",
+    description: "Make clearer decisions about people, priorities and risk",
     complexityAnchor: 61,
   },
   {
@@ -36,7 +36,7 @@ export const AUDIENCE_SEGMENTS = [
     label: "Executive",
     shortLabel: "Executive",
     icon: "♟",
-    description: "Sharpen strategic thinking under uncertainty",
+    description: "Strengthen strategic decisions when the answer is uncertain",
     complexityAnchor: 68,
   },
 ] as const;
@@ -60,8 +60,5 @@ export function audienceMatches(contentSegments: unknown, audience: AudienceSegm
 export function audienceDifficultyTarget(audience: AudienceSegment, measuredScore: number) {
   const meta = audienceMeta(audience);
   const anchor = meta?.complexityAnchor ?? 52;
-  // Context complexity and demonstrated capability both matter. Seniority is
-  // never treated as intelligence: the audience anchor changes the kind of
-  // decision and stakes, while observed performance remains the stronger input.
   return Math.round(measuredScore * 0.68 + anchor * 0.32);
 }

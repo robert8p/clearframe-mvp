@@ -10,145 +10,101 @@ export type ErrorPatternCount = {
   count: number;
 };
 
-const PATTERN_COPY: Record<
-  string,
-  { label: string; narrative: string; action: string }
-> = {
+const PATTERN_COPY: Record<string, { label: string; narrative: string; action: string }> = {
   evidence_neglect: {
-    label: "Evidence neglect",
-    narrative:
-      "You sometimes challenge the conclusion more readily than the evidence underneath it.",
-    action: "Slow down at the evidence layer: source, sample, method and missing counter-evidence.",
+    label: "Not checking the evidence closely enough",
+    narrative: "You sometimes question the conclusion without first checking the evidence underneath it.",
+    action: "Check the source, sample, method and important missing evidence before deciding.",
   },
   authority_bias: {
-    label: "Authority bias",
-    narrative:
-      "Prestige, confidence or seniority can carry more weight than the underlying evidence deserves.",
-    action: "Separate who made the claim from what independently supports it.",
+    label: "Giving status too much weight",
+    narrative: "A confident, senior or prestigious source can sometimes feel more convincing than its evidence deserves.",
+    action: "Separate who made the claim from the evidence that supports it.",
   },
   causal_inference_error: {
-    label: "Causal inference",
-    narrative:
-      "Association can sometimes feel persuasive enough that you move to a causal explanation too quickly.",
-    action: "Ask what alternative cause, confounder or experiment would distinguish correlation from causation.",
+    label: "Jumping from a pattern to cause and effect",
+    narrative: "When two things move together, you can sometimes move too quickly to the idea that one caused the other.",
+    action: "Ask what else could explain the pattern and what evidence would separate the explanations.",
   },
   premature_closure: {
-    label: "Premature closure",
-    narrative:
-      "You can settle on a plausible answer before testing whether an important alternative or missing fact changes it.",
-    action: "Before committing, ask what information could most change your decision.",
+    label: "Deciding too early",
+    narrative: "You can settle on a plausible answer before checking whether a missing fact or alternative could change it.",
+    action: "Before deciding, ask what information could most change your choice.",
   },
   overconfidence: {
-    label: "Overconfidence",
-    narrative:
-      "Your confidence can sometimes run ahead of the evidence available to support the answer.",
-    action: "Calibrate confidence to evidence quality, not to how fluent or familiar the answer feels.",
+    label: "Confidence running ahead of the evidence",
+    narrative: "You can sometimes feel more certain than the available evidence supports.",
+    action: "Base your confidence on the evidence, not on how smooth or familiar an answer feels.",
   },
   solutioneering: {
-    label: "Solutioneering",
-    narrative:
-      "You can move toward a solution before the problem has been framed tightly enough.",
-    action: "Restate the outcome, constraints and root problem before comparing interventions.",
+    label: "Jumping to a solution",
+    narrative: "You can move toward a solution before the problem is clear enough.",
+    action: "State the outcome you want, the constraints and the real problem before comparing solutions.",
   },
   confirmation_bias: {
-    label: "Confirmation bias",
-    narrative:
-      "Evidence that supports an initial view can receive more attention than evidence that could falsify it.",
-    action: "Actively seek the strongest disconfirming evidence before locking the conclusion.",
+    label: "Looking mainly for supporting evidence",
+    narrative: "Evidence that supports your first view can sometimes get more attention than evidence that challenges it.",
+    action: "Actively look for strong evidence that could show your preferred answer is wrong.",
   },
   anchoring: {
-    label: "Anchoring",
-    narrative:
-      "An early number or framing can shape later judgement more than it should.",
-    action: "Generate an independent estimate or frame before returning to the initial anchor.",
+    label: "Getting stuck on the first number or idea",
+    narrative: "An early number or way of describing the problem can influence your later judgement more than it should.",
+    action: "Make an independent estimate or describe the problem another way before returning to the first number or idea.",
   },
   "sunk-cost_bias": {
-    label: "Sunk-cost bias",
-    narrative:
-      "Past investment can influence the next decision even when only future costs and benefits should matter.",
-    action: "Ask what you would choose today if the previous investment had never happened.",
+    label: "Letting past effort drive the next decision",
+    narrative: "Time or money already spent can pull you toward continuing even when the future case is weak.",
+    action: "Ask what you would choose today if the earlier time or money had never been spent.",
   },
   availability_bias: {
-    label: "Availability bias",
-    narrative:
-      "Recent or vivid examples can feel more representative than the broader evidence base.",
-    action: "Look for base rates and representative data before generalising from memorable examples.",
+    label: "Giving memorable examples too much weight",
+    narrative: "Recent or dramatic examples can feel more common or important than the wider evidence shows.",
+    action: "Check what usually happens in similar cases and use broader data before generalising from a memorable example.",
   },
   survivorship_bias: {
-    label: "Survivorship bias",
-    narrative:
-      "Visible successes can dominate the picture when failed or missing cases are harder to observe.",
-    action: "Ask which failures disappeared from the dataset or story before drawing lessons from the winners.",
+    label: "Only seeing the winners",
+    narrative: "Visible successes can dominate the picture when failed or missing cases are harder to see.",
+    action: "Ask which failures, dropouts or excluded cases are missing before judging the success stories.",
   },
   framing_effect: {
-    label: "Framing effect",
-    narrative:
-      "Equivalent choices can feel different depending on whether they are presented as gains, losses or defaults.",
-    action: "Reframe the same decision in neutral terms and check whether your preference changes.",
+    label: "Being swayed by how a choice is worded",
+    narrative: "The same choice can feel different depending on whether it is described as a gain, loss or default.",
+    action: "Describe the same decision in neutral words and check whether your preference changes.",
   },
 };
 
 export function patternCopy(pattern?: string | null) {
   if (!pattern) return null;
-  return (
-    PATTERN_COPY[pattern] ?? {
-      label: pattern.replaceAll("_", " "),
-      narrative: `A recurring ${pattern.replaceAll("_", " ")} pattern is appearing in your answers.`,
-      action: "Use the next few sessions to test whether this pattern persists before treating it as stable.",
-    }
-  );
+  return PATTERN_COPY[pattern] ?? {
+    label: pattern.replaceAll("_", " "),
+    narrative: `A repeated ${pattern.replaceAll("_", " ")} pattern is appearing in your answers.`,
+    action: "Use the next few sessions to see whether this keeps happening before treating it as a stable pattern.",
+  };
 }
 
 export function evidenceConfidence(skills: MeasuredSkill[]) {
   if (!skills.length) {
-    return {
-      label: "Not established",
-      detail: "Complete the diagnostic to establish an initial evidence base.",
-      percent: 0,
-    };
+    return { label: "Not enough evidence yet", detail: "Complete your starting check to create your first skill profile.", percent: 0 };
   }
 
-  const averageReliability =
-    skills.reduce((sum, skill) => sum + skill.reliability, 0) / skills.length;
+  const averageReliability = skills.reduce((sum, skill) => sum + skill.reliability, 0) / skills.length;
   const totalAttempts = skills.reduce((sum, skill) => sum + skill.attempts, 0);
   const percent = Math.round(averageReliability * 100);
 
   if (averageReliability < 0.2 || totalAttempts < skills.length * 2) {
-    return {
-      label: "Early — more observations required",
-      detail: "Useful as a training direction, but too early to treat the profile as stable.",
-      percent,
-    };
+    return { label: "Early", detail: "Useful for choosing what to practise next, but we need more answers before the pattern is stable.", percent };
   }
-
   if (averageReliability < 0.4) {
-    return {
-      label: "Developing — directional signal",
-      detail: "Several observations now support the pattern, but more repetition is still valuable.",
-      percent,
-    };
+    return { label: "Building", detail: "Several answers now point in the same direction, but more practice will make this clearer.", percent };
   }
-
   if (averageReliability < 0.65) {
-    return {
-      label: "Moderate — pattern becoming stable",
-      detail: "Repeated evidence is beginning to make the profile more dependable.",
-      percent,
-    };
+    return { label: "Fairly clear", detail: "Repeated answers are making this skill estimate more dependable.", percent };
   }
-
-  return {
-    label: "Strong — repeated evidence",
-    detail: "The current pattern is supported by repeated observations, while remaining developmental rather than diagnostic.",
-    percent,
-  };
+  return { label: "Strong", detail: "This skill estimate is supported by repeated answers, but it can still change as you practise.", percent };
 }
 
 export function focusPath(skills: MeasuredSkill[], limit = 3) {
-  return [...skills]
-    .sort((a, b) => a.score - b.score || a.attempts - b.attempts)
-    .slice(0, limit)
-    .map((skill) => skill.name);
+  return [...skills].sort((a, b) => a.score - b.score || a.attempts - b.attempts).slice(0, limit).map((skill) => skill.name);
 }
 
 export function strongestSkill(skills: MeasuredSkill[]) {
@@ -159,27 +115,19 @@ export function weakestSkill(skills: MeasuredSkill[]) {
   return [...skills].sort((a, b) => a.score - b.score || a.attempts - b.attempts)[0] ?? null;
 }
 
-export function profilePatternNarrative(
-  patterns: ErrorPatternCount[],
-  weakest?: MeasuredSkill | null,
-) {
+export function profilePatternNarrative(patterns: ErrorPatternCount[], weakest?: MeasuredSkill | null) {
   const top = [...patterns].sort((a, b) => b.count - a.count)[0];
   const copy = patternCopy(top?.pattern);
-
   if (copy) return copy.narrative;
-
-  if (weakest) {
-    return `No recurring reasoning-error pattern is strong enough to call yet. ${weakest.name} is currently the highest-value area to gather more evidence.`;
-  }
-
-  return "No recurring reasoning-error pattern is strong enough to call yet. Cogni will keep testing rather than inventing one.";
+  if (weakest) return `No repeated thinking pattern is clear yet. ${weakest.name} is the best next area to practise.`;
+  return "No repeated thinking pattern is clear yet. Cogni will keep gathering evidence instead of guessing.";
 }
 
-export function calibrationLabel(accuracy: number, confidence: number) {
-  const gap = confidence - accuracy;
-  if (gap >= 15) return "Confidence ran ahead of correctness";
-  if (gap <= -15) return "You were more accurate than you expected";
-  return "Confidence and correctness were broadly aligned";
+export function calibrationLabel(score: number, confidence: number) {
+  const gap = confidence - score;
+  if (gap >= 15) return "You felt more certain than your results supported";
+  if (gap <= -15) return "You did better than you expected";
+  return "Your confidence was close to your results";
 }
 
 export function sessionInsight(args: {
@@ -188,27 +136,23 @@ export function sessionInsight(args: {
   patterns: ErrorPatternCount[];
   focusSkill?: string | null;
 }) {
-  const { accuracy, averageConfidence, patterns, focusSkill } = args;
+  const { accuracy: score, averageConfidence, patterns, focusSkill } = args;
   const top = [...patterns].sort((a, b) => b.count - a.count)[0];
   const copy = patternCopy(top?.pattern);
-  const focus = focusSkill ? ` Next, keep pressure on ${focusSkill}.` : "";
+  const focus = focusSkill ? ` Next, keep practising ${focusSkill}.` : "";
 
   if (copy && top) {
     const frequency = top.count === 1 ? "once" : `${top.count} times`;
     return `${copy.narrative} It appeared ${frequency} in this session.${focus}`;
   }
-
-  if (averageConfidence - accuracy >= 15) {
-    return `Your confidence was ${averageConfidence}% while accuracy was ${accuracy}%, so calibration is the clearest signal from this session. Before committing, ask what evidence would make you lower your confidence.${focus}`;
+  if (averageConfidence - score >= 15) {
+    return `Your confidence was ${averageConfidence}% while your score was ${score}%. A useful next step is to ask what evidence would make you less certain before committing.${focus}`;
   }
-
-  if (accuracy - averageConfidence >= 15) {
-    return `You were more accurate than your confidence suggested (${accuracy}% accuracy vs ${averageConfidence}% confidence). The next gain may be learning when your reasoning deserves more trust.${focus}`;
+  if (score - averageConfidence >= 15) {
+    return `Your score was ${score}% while your confidence was ${averageConfidence}%. You may be underestimating when your reasoning is strong.${focus}`;
   }
-
-  if (accuracy === 100) {
-    return `You were accurate and well calibrated in this session. The next gain is more challenge, not more reassurance.${focus}`;
+  if (score === 100) {
+    return `You scored 100% and your confidence was close to your results. The next step is harder practice, not more reassurance.${focus}`;
   }
-
-  return `Your confidence and correctness were broadly aligned this session. The most useful next step is targeted repetition rather than changing everything at once.${focus}`;
+  return `Your confidence was close to your score. Keep practising the same skill to make the pattern clearer.${focus}`;
 }

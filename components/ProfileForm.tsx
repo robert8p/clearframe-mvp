@@ -56,7 +56,7 @@ export function ProfileForm({
       <section className="cg-card cg-form-card" id="learning-context">
         <div className="cg-kicker">Learning context</div>
         <h2>Make training feel relevant</h2>
-        <p>Change this whenever your context changes. It affects future lessons and questions only; your historical scores stay intact.</p>
+        <p>Change this whenever your situation changes. It affects future lessons and questions only; your past skill scores stay the same.</p>
         <AudienceSelector compact initialValue={initialAudience} />
       </section>
 

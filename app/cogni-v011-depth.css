@@ -12,6 +12,13 @@
 .cg-app-brandbar,.cg-immersive-toolbar,.cg-consumer-main,.cg-bottom-nav{position:relative;z-index:2}
 .cg-consumer-main{background:transparent}
 
+/* Public landing and auth screens get the same calm living-background language. */
+.cg-public-shell,.cg-auth-wrap{position:relative;overflow:hidden;isolation:isolate}
+.cg-public-shell:before,.cg-auth-wrap:before,.cg-public-shell:after,.cg-auth-wrap:after{content:"";position:absolute;z-index:0;border-radius:50%;pointer-events:none;filter:blur(2px)}
+.cg-public-shell:before,.cg-auth-wrap:before{width:340px;height:340px;left:-170px;top:18%;background:radial-gradient(circle,rgba(23,213,255,.15),rgba(23,213,255,.025) 58%,transparent 72%);animation:cgAmbientDriftOne 17s ease-in-out infinite alternate}
+.cg-public-shell:after,.cg-auth-wrap:after{width:390px;height:390px;right:-210px;bottom:3%;background:radial-gradient(circle,rgba(139,92,246,.17),rgba(168,61,255,.02) 58%,transparent 72%);animation:cgAmbientDriftTwo 21s ease-in-out infinite alternate}
+.cg-public-grid,.cg-auth-layout{position:relative;z-index:1}
+
 @keyframes cgAmbientDriftOne{0%{transform:translate3d(0,0,0) scale(1)}100%{transform:translate3d(48px,42px,0) scale(1.16)}}
 @keyframes cgAmbientDriftTwo{0%{transform:translate3d(0,0,0) scale(1.04)}100%{transform:translate3d(-58px,-44px,0) scale(.92)}}
 @keyframes cgAmbientDriftThree{0%{transform:translate3d(0,0,0) scale(.92)}100%{transform:translate3d(34px,-68px,0) scale(1.12)}}
@@ -61,6 +68,6 @@
 }
 
 @media(prefers-reduced-motion:reduce){
-  .cg-ambient-layer span{animation:none!important}
+  .cg-ambient-layer span,.cg-public-shell:before,.cg-auth-wrap:before,.cg-public-shell:after,.cg-auth-wrap:after{animation:none!important}
   .cg-week-col-link{transition:none}
 }

@@ -11,6 +11,9 @@
 .cg-ambient-star.a{left:14%;top:11%}.cg-ambient-star.b{right:18%;top:30%;animation-delay:1.2s!important}.cg-ambient-star.c{left:24%;top:68%;animation-delay:2.1s!important}.cg-ambient-star.d{right:12%;top:82%;animation-delay:.7s!important}
 .cg-app-brandbar,.cg-immersive-toolbar,.cg-consumer-main,.cg-bottom-nav{position:relative;z-index:2}
 .cg-consumer-main{background:transparent}
+.cg-admin-page{position:relative;isolation:isolate;overflow:hidden}
+.cg-admin-page>.cg-ambient-layer{border-radius:0}
+.cg-admin-sidebar,.cg-admin-main{position:relative;z-index:2}
 
 /* Public landing and auth screens get the same calm living-background language. */
 .cg-public-shell,.cg-auth-wrap{position:relative;overflow:hidden;isolation:isolate}

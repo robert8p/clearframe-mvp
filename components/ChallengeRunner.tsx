@@ -33,9 +33,22 @@ const formatMeta: Record<string, { label: string; icon: string; instruction: str
   triage: { label: "Scenario call", icon: "⚡", instruction: "Make the call you would make in the real situation." },
 };
 
+function track(eventName: string, properties: Record<string, unknown> = {}) {
+  return fetch("/api/event", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventName, properties }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 function createRuntimeSessionId() {
   if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const bytes = Array.from({ length: 16 }, () => Math.floor(Math.random() * 256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.map((value) => value.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
 }
 
 function haptic(scoreFraction: number) {
@@ -51,6 +64,17 @@ function asStringMap(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, string> : {};
 }
 
+function difficultyBand(value: number) {
+  if (value < 40) return "Foundation";
+  if (value < 60) return "Balanced";
+  if (value < 75) return "Stretch";
+  return "Advanced";
+}
+
+function humanPattern(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredChallengeIds = [], completionHref, modeLabel }: Props) {
   const initiallyAnswered = useMemo(() => new Set(initialAnsweredChallengeIds), [initialAnsweredChallengeIds]);
   const pending = challenges.findIndex((challenge) => !initiallyAnswered.has(challenge.id));
@@ -62,6 +86,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
   const [confidence, setConfidence] = useState(60);
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [runtimeSessionId] = useState(() => sessionId ?? createRuntimeSessionId());
   const [answered, setAnswered] = useState(() => new Set(initialAnsweredChallengeIds));
@@ -70,27 +95,21 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
   const interactionType = challenge?.interaction_type ?? "single_choice";
   const meta = formatMeta[interactionType] ?? formatMeta.single_choice;
   const categories = ((challenge?.interaction_config?.categories ?? []) as Category[]).filter((item) => item?.id && item?.label);
-  const progress = challenges.length ? Math.round(((answered.size + (result && !answered.has(challenge?.id) ? 1 : 0)) / challenges.length) * 100) : 0;
+  const progress = challenges.length ? Math.round((answered.size / challenges.length) * 100) : 0;
   const remaining = Math.max(challenges.length - answered.size, 0);
 
   useEffect(() => {
-    void fetch("/api/event", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ eventName: mode === "diagnostic" ? "diagnostic_started" : mode === "practice" ? "practice_started" : "session_started", properties: { session_id: runtimeSessionId, resumed: initialAnsweredChallengeIds.length > 0 } }),
-    });
+    void track(mode === "diagnostic" ? "diagnostic_started" : mode === "practice" ? "practice_started" : "session_started", { session_id: runtimeSessionId, resumed: initialAnsweredChallengeIds.length > 0, answered_on_resume: initialAnsweredChallengeIds.length });
   }, [mode, runtimeSessionId, initialAnsweredChallengeIds.length]);
 
   useEffect(() => {
     if (!challenge) return;
-    void fetch("/api/event", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ eventName: "challenge_viewed", properties: { session_id: runtimeSessionId, challenge_id: challenge.id, interaction_type: interactionType, index } }),
-    });
+    void track("challenge_viewed", { session_id: runtimeSessionId, challenge_id: challenge.id, interaction_type: interactionType, index });
   }, [challenge, interactionType, index, runtimeSessionId]);
 
-  if (!challenge) return <section className="cg-card"><h2>No challenges available</h2></section>;
+  if (!challenge) {
+    return <section className="cg-card"><h2>No challenges available</h2><p>Return Home and try again. If this continues, use Help & support from Profile.</p></section>;
+  }
 
   const isReady = interactionType === "multi_select"
     ? multiSelected.length > 0
@@ -103,6 +122,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
   async function submit() {
     if (!isReady || busy) return;
     setBusy(true);
+    setSubmitError("");
     const responsePayload = interactionType === "multi_select"
       ? multiSelected
       : interactionType === "ranking"
@@ -110,33 +130,39 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
         : interactionType === "classification"
           ? classification
           : selected;
-    const response = await fetch("/api/answer", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        challengeId: challenge.id,
-        selectedIndex: interactionType === "single_choice" || interactionType === "triage" ? selected : undefined,
-        responsePayload,
-        confidence,
-        responseTimeMs: Date.now() - startedAt,
-        mode,
-        sessionId: runtimeSessionId,
-      }),
-    });
-    const body = await response.json();
-    setBusy(false);
-    if (!response.ok) return alert(body.error || "Could not submit answer");
-    setResult(body);
-    setAnswered((current) => new Set([...current, challenge.id]));
-    haptic(Number(body.scoreFraction ?? (body.correct ? 1 : 0)));
+
+    try {
+      const response = await fetch("/api/answer", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          challengeId: challenge.id,
+          selectedIndex: interactionType === "single_choice" || interactionType === "triage" ? selected : undefined,
+          responsePayload,
+          confidence,
+          responseTimeMs: Date.now() - startedAt,
+          mode,
+          sessionId: runtimeSessionId,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSubmitError(typeof body.error === "string" ? body.error : "Could not submit this answer. Try again.");
+        return;
+      }
+      setResult(body as AnswerResult);
+      setAnswered((current) => new Set([...current, challenge.id]));
+      haptic(Number(body.scoreFraction ?? (body.correct ? 1 : 0)));
+      void track("explanation_viewed", { session_id: runtimeSessionId, challenge_id: challenge.id, interaction_type: interactionType });
+    } catch {
+      setSubmitError("Connection interrupted. Your selection is still here — try submitting again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function finishSession() {
-    void fetch("/api/event", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ eventName: mode === "diagnostic" ? "diagnostic_completed" : mode === "practice" ? "practice_completed" : "session_completed", properties: { session_id: runtimeSessionId } }),
-    });
+    void track(mode === "diagnostic" ? "diagnostic_completed" : mode === "practice" ? "practice_completed" : "session_completed", { session_id: runtimeSessionId });
     router.push(completionHref ?? (mode === "diagnostic" ? "/diagnostic/results" : mode === "practice" ? "/skills" : "/session-complete"));
     router.refresh();
   }
@@ -150,6 +176,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
     setRanking([]);
     setClassification({});
     setResult(null);
+    setSubmitError("");
     setConfidence(60);
     setStartedAt(Date.now());
   }
@@ -175,8 +202,10 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
             const wasWrongChoice = result ? active && !isCorrectChoice : false;
             return (
               <button
+                type="button"
                 key={optionIndex}
                 disabled={Boolean(result)}
+                aria-pressed={active}
                 className={`option cg-option-enter cg-multi-option ${active ? "selected" : ""} ${isCorrectChoice ? "correct" : ""} ${wasWrongChoice ? "incorrect" : ""}`}
                 style={{ animationDelay: `${70 + optionIndex * 48}ms` }}
                 onClick={() => setMultiSelected((current) => current.includes(optionIndex) ? current.filter((value) => value !== optionIndex) : [...current, optionIndex])}
@@ -195,12 +224,12 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
         <div className="cg-ranking-wrap">
           <div className="cg-ranked-list">
             {ranking.map((optionIndex, rankIndex) => (
-              <button key={optionIndex} disabled={Boolean(result)} className="cg-ranked-item" onClick={() => setRanking((current) => current.filter((value) => value !== optionIndex))}>
+              <button type="button" key={optionIndex} disabled={Boolean(result)} className="cg-ranked-item" onClick={() => setRanking((current) => current.filter((value) => value !== optionIndex))}>
                 <span>{rankIndex + 1}</span><strong>{challenge.options[optionIndex]}</strong>{!result && <small>tap to remove</small>}
               </button>
             ))}
           </div>
-          {!result && unranked.length > 0 && <div className="cg-rank-pool">{unranked.map(({ option, optionIndex }) => <button key={optionIndex} onClick={() => setRanking((current) => [...current, optionIndex])}><span>＋</span>{option}</button>)}</div>}
+          {!result && unranked.length > 0 && <div className="cg-rank-pool">{unranked.map(({ option, optionIndex }) => <button type="button" key={optionIndex} onClick={() => setRanking((current) => [...current, optionIndex])}><span>＋</span>{option}</button>)}</div>}
           {result && <div className="cg-correct-order"><span className="cg-kicker">Best order</span>{correctList.map((optionIndex, rankIndex) => <div key={rankIndex}><b>{rankIndex + 1}</b><span>{challenge.options[optionIndex]}</span></div>)}</div>}
         </div>
       );
@@ -217,7 +246,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
                   const active = classification[String(optionIndex)] === category.id;
                   const correctCategory = result ? correctMap[String(optionIndex)] === category.id : false;
                   const wrong = result ? active && !correctCategory : false;
-                  return <button key={category.id} disabled={Boolean(result)} className={`${active ? "active" : ""} ${correctCategory ? "correct" : ""} ${wrong ? "incorrect" : ""}`} onClick={() => setClassification((current) => ({ ...current, [String(optionIndex)]: category.id }))}>{category.label}</button>;
+                  return <button type="button" key={category.id} disabled={Boolean(result)} aria-pressed={active} className={`${active ? "active" : ""} ${correctCategory ? "correct" : ""} ${wrong ? "incorrect" : ""}`} onClick={() => setClassification((current) => ({ ...current, [String(optionIndex)]: category.id }))}>{category.label}</button>;
                 })}
               </div>
             </div>
@@ -231,7 +260,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
         <div className="cg-triage-grid">
           {challenge.options.map((option, optionIndex) => {
             const correctIndex = result?.correctIndex ?? -1;
-            return <button key={optionIndex} disabled={Boolean(result)} className={`cg-triage-card ${selected === optionIndex ? "selected" : ""} ${result && optionIndex === correctIndex ? "correct" : ""} ${result && selected === optionIndex && optionIndex !== correctIndex ? "incorrect" : ""}`} onClick={() => setSelected(optionIndex)}><span>{["→", "?", "!"][optionIndex] ?? "•"}</span><strong>{option}</strong></button>;
+            return <button type="button" key={optionIndex} disabled={Boolean(result)} aria-pressed={selected === optionIndex} className={`cg-triage-card ${selected === optionIndex ? "selected" : ""} ${result && optionIndex === correctIndex ? "correct" : ""} ${result && selected === optionIndex && optionIndex !== correctIndex ? "incorrect" : ""}`} onClick={() => setSelected(optionIndex)}><span>{String.fromCharCode(65 + optionIndex)}</span><strong>{option}</strong></button>;
           })}
         </div>
       );
@@ -245,7 +274,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
           if (result && optionIndex === result.correctIndex) className += " correct";
           if (result && selected === optionIndex && !result.correct) className += " incorrect";
           return (
-            <button key={optionIndex} disabled={Boolean(result)} className={className} style={{ animationDelay: `${70 + optionIndex * 48}ms` }} onClick={() => setSelected(optionIndex)}>
+            <button type="button" key={optionIndex} disabled={Boolean(result)} aria-pressed={selected === optionIndex} className={className} style={{ animationDelay: `${70 + optionIndex * 48}ms` }} onClick={() => setSelected(optionIndex)}>
               <span className="cg-option-letter">{String.fromCharCode(65 + optionIndex)}</span><span>{option}</span>{result && optionIndex === result.correctIndex && <span className="cg-answer-check">✓</span>}
             </button>
           );
@@ -258,14 +287,14 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
     <div className={`cg-quiz-screen ${result ? (result.correct ? "is-correct" : scoreFraction >= 0.5 ? "is-partial" : "is-learning") : ""}`}>
       <div className="cg-quiz-header">
         <span className="cg-kicker">{modeLabel ?? (mode === "diagnostic" ? "Diagnostic" : mode === "practice" ? "Skill practice" : "Daily challenge")}</span>
-        <span className="cg-pill cg-question-count">{index + 1} of {challenges.length}</span>
+        <span className="cg-pill cg-question-count">{Math.min(answered.size + 1, challenges.length)} of {challenges.length}</span>
       </div>
-      <div className="progress cg-animated-progress" aria-label={`${progress}% complete`}><span style={{ width: `${Math.max(progress, (index / challenges.length) * 100)}%` }} /></div>
+      <div className="progress cg-animated-progress" aria-label={`${progress}% complete`}><span style={{ width: `${progress}%` }} /></div>
 
       <div key={challenge.id} className="cg-question-stage">
         {challenge.scenario_context && <div className="cg-context-strip">{challenge.scenario_context}</div>}
         <div className="cg-format-banner"><span>{meta.icon}</span><div><strong>{meta.label}</strong><small>{String(challenge.interaction_config?.instructions ?? meta.instruction)}</small></div></div>
-        <div className="cg-question-meta"><span>{challenge.challenge_type.replaceAll("_", " ")}</span><span>Difficulty {challenge.difficulty}</span></div>
+        <div className="cg-question-meta"><span>Adaptive challenge</span><span>{difficultyBand(challenge.difficulty)} level</span></div>
         <h1 className="cg-question-title">{challenge.title}</h1>
         <p className="cg-question-prompt">{challenge.prompt}</p>
 
@@ -274,13 +303,15 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
         {challenge.confidence_required && !result && (
           <div className="cg-confidence cg-enter-up">
             <div><strong>How confident are you?</strong><span>{confidence}%</span></div>
-            <input type="range" min="20" max="100" step="10" value={confidence} onChange={(event: { target: { value: string } }) => setConfidence(Number(event.target.value))} />
+            <input aria-label="Confidence percentage" type="range" min="20" max="100" step="10" value={confidence} onChange={(event: { target: { value: string } }) => setConfidence(Number(event.target.value))} />
             <small>{confidence >= 80 ? "High conviction — worth checking if you’re wrong" : confidence >= 50 ? "Moderate conviction" : "Healthy doubt"}</small>
           </div>
         )}
 
+        {submitError && <div className="cg-inline-error" role="alert">{submitError}</div>}
+
         {!result ? (
-          <button className={`cg-button cg-full cg-submit-answer ${isReady ? "ready" : ""}`} disabled={!isReady || busy} onClick={submit}>
+          <button type="button" className={`cg-button cg-full cg-submit-answer ${isReady ? "ready" : ""}`} disabled={!isReady || busy} onClick={submit}>
             {busy ? <><span className="cg-spinner" /> Checking your reasoning…</> : interactionType === "ranking" ? "Lock in this order" : interactionType === "classification" ? "Check my sorting" : interactionType === "multi_select" ? "Submit selections" : "Make the call"}
           </button>
         ) : (
@@ -296,9 +327,9 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
             {result.skillUpdates?.length > 0 && <div className="cg-live-skill-updates">{result.skillUpdates.slice(0, 2).map((skill) => <div key={skill.slug}><span>{skill.name ?? skill.slug.replaceAll("-", " ")}</span><strong>{typeof skill.delta === "number" ? `${skill.delta >= 0 ? "+" : ""}${skill.delta.toFixed(1)}` : Math.round(skill.score)}</strong></div>)}</div>}
             <div className="cg-lesson-chip cg-reveal-card"><strong>Thinking principle</strong><span>{result.thinkingPrinciple}</span></div>
             <div className="cg-lesson-chip cg-reveal-card delay"><strong>AI-age application</strong><span>{result.application}</span></div>
-            {result.errorPattern && !result.correct && <span className="cg-pill cg-pattern-pill">Pattern: {result.errorPattern.replaceAll("_", " ")}</span>}
-            <div className="cg-momentum-line"><span>{answered.size >= challenges.length ? "Daily session complete" : `${remaining} ${remaining === 1 ? "question" : "questions"} left`}</span><strong>{Math.round((answered.size / challenges.length) * 100)}%</strong></div>
-            <button className="cg-button cg-full cg-next-answer" onClick={next}>{answered.size >= challenges.length ? "See my results ✦" : "Keep going →"}</button>
+            {result.errorPattern && !result.correct && <span className="cg-pill cg-pattern-pill">Pattern: {humanPattern(result.errorPattern)}</span>}
+            <div className="cg-momentum-line"><span>{answered.size >= challenges.length ? "Session complete" : `${remaining} ${remaining === 1 ? "question" : "questions"} left`}</span><strong>{Math.round((answered.size / challenges.length) * 100)}%</strong></div>
+            <button type="button" className="cg-button cg-full cg-next-answer" onClick={next}>{answered.size >= challenges.length ? "See my results ✦" : "Keep going →"}</button>
           </div>
         )}
       </div>

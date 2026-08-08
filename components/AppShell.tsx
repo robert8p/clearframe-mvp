@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CogniMark } from "./CogniMark";
 import { SignOutButton } from "./SignOutButton";
-import { SessionFeedback } from "./SessionFeedback";
 
 const consumerItems = [
   ["/dashboard", "Home", "home"],
@@ -24,14 +23,14 @@ function NavIcon({ type }: { type: string }) {
 export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
   const pathname = usePathname();
   const internal = pathname.startsWith("/admin") || pathname.startsWith("/analytics");
-  const immersive = pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/diagnostic") || pathname.startsWith("/session-complete") || pathname.startsWith("/onboarding");
+  const immersive = pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/practice") || pathname.startsWith("/diagnostic") || pathname.startsWith("/session-complete") || pathname.startsWith("/onboarding");
 
   if (internal) {
     return (
       <div className="cg-admin-page">
         <aside className="cg-admin-sidebar">
           <CogniMark href="/dashboard" />
-          <nav className="cg-admin-nav">
+          <nav className="cg-admin-nav" aria-label="Internal tools">
             <Link href="/dashboard">Consumer app</Link>
             <Link href="/admin">Content</Link>
             <Link href="/analytics">Analytics</Link>
@@ -53,16 +52,13 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
           <CogniMark href="/dashboard" compact />
           {isAdmin && pathname === "/settings" ? <Link href="/admin" className="cg-mini-admin">Admin</Link> : null}
         </header>
-        <main className={`cg-consumer-main ${immersive ? "immersive" : ""}`}>
-          {children}
-          {pathname.startsWith("/session-complete") ? <SessionFeedback /> : null}
-        </main>
+        <main className={`cg-consumer-main ${immersive ? "immersive" : ""}`}>{children}</main>
         {!immersive && (
           <nav className="cg-bottom-nav" aria-label="Primary">
             {consumerItems.map(([href, label, icon]) => {
               const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
               return (
-                <Link key={href} href={href} className={active ? "active" : ""}>
+                <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
                   <NavIcon type={icon} />
                   <span>{label}</span>
                 </Link>

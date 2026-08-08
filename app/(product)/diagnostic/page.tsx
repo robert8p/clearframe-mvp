@@ -1,8 +1,39 @@
+import { randomUUID } from "node:crypto";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { ChallengeRunner } from "@/components/ChallengeRunner";
+import { getDiagnosticProgress } from "@/lib/diagnostic";
+import type { Challenge } from "@/lib/types";
 
-export default async function DiagnosticPage(){
-  const { supabase }=await requireUser();
-  const {data}=await supabase.from("challenges").select("id,title,prompt,options,challenge_type,interaction_type,interaction_config,difficulty,confidence_required").eq("is_published",true).eq("is_diagnostic",true).order("sort_order").limit(12);
-  return <ChallengeRunner challenges={(data??[]) as never[]} mode="diagnostic"/>;
+export const dynamic = "force-dynamic";
+
+export default async function DiagnosticPage() {
+  const { user, supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("challenges")
+    .select("id,title,prompt,options,challenge_type,interaction_type,interaction_config,difficulty,confidence_required,scenario_context")
+    .eq("is_published", true)
+    .eq("is_diagnostic", true)
+    .order("sort_order")
+    .limit(12);
+  if (error) throw error;
+
+  const challenges = (data ?? []) as Challenge[];
+  if (!challenges.length) {
+    return <div className="cg-mobile-page"><section className="cg-card"><h2>Diagnostic unavailable</h2><p>Cogni could not load the baseline questions. Return Home and try again shortly.</p></section></div>;
+  }
+
+  const progress = await getDiagnosticProgress(supabase, user.id, challenges.map((challenge) => challenge.id));
+  if (progress.completedSessionKey) redirect("/diagnostic/results");
+
+  const sessionId = progress.resumableSessionKey ?? randomUUID();
+  return (
+    <ChallengeRunner
+      challenges={challenges}
+      mode="diagnostic"
+      sessionId={sessionId}
+      initialAnsweredChallengeIds={progress.answeredChallengeIds}
+      modeLabel="Baseline diagnostic"
+    />
+  );
 }

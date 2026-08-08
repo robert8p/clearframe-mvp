@@ -18,7 +18,7 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
   const [reflection, setReflection] = useState("");
   const [revealed, setRevealed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [reward, setReward] = useState<number | null>(null);
+  const [error, setError] = useState("");
   const router = useRouter();
   const slides = useMemo(() => [
     { kicker: "Today’s story", title: lesson.title, body: lesson.content.story, icon: lesson.emoji },
@@ -41,30 +41,41 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
   async function complete() {
     if (busy) return;
     setBusy(true);
-    const response = await fetch("/api/lesson/complete", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ lessonId: lesson.id }),
-    });
-    const body = await response.json();
-    setBusy(false);
-    if (!response.ok) return alert(body.error || "Could not complete today’s lesson");
-    const earned = Number(body.xpEarned ?? 0);
-    if (earned > 0) {
-      setReward(earned);
-      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate([18, 35, 22]);
-      await new Promise((resolve) => setTimeout(resolve, 650));
+    setError("");
+    try {
+      const response = await fetch("/api/lesson/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lessonId: lesson.id }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(typeof body.error === "string" ? body.error : "Could not complete today’s lesson. Try again.");
+        return;
+      }
+      const earned = Number(body.xpEarned ?? 0);
+      if (earned > 0 && typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate([18, 35, 22]);
+      router.push("/training");
+      router.refresh();
+    } catch {
+      setError("Connection interrupted. Your place in the lesson is still here — try again.");
+    } finally {
+      setBusy(false);
     }
-    router.push("/training");
-    router.refresh();
   }
 
   function next() {
+    setError("");
     if (step < slides.length - 1) {
       setStep((value) => value + 1);
       return;
     }
     void complete();
+  }
+
+  function back() {
+    setError("");
+    if (step > 0 && !busy) setStep((value) => value - 1);
   }
 
   function reveal() {
@@ -78,7 +89,7 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
         <div><span className="cg-kicker">Daily lesson</span><strong>{lesson.estimated_minutes} min</strong></div>
         <span>{step + 1}/{slides.length}</span>
       </div>
-      <div className="progress cg-animated-progress"><span style={{ width: `${progress}%` }} /></div>
+      <div className="progress cg-animated-progress" aria-label={`${progress}% through today's lesson`}><span style={{ width: `${progress}%` }} /></div>
       {lesson.scenario_context && <div className="cg-context-strip"><span>Context</span><strong>{lesson.scenario_context}</strong></div>}
 
       <section key={step} className="cg-lesson-story-card cg-question-stage">
@@ -96,33 +107,26 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
               rows={4}
               value={reflection}
               onChange={(event: { target: { value: string } }) => setReflection(event.target.value)}
-              placeholder="Write one sentence. This stays on your device and is not graded."
+              placeholder="Write one sentence. This isn’t saved or graded."
             />
             {!revealed ? (
-              <button className="cg-button secondary cg-full" disabled={reflection.trim().length < 3} onClick={reveal}>
-                Reveal the thinking move
-              </button>
+              <button type="button" className="cg-button secondary cg-full" disabled={reflection.trim().length < 3} onClick={reveal}>Reveal the thinking move</button>
             ) : (
-              <div className="cg-lesson-reveal">
-                <span>Compare your instinct</span>
-                <strong>{lesson.content.reveal}</strong>
-              </div>
+              <div className="cg-lesson-reveal"><span>Compare your instinct</span><strong>{lesson.content.reveal}</strong></div>
             )}
           </div>
         )}
       </section>
 
-      <div className="cg-lesson-dots" aria-hidden="true">
-        {slides.map((_, index) => <i key={index} className={index <= step ? "active" : ""} />)}
-      </div>
+      <div className="cg-lesson-dots" aria-hidden="true">{slides.map((_, index) => <i key={index} className={index <= step ? "active" : ""} />)}</div>
+      {error && <div className="cg-inline-error" role="alert">{error}</div>}
 
-      <button
-        className="cg-button cg-full cg-lesson-next"
-        onClick={next}
-        disabled={busy || (slide.reflection && !revealed)}
-      >
-        {busy ? "Banking the lesson…" : reward ? `+${reward} XP earned ✦` : step === slides.length - 1 ? "Complete lesson +5 XP →" : "Continue →"}
-      </button>
+      <div className="cg-lesson-actions">
+        {step > 0 ? <button type="button" className="cg-button secondary" disabled={busy} onClick={back}>← Back</button> : <span />}
+        <button type="button" className="cg-button cg-full cg-lesson-next" onClick={next} disabled={busy || (slide.reflection && !revealed)}>
+          {busy ? "Banking the lesson…" : step === slides.length - 1 ? "Complete lesson +5 XP →" : "Continue →"}
+        </button>
+      </div>
       <p className="cg-lesson-footnote">One idea. One memorable example. Then five judgement reps.</p>
     </div>
   );

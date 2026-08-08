@@ -12,58 +12,69 @@ const choices: Array<{ value: Reaction; emoji: string; label: string }> = [
 
 export function SessionFeedback() {
   const [reaction, setReaction] = useState<Reaction | null>(null);
+  const [savedReaction, setSavedReaction] = useState<Reaction | null>(null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function submit() {
-    if (!reaction || busy) return;
+  async function save(value: Reaction, note?: string) {
     setBusy(true);
     setMessage("");
-    const response = await fetch("/api/session-feedback", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reaction, comment: comment.trim() || undefined }),
-    });
-    const body = await response.json();
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(body.error || "Could not save your feedback.");
-      return;
+    try {
+      const response = await fetch("/api/session-feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reaction: value, comment: note?.trim() || undefined }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(typeof body.error === "string" ? body.error : "Could not save your feedback.");
+        return false;
+      }
+      return true;
+    } catch {
+      setMessage("Connection interrupted. Try saving your feedback again.");
+      return false;
+    } finally {
+      setBusy(false);
     }
-    setSaved(true);
   }
 
-  if (saved) {
-    return (
-      <section className="cg-card cg-feedback-survey cg-feedback-thanks" aria-live="polite">
-        <span className="cg-feedback-thanks-icon">✓</span>
-        <div><strong>Thanks — that helps Cogni get better.</strong><p>Tomorrow’s session will keep adapting to your learning context and the judgement skills that need the most useful practice.</p></div>
-      </section>
-    );
+  async function choose(value: Reaction) {
+    if (busy) return;
+    setReaction(value);
+    setNoteSaved(false);
+    if (await save(value)) setSavedReaction(value);
+  }
+
+  async function saveNote() {
+    if (!reaction || busy || !comment.trim()) return;
+    if (await save(reaction, comment)) setNoteSaved(true);
   }
 
   return (
     <section className="cg-card cg-feedback-survey">
       <div className="cg-kicker">Help shape Cogni</div>
       <h2>How did today’s session feel?</h2>
-      <p>One tap is enough. This helps us distinguish learning value from content people simply tolerate.</p>
+      <p>One tap saves your reaction. Add a note only if there’s something useful to say.</p>
       <div className="cg-reaction-grid" role="radiogroup" aria-label="Session feedback">
         {choices.map((choice) => (
-          <button key={choice.value} type="button" role="radio" aria-checked={reaction === choice.value} className={reaction === choice.value ? "selected" : ""} onClick={() => setReaction(choice.value)}>
+          <button key={choice.value} type="button" role="radio" aria-checked={reaction === choice.value} className={reaction === choice.value ? "selected" : ""} disabled={busy} onClick={() => void choose(choice.value)}>
             <span>{choice.emoji}</span><strong>{choice.label}</strong>
           </button>
         ))}
       </div>
-      {reaction && (
+
+      {savedReaction && (
         <div className="cg-feedback-comment">
+          <span className="cg-feedback-saved">✓ Reaction saved</span>
           <label htmlFor="session-feedback-comment">Anything you’d change? <span>Optional</span></label>
-          <textarea id="session-feedback-comment" className="input" rows={3} maxLength={1000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Too easy, too wordy, loved the example, wanted a harder decision…" />
-          <button type="button" className="cg-button cg-full" disabled={busy} onClick={submit}>{busy ? "Saving…" : "Send feedback"}</button>
+          <textarea id="session-feedback-comment" className="input" rows={3} maxLength={1000} value={comment} onChange={(event) => { setComment(event.target.value); setNoteSaved(false); }} placeholder="Too easy, too wordy, loved the example, wanted a harder decision…" />
+          {comment.trim() && <button type="button" className="cg-button secondary cg-full" disabled={busy || noteSaved} onClick={() => void saveNote()}>{busy ? "Saving…" : noteSaved ? "Note saved ✓" : "Save optional note"}</button>}
         </div>
       )}
-      {message && <p className="cg-form-message" aria-live="polite">{message}</p>}
+      {message && <div className="cg-inline-error" role="alert">{message}</div>}
     </section>
   );
 }

@@ -1,0 +1,55 @@
+/* Cogni v0.11 — navigation clarity and spatial safety */
+
+/* Overview screens use the normal product navigation. Only active learning is immersive. */
+.cg-consumer-main:not(.immersive){padding-bottom:calc(136px + env(safe-area-inset-bottom))}
+.cg-consumer-main.immersive{padding-bottom:34px}
+.cg-mobile-page,.cg-mobile-page>*{min-width:0}
+.cg-card,.cg-course-card,.cg-skill-card,.cg-context-callout{min-width:0}
+
+/* Explicit escape/navigation for active lesson, diagnostic and practice flows. */
+.cg-immersive-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 17px 2px;padding:10px 0 2px;border-bottom:1px solid rgba(80,103,151,.22)}
+.cg-immersive-back,.cg-immersive-shortcut{min-height:40px;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;color:#c5d4f0;font-size:13px;font-weight:750;line-height:1;padding:0 11px;border:1px solid transparent;transition:background .16s ease,border-color .16s ease,transform .16s ease}
+.cg-immersive-back{padding-left:4px;color:#7fe5ff}
+.cg-immersive-shortcuts{display:flex;align-items:center;gap:3px}
+.cg-immersive-shortcut{color:#9eacc8}
+.cg-immersive-back:hover,.cg-immersive-shortcut:hover{background:#0e192e;border-color:#263a61}
+.cg-immersive-back:active,.cg-immersive-shortcut:active{transform:scale(.97)}
+
+/* The diagnostic visual must stay inside its own card. No decorative overlap. */
+.cg-diagnostic-card{position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(circle at 100% 0,rgba(104,92,255,.12),transparent 42%),linear-gradient(180deg,#101a32,#0d162a)}
+.cg-diagnostic-card-head{display:grid;grid-template-columns:96px minmax(0,1fr);gap:16px;align-items:center;margin-bottom:14px}
+.cg-diagnostic-copy{min-width:0}
+.cg-diagnostic-copy h2{margin:4px 0 6px;font-size:21px}
+.cg-diagnostic-copy p{margin:0;font-size:14px;line-height:1.55}
+.cg-diagnostic-orb{width:88px;height:88px;border-radius:50%;position:relative;display:grid;place-items:center;overflow:hidden;background:radial-gradient(circle at 34% 28%,#23ebff 0 10%,#13a8ff 30%,#525cff 58%,#b438f3 86%);box-shadow:0 0 0 10px rgba(75,94,255,.07),0 14px 28px rgba(23,117,255,.22)}
+.cg-diagnostic-orb:before{content:"";position:absolute;inset:10px;border-radius:50%;background:radial-gradient(circle at 35% 28%,rgba(255,255,255,.34),transparent 30%);mix-blend-mode:screen}
+.cg-diagnostic-orb span{position:relative;z-index:1;color:#fff;font-size:31px;line-height:1;text-shadow:0 0 12px rgba(255,255,255,.9)}
+.cg-diagnostic-card .callout{margin-top:2px}
+.cg-diagnostic-card .cg-button{margin-top:14px}
+
+/* Context control reads as an action, but never crowds the card content. */
+.cg-context-callout>a{white-space:nowrap;min-height:40px;display:inline-flex;align-items:center;justify-content:center;padding-inline:12px}
+
+/* Fixed navigation must never cover the final actionable element. */
+.cg-bottom-nav{grid-template-columns:repeat(4,minmax(0,1fr));bottom:max(10px,env(safe-area-inset-bottom));width:min(calc(100% - 20px),450px)}
+.cg-bottom-nav a{min-width:0;min-height:50px}
+
+/* General spatial safety for rich content. */
+.cg-card img,.cg-card svg,.cg-mobile-page img,.cg-mobile-page svg{max-width:100%}
+.cg-app-brandbar{position:relative;z-index:25}
+
+@media(max-width:420px){
+  .cg-immersive-toolbar{margin-inline:14px}
+  .cg-immersive-back,.cg-immersive-shortcut{font-size:12px;padding-inline:8px}
+  .cg-diagnostic-card-head{grid-template-columns:78px minmax(0,1fr);gap:13px}
+  .cg-diagnostic-orb{width:72px;height:72px;box-shadow:0 0 0 7px rgba(75,94,255,.06),0 10px 24px rgba(23,117,255,.18)}
+  .cg-diagnostic-orb span{font-size:27px}
+  .cg-diagnostic-copy h2{font-size:20px}
+  .cg-diagnostic-copy p{font-size:13px}
+}
+
+@media(max-width:350px){
+  .cg-immersive-shortcuts .cg-immersive-shortcut:first-child{display:none}
+  .cg-diagnostic-card-head{grid-template-columns:1fr}
+  .cg-diagnostic-orb{margin:0 auto}
+}

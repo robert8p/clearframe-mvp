@@ -1,0 +1,77 @@
+/* Cogni v0.13 — finishing polish: touch targets, focus, safe areas and perceived speed. */
+
+html{scroll-behavior:smooth}
+body{overscroll-behavior-y:none}
+a,button,input,textarea,select{touch-action:manipulation}
+h1,h2,h3{text-wrap:balance}
+p{overflow-wrap:anywhere}
+
+/* Clear keyboard focus without changing the visual language for pointer users. */
+:where(a,button,input,textarea,select):focus-visible{outline:3px solid rgba(23,213,255,.72);outline-offset:3px}
+
+/* Prevent iOS form zoom and keep mobile controls comfortably readable. */
+.input,textarea.input,select.input{font-size:16px;line-height:1.45}
+
+/* A finished mobile product should not require precision tapping. */
+.cg-button,.option,.cg-audience-card,.cg-triage-card,.cg-ranked-item,.cg-rank-pool button{min-height:48px}
+.cg-bottom-nav a,.cg-profile-links a,.cg-achievement-summary{min-height:48px}
+.cg-section-head a,.cg-back-link,.cg-context-callout>a,.cg-immersive-back,.cg-immersive-shortcut{min-height:44px;display:inline-flex;align-items:center}
+.cg-category-buttons button{min-height:40px;padding-inline:12px}
+.cg-week-col-link{min-width:40px;min-height:44px;border-radius:12px;padding:2px}
+
+/* Reliable four-tab navigation and modern phone safe-area clearance. */
+.cg-bottom-nav{grid-template-columns:repeat(4,minmax(0,1fr));padding-bottom:max(10px,env(safe-area-inset-bottom));bottom:max(8px,env(safe-area-inset-bottom))}
+.cg-consumer-bg{padding-bottom:max(90px,calc(72px + env(safe-area-inset-bottom)))}
+.cg-consumer-main:not(.immersive){padding-bottom:calc(142px + env(safe-area-inset-bottom))}
+
+/* Keep the brand available while scrolling without becoming a heavy toolbar. */
+.cg-app-brandbar{position:sticky;top:0;z-index:35;background:linear-gradient(180deg,rgba(6,12,25,.96),rgba(6,12,25,.84) 72%,rgba(6,12,25,0));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+
+/* Accessibility helper, only visible when keyboard users ask for it. */
+.cg-skip-link{position:fixed;left:12px;top:10px;z-index:999;transform:translateY(-160%);padding:10px 14px;border-radius:12px;background:#fff;color:#07101f;font-weight:800;transition:transform .15s ease}
+.cg-skip-link:focus{transform:translateY(0)}
+
+/* Reassure users that leaving an active session will not discard completed work. */
+.cg-autosave-note{margin:5px 18px 0;text-align:center;color:#8294b7;font-size:12px;line-height:1.4}
+.cg-autosave-note strong{color:#93edc0}
+
+/* Clarify help/glossary content without adding visual weight. */
+.cg-glossary-grid{display:grid;gap:9px;margin-top:12px}
+.cg-glossary-row{display:grid;grid-template-columns:minmax(92px,auto) 1fr;gap:12px;align-items:start;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:#10192e}
+.cg-glossary-row strong{font-size:13px}
+.cg-glossary-row p{font-size:13px;line-height:1.5;margin:0}
+.cg-inline-help-link{width:max-content;max-width:100%;display:inline-flex;align-items:center;min-height:40px;margin-top:4px;color:#6fe3ff;font-size:13px;font-weight:700}
+
+/* Stronger pressed-state feedback makes cards and buttons feel native. */
+.cg-button,.cg-course-card,.cg-topic-card,.cg-skill-link,.cg-master-row,.cg-profile-links a,.cg-achievement-summary{transition:transform .14s ease,border-color .14s ease,filter .14s ease}
+.cg-button:active,.cg-course-card:active,.cg-topic-card:active,.cg-skill-link:active,.cg-master-row:active,.cg-profile-links a:active,.cg-achievement-summary:active{transform:scale(.985)}
+
+/* Make loading states feel deliberate instead of static placeholders. */
+.cg-skeleton{position:relative;overflow:hidden}
+.cg-skeleton:after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);animation:cg-polish-shimmer 1.35s ease-in-out infinite}
+@keyframes cg-polish-shimmer{to{transform:translateX(100%)}}
+
+/* Review content should read like a learning recap, not a data table. */
+.cg-review-card h3{font-size:18px;line-height:1.3;margin-bottom:7px}
+.cg-review-card>p{font-size:14px;line-height:1.55}
+.cg-review-answer strong{font-size:13px;line-height:1.5;white-space:pre-line}
+
+/* Small-screen resilience. */
+@media(max-width:420px){
+  .cg-consumer-main{padding-inline:17px}
+  .cg-glossary-row{grid-template-columns:1fr;gap:5px}
+  .cg-bottom-nav a{font-size:11px}
+  .cg-streak{font-size:11px}
+}
+
+@media(max-width:350px){
+  .cg-consumer-main{padding-inline:14px}
+  .cg-bottom-nav{padding-inline:6px;gap:1px}
+  .cg-bottom-nav a{font-size:10px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .cg-skeleton:after{animation:none;display:none}
+  .cg-button,.cg-course-card,.cg-topic-card,.cg-skill-link,.cg-master-row,.cg-profile-links a,.cg-achievement-summary,.cg-skip-link{transition:none}
+}

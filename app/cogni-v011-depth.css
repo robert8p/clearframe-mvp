@@ -1,0 +1,66 @@
+/* Cogni v0.11 — deeper practice, ambient motion and interactive progress review */
+
+/* Ambient motion lives behind all product content and never intercepts taps. */
+.cg-phone-app{isolation:isolate}
+.cg-ambient-layer{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;border-radius:inherit}
+.cg-ambient-layer span{position:absolute;display:block;border-radius:999px;opacity:.34;filter:blur(2px);will-change:transform}
+.cg-ambient-orb.one{width:180px;height:180px;left:-92px;top:17%;background:radial-gradient(circle,rgba(23,213,255,.24),rgba(23,213,255,.04) 58%,transparent 72%);animation:cgAmbientDriftOne 15s ease-in-out infinite alternate}
+.cg-ambient-orb.two{width:230px;height:230px;right:-132px;top:48%;background:radial-gradient(circle,rgba(139,92,246,.24),rgba(104,92,255,.045) 58%,transparent 72%);animation:cgAmbientDriftTwo 19s ease-in-out infinite alternate}
+.cg-ambient-orb.three{width:140px;height:140px;left:34%;bottom:-78px;background:radial-gradient(circle,rgba(236,72,153,.13),rgba(15,140,255,.04) 58%,transparent 72%);animation:cgAmbientDriftThree 17s ease-in-out infinite alternate}
+.cg-ambient-star{width:4px!important;height:4px!important;border-radius:50%!important;background:#71e6ff;box-shadow:0 0 14px rgba(113,230,255,.7);filter:none!important;opacity:.28!important;animation:cgAmbientTwinkle 4.6s ease-in-out infinite!important}
+.cg-ambient-star.a{left:14%;top:11%}.cg-ambient-star.b{right:18%;top:30%;animation-delay:1.2s!important}.cg-ambient-star.c{left:24%;top:68%;animation-delay:2.1s!important}.cg-ambient-star.d{right:12%;top:82%;animation-delay:.7s!important}
+.cg-app-brandbar,.cg-immersive-toolbar,.cg-consumer-main,.cg-bottom-nav{position:relative;z-index:2}
+.cg-consumer-main{background:transparent}
+
+@keyframes cgAmbientDriftOne{0%{transform:translate3d(0,0,0) scale(1)}100%{transform:translate3d(48px,42px,0) scale(1.16)}}
+@keyframes cgAmbientDriftTwo{0%{transform:translate3d(0,0,0) scale(1.04)}100%{transform:translate3d(-58px,-44px,0) scale(.92)}}
+@keyframes cgAmbientDriftThree{0%{transform:translate3d(0,0,0) scale(.92)}100%{transform:translate3d(34px,-68px,0) scale(1.12)}}
+@keyframes cgAmbientTwinkle{0%,100%{opacity:.12;transform:scale(.7)}50%{opacity:.62;transform:scale(1.45)}}
+
+/* Completed daily goal should visibly open into optional extra practice. */
+.cg-daily-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+.cg-daily-actions .cg-button{min-width:0;padding-left:12px;padding-right:12px;text-align:center}
+.cg-extra-training-card{background:radial-gradient(circle at 100% 0,rgba(23,213,255,.11),transparent 34%),radial-gradient(circle at 0 100%,rgba(168,61,255,.09),transparent 34%),linear-gradient(180deg,#101a32,#0d162a)}
+.cg-extra-training-card h2{margin-top:7px}.cg-extra-training-card p{margin-bottom:14px}
+
+/* Weekly activity bars become clear, accessible day selectors. */
+.cg-week-col-link{display:grid;grid-template-rows:1fr auto;gap:7px;height:100%;text-align:center;padding:0 2px 5px;border-radius:12px;transition:background .16s ease,transform .16s ease;color:inherit}
+.cg-week-col-link:hover,.cg-week-col-link:focus-visible{background:rgba(23,213,255,.055)}
+.cg-week-col-link:active{transform:scale(.97)}
+.cg-week-col-link.active{background:linear-gradient(180deg,rgba(23,213,255,.07),rgba(104,92,255,.08));box-shadow:inset 0 0 0 1px rgba(92,137,255,.2)}
+.cg-week-col-link .cg-week-track{width:100%}
+.cg-week-col-link small{font-weight:700;color:#9cabc9}
+.cg-week-col-link.active small{color:#67ddff}
+.cg-progress-hint{margin:10px 0 0;font-size:12px;text-align:center;color:#8999ba}
+
+/* Answer-review surface. */
+.cg-day-review{scroll-margin-top:18px;display:grid;gap:11px}
+.cg-day-review-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.cg-day-review-head>div{display:grid;gap:4px}.cg-day-review-head h2{margin:0}.cg-day-review-head p{margin:0;font-size:13px}
+.cg-review-list{display:grid;gap:10px}
+.cg-review-card{display:grid;gap:11px;text-align:left}
+.cg-review-topline{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap}
+.cg-review-status{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;border:1px solid var(--line);font-size:12px;font-weight:800}
+.cg-review-status.good{color:#83efad;border-color:rgba(34,197,94,.28);background:rgba(34,197,94,.07)}
+.cg-review-status.partial{color:#80ddff;border-color:rgba(23,213,255,.25);background:rgba(23,213,255,.06)}
+.cg-review-status.learning{color:#ffc878;border-color:rgba(245,158,11,.26);background:rgba(245,158,11,.07)}
+.cg-review-card h3{font-size:17px;line-height:1.35;margin:0;letter-spacing:-.02em}.cg-review-card>p{margin:0;color:#dce5f8;font-size:14px;line-height:1.55}
+.cg-review-answer-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cg-review-answer{min-width:0;padding:10px 11px;border-radius:13px;border:1px solid var(--line);background:#0d172b;display:grid;gap:4px}
+.cg-review-answer small{font-size:11px}.cg-review-answer strong{font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.cg-review-answer.yours{border-color:#35466d}.cg-review-answer.best{border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.045)}
+.cg-review-explanation{padding:11px 12px;border-radius:13px;background:rgba(99,102,241,.055);border:1px solid rgba(99,102,241,.18)}
+.cg-review-explanation strong{display:block;font-size:12px;margin-bottom:4px}.cg-review-explanation p{font-size:13px;line-height:1.5;margin:0}
+.cg-review-meta{display:flex;gap:7px;flex-wrap:wrap}
+
+@media(max-width:420px){
+  .cg-daily-actions{grid-template-columns:1fr}
+  .cg-review-answer-grid{grid-template-columns:1fr}
+  .cg-day-review-head{display:grid}
+  .cg-ambient-orb.one{width:150px;height:150px}.cg-ambient-orb.two{width:190px;height:190px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .cg-ambient-layer span{animation:none!important}
+  .cg-week-col-link{transition:none}
+}

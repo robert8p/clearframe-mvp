@@ -27,6 +27,20 @@ function immersiveBack(pathname: string) {
   return { href: "/dashboard", label: "Exit challenge" };
 }
 
+function AmbientLayer() {
+  return (
+    <div className="cg-ambient-layer" aria-hidden="true">
+      <span className="cg-ambient-orb one" />
+      <span className="cg-ambient-orb two" />
+      <span className="cg-ambient-orb three" />
+      <span className="cg-ambient-star a" />
+      <span className="cg-ambient-star b" />
+      <span className="cg-ambient-star c" />
+      <span className="cg-ambient-star d" />
+    </div>
+  );
+}
+
 export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
   const pathname = usePathname();
   const internal = pathname.startsWith("/admin") || pathname.startsWith("/analytics");
@@ -62,6 +76,7 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
   return (
     <div className="cg-consumer-bg">
       <div className="cg-phone-app">
+        <AmbientLayer />
         <header className="cg-app-brandbar">
           <CogniMark href={brandHref} compact />
           {isAdmin && pathname === "/settings" ? <Link href="/admin" className="cg-mini-admin">Admin</Link> : null}

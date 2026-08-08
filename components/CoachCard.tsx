@@ -3,20 +3,19 @@
 import { useEffect, useState } from "react";
 
 export function CoachCard() {
-  const [insight, setInsight] = useState("Generating your insight…");
-
+  const [insight, setInsight] = useState("Analysing your recent evidence…");
   useEffect(() => {
-    fetch("/api/coach")
-      .then((response) => response.json())
-      .then((body) => setInsight(body.insight ?? "Complete more questions to unlock a grounded coaching insight."))
-      .catch(() => setInsight("Complete more questions to unlock a grounded coaching insight."));
+    fetch("/api/coach").then((r) => r.json()).then((b) => setInsight(b.insight ?? "Complete more challenges to unlock a grounded insight.")).catch(() => setInsight("Complete more challenges to unlock a grounded insight."));
   }, []);
 
   return (
-    <section className="cg-card">
-      <div className="cg-kicker">AI study buddy</div>
-      <h2 style={{ marginTop: 10 }}>This week’s coaching insight</h2>
-      <p>{insight}</p>
+    <section className="cg-card cg-buddy-card">
+      <div className="cg-buddy-robot" aria-hidden="true"><span>• •</span></div>
+      <div>
+        <div className="cg-kicker">AI study buddy</div>
+        <h2>Your coaching insight</h2>
+        <p>{insight}</p>
+      </div>
     </section>
   );
 }

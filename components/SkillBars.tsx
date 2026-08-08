@@ -1,31 +1,30 @@
 type SkillShape = { name: string; slug: string } | { name: string; slug: string }[] | null;
 type Row = { score: number; reliability: number; attempts?: number; skills: SkillShape };
 
-function extractSkill(skill: SkillShape) {
-  return Array.isArray(skill) ? skill[0] : skill;
-}
+function skillOf(value: SkillShape) { return Array.isArray(value) ? value[0] : value; }
 
 export function SkillBars({ rows }: { rows: Row[] }) {
+  if (!rows.length) return <section className="cg-card"><p>Complete the diagnostic to build your Cogni profile.</p></section>;
+
   return (
-    <section className="cg-card">
+    <div className="cg-skill-list">
       {rows.map((row, index) => {
-        const skill = extractSkill(row.skills);
-        const assessed = (row.attempts ?? 0) > 0;
+        const skill = skillOf(row.skills);
+        const measured = (row.attempts ?? 0) > 0;
         return (
-          <div key={index} style={{ marginBottom: index === rows.length - 1 ? 0 : 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
-              <div>
+          <div className="cg-skill-card" key={index}>
+            <div className="cg-skill-icon">{measured ? Math.round(row.score) : "?"}</div>
+            <div className="cg-skill-copy">
+              <div className="cg-skill-head">
                 <strong>{skill?.name ?? "Skill"}</strong>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {assessed ? `Reliability ${Math.round(row.reliability * 100)}%` : "Not yet measured"}
-                </div>
+                <span>{measured ? `${Math.round(row.score)}%` : "Unmeasured"}</span>
               </div>
-              <strong>{assessed ? Math.round(row.score) : "—"}</strong>
+              <div className="progress"><span style={{ width: `${measured ? Math.round(row.score) : 0}%` }} /></div>
+              <small>{measured ? `Evidence confidence ${Math.round(row.reliability * 100)}%` : "Cogni will explore this capability in future sessions."}</small>
             </div>
-            <div className="progress"><span style={{ width: `${assessed ? Math.round(row.score) : 0}%` }} /></div>
           </div>
         );
       })}
-    </section>
+    </div>
   );
 }

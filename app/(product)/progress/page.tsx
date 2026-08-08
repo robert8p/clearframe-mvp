@@ -1,31 +1,46 @@
 import { requireUser } from "@/lib/auth";
 
+function skillName(value: any) { return Array.isArray(value) ? value[0]?.name : value?.name; }
+
 export default async function ProgressPage() {
   const { user, supabase } = await requireUser();
-  const { data } = await supabase.from("user_responses").select("is_correct,confidence,response_time_ms").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const [{ data: responses }, { data: scores }] = await Promise.all([
+    supabase.from("user_responses").select("is_correct,confidence,response_time_ms,created_at").eq("user_id", user.id).gte("created_at", since).order("created_at"),
+    supabase.from("user_skill_scores").select("score,attempts,skills(name)").eq("user_id", user.id).gt("attempts", 0).order("score", { ascending: false }).limit(4),
+  ]);
 
-  const rows = data ?? [];
-  const accuracy = rows.length ? Math.round((rows.filter((row) => row.is_correct).length / rows.length) * 100) : 0;
-  const avgConfidence = rows.length ? Math.round(rows.reduce((sum, row) => sum + (row.confidence ?? 0), 0) / rows.length) : 0;
-  const avgSpeed = rows.length ? Math.round(rows.reduce((sum, row) => sum + (row.response_time_ms ?? 0), 0) / rows.length / 1000) : 0;
+  const rows = responses ?? [];
+  const accuracy = rows.length ? Math.round(rows.filter((x) => x.is_correct).length / rows.length * 100) : 0;
+  const avgConfidence = rows.length ? Math.round(rows.reduce((a, b) => a + (b.confidence ?? 0), 0) / rows.length) : 0;
+  const dayCounts = Array.from({ length: 7 }, (_, offset) => {
+    const d = new Date(Date.now() - (6 - offset) * 86400000);
+    const key = d.toISOString().slice(0,10);
+    return { label: d.toLocaleDateString("en-GB", { weekday: "narrow" }), count: rows.filter((r) => r.created_at.slice(0,10) === key).length };
+  });
+  const maxCount = Math.max(1, ...dayCounts.map((d) => d.count));
 
   return (
-    <>
+    <div className="cg-mobile-page">
       <div className="cg-kicker">Progress</div>
-      <h1>Track what matters.</h1>
-      <p>Cogni keeps the feedback loop tight: correctness, confidence and consistency.</p>
+      <h1 className="cg-screen-title">Your progress</h1>
 
-      <div className="cg-grid three" style={{ marginTop: 18 }}>
-        <section className="cg-card"><div className="cg-kicker">Accuracy</div><div className="cg-stat">{accuracy}%</div><p>Recent answer quality across your latest responses.</p></section>
-        <section className="cg-card"><div className="cg-kicker">Average confidence</div><div className="cg-stat">{avgConfidence}%</div><p>Useful for calibration, not ego.</p></section>
-        <section className="cg-card"><div className="cg-kicker">Average speed</div><div className="cg-stat">{avgSpeed}s</div><p>Speed adds context, not status.</p></section>
-      </div>
-
-      <section className="cg-card" style={{ marginTop: 18 }}>
-        <div className="cg-kicker">What to look for</div>
-        <h2>Confidence should earn its place.</h2>
-        <p>If your confidence is consistently high while accuracy lags, that is a trainable signal. Cogni treats calibration as part of judgement quality.</p>
+      <section className="cg-card cg-progress-summary">
+        <div className="cg-ring big" style={{ ['--progress' as string]: `${accuracy * 3.6}deg` }}><span>{accuracy}%</span></div>
+        <div><h2>You’re doing great.</h2><p>Recent accuracy with average confidence of {avgConfidence}%.</p></div>
       </section>
-    </>
+
+      <section className="cg-card">
+        <div className="cg-section-head flush"><h2>Weekly activity</h2></div>
+        <div className="cg-week-bars">
+          {dayCounts.map((day, i) => <div className="cg-week-col" key={i}><div className="cg-week-track"><span style={{ height: `${Math.max(8, day.count / maxCount * 100)}%` }} /></div><small>{day.label}</small></div>)}
+        </div>
+      </section>
+
+      <section className="cg-section-head"><h2>Topics mastered</h2><Link href="/skills">See all</Link></section>
+      <div className="cg-master-list">
+        {(scores ?? []).map((row: any, i: number) => <div className="cg-master-row" key={i}><div className="cg-course-icon">{i + 1}</div><div className="cg-course-copy"><strong>{skillName(row.skills)}</strong><div className="progress"><span style={{ width: `${Math.round(row.score)}%` }} /></div></div><span>{Math.round(row.score)}%</span></div>)}
+      </div>
+    </div>
   );
 }

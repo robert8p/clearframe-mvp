@@ -3,23 +3,18 @@ import { SkillBars } from "@/components/SkillBars";
 
 export default async function SkillsPage() {
   const { user, supabase } = await requireUser();
-  const { data } = await supabase.from("user_skill_scores").select("score,reliability,attempts,skills(name,slug)").eq("user_id", user.id).order("score");
-
-  const measuredCount = (data ?? []).filter((row: any) => (row.attempts ?? 0) > 0).length;
+  const { data } = await supabase.from("user_skill_scores").select("score,reliability,attempts,skills(name,slug)").eq("user_id", user.id).order("score", { ascending: false });
+  const measured = (data ?? []).filter((row: any) => (row.attempts ?? 0) > 0);
+  const unmeasured = (data ?? []).filter((row: any) => (row.attempts ?? 0) === 0);
 
   return (
-    <>
-      <div className="cg-kicker">Skills</div>
-      <h1>Your judgement profile</h1>
-      <p>Measured skills show evidence-backed development scores. Unassessed skills are kept separate rather than mislabelled as weaknesses.</p>
-
-      <div className="cg-grid three" style={{ marginTop: 18 }}>
-        <section className="cg-card"><div className="cg-kicker">Measured</div><div className="cg-stat">{measuredCount}</div><p>Capabilities with actual observed evidence.</p></section>
-        <section className="cg-card"><div className="cg-kicker">Not yet measured</div><div className="cg-stat">{Math.max((data ?? []).length - measuredCount, 0)}</div><p>These will be explored over time.</p></section>
-        <section className="cg-card"><div className="cg-kicker">Read this correctly</div><p>This profile is directional and developmental, not a permanent identity label.</p></section>
-      </div>
-
-      <div style={{ marginTop: 18 }}><SkillBars rows={(data ?? []) as never[]} /></div>
-    </>
+    <div className="cg-mobile-page">
+      <div className="cg-kicker">Explore</div>
+      <h1 className="cg-screen-title">Skills</h1>
+      <div className="cg-search-fake">⌕ Search skills...</div>
+      <div className="badge-row"><span className="cg-pill active">Measured {measured.length}</span><span className="cg-pill">Unmeasured {unmeasured.length}</span><span className="cg-pill">AI-era skills</span></div>
+      <section className="cg-section-head"><h2>Your capability areas</h2></section>
+      <SkillBars rows={(data ?? []) as never[]} />
+    </div>
   );
 }

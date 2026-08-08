@@ -1,2 +1,21 @@
-import {requireAdmin}from"@/lib/auth";import{createAdminClient}from"@/lib/supabase/admin";
-export default async function Analytics(){await requireAdmin();const a=createAdminClient();const now=Date.now(),d1=new Date(now-86400000).toISOString(),d7=new Date(now-7*86400000).toISOString(),d30=new Date(now-30*86400000).toISOString();const [profiles,responses,e1,e7,e30]=await Promise.all([a.from("profiles").select("id",{count:"exact",head:true}),a.from("user_responses").select("id",{count:"exact",head:true}),a.from("analytics_events").select("user_id").gte("created_at",d1),a.from("analytics_events").select("user_id").gte("created_at",d7),a.from("analytics_events").select("user_id").gte("created_at",d30)]);const unique=(r:any)=>new Set((r.data??[]).map((x:any)=>x.user_id)).size;return <><div className="kicker">Internal analytics</div><h1>Product health</h1><div className="grid grid-3"><div className="card"><div className="kicker">Users</div><div className="stat">{profiles.count??0}</div></div><div className="card"><div className="kicker">DAU</div><div className="stat">{unique(e1)}</div></div><div className="card"><div className="kicker">WAU</div><div className="stat">{unique(e7)}</div></div><div className="card"><div className="kicker">MAU</div><div className="stat">{unique(e30)}</div></div><div className="card"><div className="kicker">Responses</div><div className="stat">{responses.count??0}</div></div><div className="card"><div className="kicker">North star</div><div className="stat" style={{fontSize:18}}>4+ sessions / week</div><p className="muted">Add session-boundary events in the next build to calculate this exactly.</p></div></div></>}
+import { requireAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export default async function AnalyticsPage() {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const now = Date.now();
+  const d1 = new Date(now - 86400000).toISOString();
+  const d7 = new Date(now - 7 * 86400000).toISOString();
+  const d30 = new Date(now - 30 * 86400000).toISOString();
+  const [profiles, responses, e1, e7, e30] = await Promise.all([
+    admin.from("profiles").select("id", { count: "exact", head: true }),
+    admin.from("user_responses").select("id", { count: "exact", head: true }),
+    admin.from("analytics_events").select("user_id").gte("created_at", d1),
+    admin.from("analytics_events").select("user_id").gte("created_at", d7),
+    admin.from("analytics_events").select("user_id").gte("created_at", d30),
+  ]);
+  const unique = (r: any) => new Set((r.data ?? []).map((x: any) => x.user_id)).size;
+  const metrics = [["Users", profiles.count ?? 0], ["DAU", unique(e1)], ["WAU", unique(e7)], ["MAU", unique(e30)], ["Responses", responses.count ?? 0]];
+  return <><div className="cg-kicker">Internal analytics</div><h1>Product health</h1><div className="cg-grid three">{metrics.map(([label, value]) => <section className="cg-card" key={label}><div className="cg-kicker">{label}</div><div className="cg-stat">{value}</div></section>)}<section className="cg-card"><div className="cg-kicker">North star</div><h2 style={{ marginTop: 10 }}>4+ sessions / week</h2><p>Add cohort/session reporting once usage volume is meaningful.</p></section></div></>;
+}

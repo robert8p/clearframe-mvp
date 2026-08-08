@@ -51,6 +51,7 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
   if (internal) {
     return (
       <div className="cg-admin-page">
+        <AmbientLayer />
         <aside className="cg-admin-sidebar">
           <CogniMark href="/dashboard" />
           <nav className="cg-admin-nav" aria-label="Internal tools">

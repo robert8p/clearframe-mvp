@@ -7,6 +7,7 @@ import "./cogni-v090-engagement.css";
 import "./cogni-v010-ux.css";
 import "./cogni-v0101-fixes.css";
 import "./cogni-v011-navigation.css";
+import "./cogni-v011-depth.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),

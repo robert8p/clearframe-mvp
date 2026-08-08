@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { ChallengeRunner } from "@/components/ChallengeRunner";
 import { getOrCreateDailyTrainingSession } from "@/lib/recommendation";
 import type { Challenge } from "@/lib/types";
+import { isDailyLessonComplete } from "@/lib/lessons";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,10 @@ export default async function TrainingPage() {
     user.id,
     5,
   );
+
+  if (session.id && session.status !== "completed" && !(await isDailyLessonComplete(supabase, user.id))) {
+    redirect("/lesson");
+  }
 
   if (!session.id || session.challenges.length === 0) {
     return (

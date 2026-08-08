@@ -8,10 +8,11 @@ function skillName(value: any) { return Array.isArray(value) ? value[0]?.name : 
 export default async function DashboardPage() {
   const { user, supabase } = await requireUser();
   const day = localDateKey();
-  const [{ data: profile }, { data: scores }, { data: todaySession }] = await Promise.all([
+  const [{ data: profile }, { data: scores }, { data: todaySession }, { data: lessonCompletion }] = await Promise.all([
     supabase.from("profiles").select("full_name,xp,current_streak").eq("id", user.id).single(),
     supabase.from("user_skill_scores").select("score,reliability,attempts,skills(name)").eq("user_id", user.id).gt("attempts", 0).order("score"),
-    supabase.from("training_sessions").select("id,status").eq("user_id", user.id).eq("session_date", day).maybeSingle(),
+    supabase.from("training_sessions").select("id,status,lesson_id").eq("user_id", user.id).eq("session_date", day).maybeSingle(),
+    supabase.from("user_lesson_completions").select("id").eq("user_id", user.id).eq("lesson_date", day).maybeSingle(),
   ]);
 
   let assigned = 5, answered = 0;
@@ -23,7 +24,10 @@ export default async function DashboardPage() {
     assigned = assignmentCount ?? 5; answered = answeredCount ?? 0;
   }
 
-  const dailyProgress = todaySession?.status === "completed" ? 100 : assigned ? Math.round((answered / assigned) * 100) : 0;
+  const lessonDone = Boolean(lessonCompletion);
+  const dailyUnits = assigned + 1;
+  const dailyProgress = todaySession?.status === "completed" ? 100 : Math.round(((answered + (lessonDone ? 1 : 0)) / dailyUnits) * 100);
+  const continueHref = todaySession?.status === "completed" ? "/session-complete" : lessonDone ? "/training" : "/lesson";
   const weakest = scores?.[0];
   const recentSkills = (scores ?? []).slice(0, 3);
   const firstName = profile?.full_name?.split(" ")[0] ?? "there";
@@ -39,15 +43,15 @@ export default async function DashboardPage() {
         <div className="cg-kicker">Daily goal</div>
         <div className="cg-goal-row">
           <div className="cg-ring" style={{ ['--progress' as string]: `${dailyProgress * 3.6}deg` }}><span>{dailyProgress}%</span></div>
-          <div><h2>{todaySession?.status === "completed" ? "Goal complete" : "Keep it up!"}</h2><p>{answered} / {assigned} questions completed</p></div>
+          <div><h2>{todaySession?.status === "completed" ? "Goal complete" : lessonDone ? "Lesson done — time to practise" : "Start with today’s 3-min lesson"}</h2><p>{lessonDone ? "✓ Lesson" : "1 lesson"} • {answered} / {assigned} questions</p></div>
         </div>
         <div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div>
       </section>
 
-      <section className="cg-section-head"><h2>Continue learning</h2><Link href="/training">See all</Link></section>
-      <Link href="/training" className="cg-course-card">
-        <div className="cg-course-icon">◎</div>
-        <div className="cg-course-copy"><strong>Judgement training</strong><span>{todaySession?.status === "completed" ? "Completed today" : `${Math.max(assigned - answered, 0)} questions left`}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
+      <section className="cg-section-head"><h2>Continue learning</h2><Link href={continueHref}>See all</Link></section>
+      <Link href={continueHref} className="cg-course-card">
+        <div className="cg-course-icon">{lessonDone ? "◎" : "✦"}</div>
+        <div className="cg-course-copy"><strong>{todaySession?.status === "completed" ? "Today complete" : lessonDone ? "Daily judgement challenge" : "Today’s mini lesson"}</strong><span>{todaySession?.status === "completed" ? "Lesson + challenge complete" : lessonDone ? `${Math.max(assigned - answered, 0)} questions left` : "3 fun minutes, then 5 mixed-format questions"}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
         <div className="cg-play">▶</div>
       </Link>
 
@@ -68,7 +72,7 @@ export default async function DashboardPage() {
         <div className="cg-kicker">Highest-value focus</div>
         <h2>{skillName(weakest?.skills) ?? "Complete your diagnostic"}</h2>
         <p>{weakest ? `Current score ${Math.round(weakest.score)} with ${Math.round((weakest.reliability ?? 0) * 100)}% evidence confidence.` : "Cogni needs measured evidence before personalising your focus."}</p>
-        <Link href="/training" className="cg-button cg-full">{todaySession?.status === "completed" ? "Review today’s result" : answered ? "Continue session" : "Start session"}</Link>
+        <Link href={continueHref} className="cg-button cg-full">{todaySession?.status === "completed" ? "Review today’s result" : !lessonDone ? "Start today’s lesson" : answered ? "Continue challenge" : "Start challenge"}</Link>
       </section>
     </div>
   );

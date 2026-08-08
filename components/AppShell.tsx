@@ -23,7 +23,7 @@ function NavIcon({ type }: { type: string }) {
 export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
   const pathname = usePathname();
   const internal = pathname.startsWith("/admin") || pathname.startsWith("/analytics");
-  const immersive = pathname.startsWith("/training") || pathname.startsWith("/diagnostic") || pathname.startsWith("/session-complete") || pathname.startsWith("/onboarding");
+  const immersive = pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/diagnostic") || pathname.startsWith("/session-complete") || pathname.startsWith("/onboarding");
 
   if (internal) {
     return (

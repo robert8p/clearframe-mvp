@@ -8,6 +8,8 @@ type ChallengeRow = {
   prompt: string;
   options: string[];
   challenge_type: string;
+  interaction_type: string;
+  interaction_config: Record<string, unknown>;
   difficulty: number;
   confidence_required: boolean;
 };
@@ -51,7 +53,7 @@ export type DailyTrainingSession = {
 };
 
 const CHALLENGE_FIELDS =
-  "id,title,prompt,options,challenge_type,difficulty,confidence_required";
+  "id,title,prompt,options,challenge_type,interaction_type,interaction_config,difficulty,confidence_required";
 
 const AI_AUDIT_TYPE = "ai_answer_audit";
 
@@ -102,6 +104,16 @@ function typeCounts(plan: PlannedChallenge[]) {
     );
   }
 
+  return counts;
+}
+
+
+function interactionCounts(plan: PlannedChallenge[]) {
+  const counts = new Map<string, number>();
+  for (const item of plan) {
+    const type = item.challenge.interaction_type ?? "single_choice";
+    counts.set(type, (counts.get(type) ?? 0) + 1);
+  }
   return counts;
 }
 
@@ -159,7 +171,30 @@ function chooseDiverseChallenge(
   });
 
   if (preferred.length) {
-    return rankCandidates(preferred, targetDifficulty, seed)[0];
+    const formatCounts = interactionCounts(plan);
+    const minimumFormatCount = Math.min(
+      ...preferred.map((row) => formatCounts.get(row.interaction_type ?? "single_choice") ?? 0),
+    );
+    let formatPreferred = preferred.filter(
+      (row) => (formatCounts.get(row.interaction_type ?? "single_choice") ?? 0) === minimumFormatCount,
+    );
+    const nonMcqCount = plan.filter((item) => item.challenge.interaction_type !== "single_choice").length;
+    if (nonMcqCount < 2) {
+      const alternatives = formatPreferred.filter((row) => row.interaction_type !== "single_choice");
+      if (alternatives.length) formatPreferred = alternatives;
+    }
+
+    // Once format diversity is satisfied, favour one story-led MCQ when the
+    // target skill has one available. This keeps the daily set concrete and
+    // memorable without allowing story items to override required AI audits
+    // or the mixed-format quota.
+    const hasStory = plan.some((item) => item.challenge.challenge_type === "story_mcq");
+    if (!hasStory) {
+      const storyCandidates = formatPreferred.filter((row) => row.challenge_type === "story_mcq");
+      if (storyCandidates.length) formatPreferred = storyCandidates;
+    }
+
+    return rankCandidates(formatPreferred, targetDifficulty, seed)[0];
   }
 
   const uniqueTypeFallback = required.filter(

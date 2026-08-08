@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { SessionCelebration } from "@/components/SessionCelebration";
 import {
   patternCopy,
   sessionInsight,
@@ -51,7 +52,7 @@ export default async function SessionCompletePage() {
   if (session?.id) {
     const { data: responseRows } = await supabase
       .from("user_responses")
-      .select("id,challenge_id,is_correct,confidence,error_pattern,xp_awarded,created_at")
+      .select("id,challenge_id,is_correct,score_fraction,confidence,error_pattern,xp_awarded,created_at")
       .eq("user_id", user.id)
       .eq("session_key", session.id)
       .order("created_at");
@@ -121,7 +122,9 @@ export default async function SessionCompletePage() {
 
   const total = responses.length;
   const correct = responses.filter((row: any) => Boolean(row.is_correct)).length;
-  const accuracy = total ? Math.round((correct / total) * 100) : 0;
+  const accuracy = total
+    ? Math.round((responses.reduce((sum: number, row: any) => sum + Number(row.score_fraction ?? (row.is_correct ? 1 : 0)), 0) / total) * 100)
+    : 0;
   const confidenceValues = responses
     .map((row: any) => row.confidence)
     .filter((value: unknown): value is number => typeof value === "number");
@@ -145,14 +148,12 @@ export default async function SessionCompletePage() {
 
   const focusSkill = movements[0]?.name ?? null;
   const insight = sessionInsight({ accuracy, averageConfidence, patterns, focusSkill });
+  const completionTitle = accuracy >= 80 ? "Excellent!" : accuracy >= 60 ? "Strong session!" : "Session banked!";
 
   return (
     <div className="cg-mobile-page cg-results-screen">
-      <div className="cg-celebration">✦</div>
-      <div className="cg-kicker">Session complete</div>
-      <h1 className="cg-results-title">Excellent!</h1>
-      <div className="cg-xp">+{sessionXp} XP</div>
-      <p>You scored {correct} out of {total || 5}.</p>
+      <SessionCelebration xp={sessionXp} streak={profile?.current_streak ?? 0} title={completionTitle} />
+      <p className="cg-results-scoreline">{correct} fully correct • {accuracy}% overall alignment across all formats.</p>
 
       <div className="cg-result-stats">
         <div><small>Score</small><strong>{accuracy}%</strong></div>

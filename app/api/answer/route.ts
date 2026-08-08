@@ -24,10 +24,7 @@ export async function POST(req: Request) {
     } = await userClient.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorised" },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
     }
 
     const admin = createAdminClient();
@@ -41,17 +38,11 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (!trainingSession) {
-        return NextResponse.json(
-          { error: "Training session not found." },
-          { status: 403 },
-        );
+        return NextResponse.json({ error: "Training session not found." }, { status: 403 });
       }
 
       if (trainingSession.status === "completed") {
-        return NextResponse.json(
-          { error: "This training session is already complete." },
-          { status: 409 },
-        );
+        return NextResponse.json({ error: "This training session is already complete." }, { status: 409 });
       }
 
       const { data: assignment } = await admin
@@ -62,18 +53,11 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (!assignment) {
-        return NextResponse.json(
-          { error: "This challenge is not assigned to this session." },
-          { status: 403 },
-        );
+        return NextResponse.json({ error: "This challenge is not assigned to this session." }, { status: 403 });
       }
     }
 
-    const [
-      { data: challenge },
-      { data: key },
-      { data: mappings },
-    ] = await Promise.all([
+    const [{ data: challenge }, { data: key }, { data: mappings }] = await Promise.all([
       admin
         .from("challenges")
         .select("id,difficulty,is_diagnostic")
@@ -82,50 +66,33 @@ export async function POST(req: Request) {
         .single(),
       admin
         .from("challenge_answer_keys")
-        .select(
-          "correct_index,explanation,thinking_principle,application,error_patterns",
-        )
+        .select("correct_index,explanation,thinking_principle,application,error_patterns")
         .eq("challenge_id", body.challengeId)
         .single(),
       admin
         .from("challenge_skill_mapping")
-        .select("skill_id,weight,skills(slug)")
+        .select("skill_id,weight,skills(name,slug)")
         .eq("challenge_id", body.challengeId),
     ]);
 
     if (!challenge || !key) {
-      return NextResponse.json(
-        { error: "Challenge not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Challenge not found" }, { status: 404 });
     }
 
     if (body.mode === "diagnostic" && !challenge.is_diagnostic) {
-      return NextResponse.json(
-        { error: "This is not a diagnostic challenge." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "This is not a diagnostic challenge." }, { status: 400 });
     }
 
     if (body.mode === "training" && challenge.is_diagnostic) {
-      return NextResponse.json(
-        { error: "Diagnostic challenges cannot be submitted as training." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Diagnostic challenges cannot be submitted as training." }, { status: 400 });
     }
 
     const correct = body.selectedIndex === key.correct_index;
-    const errorPatterns =
-      key.error_patterns &&
-      typeof key.error_patterns === "object"
-        ? key.error_patterns
-        : {};
-
+    const xp = correct ? 12 : 7;
+    const errorPatterns = key.error_patterns && typeof key.error_patterns === "object" ? key.error_patterns : {};
     const pattern = correct
       ? null
-      : (
-          errorPatterns as Record<string, string>
-        )[String(body.selectedIndex)] ?? "premature_closure";
+      : (errorPatterns as Record<string, string>)[String(body.selectedIndex)] ?? "premature_closure";
 
     const { data: existing } = await admin
       .from("user_responses")
@@ -136,16 +103,10 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existing) {
-      return NextResponse.json(
-        {
-          error:
-            "This challenge has already been submitted in this session.",
-        },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: "This challenge has already been submitted in this session." }, { status: 409 });
     }
 
-    const { error: responseInsertError } = await admin
+    const { data: insertedResponse, error: responseInsertError } = await admin
       .from("user_responses")
       .insert({
         user_id: user.id,
@@ -156,56 +117,77 @@ export async function POST(req: Request) {
         response_time_ms: body.responseTimeMs,
         error_pattern: pattern,
         session_key: body.sessionId,
-      });
+        xp_awarded: xp,
+      })
+      .select("id")
+      .single();
 
     if (responseInsertError) throw responseInsertError;
+    if (!insertedResponse?.id) throw new Error("Response was saved without an id.");
 
     const updates: {
       slug: string;
+      name: string;
       score: number;
       reliability: number;
+      delta: number;
     }[] = [];
 
     for (const mapping of mappings ?? []) {
       const { data: old } = await admin
         .from("user_skill_scores")
-        .select("score,attempts")
+        .select("score,reliability,attempts")
         .eq("user_id", user.id)
         .eq("skill_id", mapping.skill_id)
         .maybeSingle();
 
-      const attempts = (old?.attempts ?? 0) + 1;
-
-      const score = nextSkillScore(
-        old?.score ?? 50,
+      const scoreBefore = Number(old?.score ?? 50);
+      const reliabilityBefore = Number(old?.reliability ?? 0);
+      const attemptsBefore = Number(old?.attempts ?? 0);
+      const attemptsAfter = attemptsBefore + 1;
+      const scoreAfter = nextSkillScore(
+        scoreBefore,
         challenge.difficulty,
         correct,
         Boolean(challenge.is_diagnostic),
         mapping.weight ?? 1,
       );
-
-      const reliability = reliabilityFromAttempts(attempts);
+      const reliabilityAfter = reliabilityFromAttempts(attemptsAfter);
 
       await admin.from("user_skill_scores").upsert(
         {
           user_id: user.id,
           skill_id: mapping.skill_id,
-          score,
-          reliability,
-          attempts,
+          score: scoreAfter,
+          reliability: reliabilityAfter,
+          attempts: attemptsAfter,
           last_seen_at: new Date().toISOString(),
         },
         { onConflict: "user_id,skill_id" },
       );
 
-      const skill = Array.isArray(mapping.skills)
-        ? mapping.skills[0]
-        : mapping.skills;
+      await admin.from("user_response_skill_updates").insert({
+        response_id: insertedResponse.id,
+        user_id: user.id,
+        skill_id: mapping.skill_id,
+        score_before: scoreBefore,
+        score_after: scoreAfter,
+        reliability_before: reliabilityBefore,
+        reliability_after: reliabilityAfter,
+        attempts_before: attemptsBefore,
+        attempts_after: attemptsAfter,
+        weight: mapping.weight ?? 1,
+      });
+
+      const skill = Array.isArray(mapping.skills) ? mapping.skills[0] : mapping.skills;
+      const skillName = skill?.name ?? "Skill";
 
       updates.push({
         slug: skill?.slug ?? "skill",
-        score,
-        reliability,
+        name: skillName,
+        score: scoreAfter,
+        reliability: reliabilityAfter,
+        delta: Number((scoreAfter - scoreBefore).toFixed(1)),
       });
     }
 
@@ -220,24 +202,15 @@ export async function POST(req: Request) {
       if (errorPattern) {
         await admin
           .from("user_error_patterns")
-          .update({
-            count: errorPattern.count + 1,
-            last_seen_at: new Date().toISOString(),
-          })
+          .update({ count: errorPattern.count + 1, last_seen_at: new Date().toISOString() })
           .eq("id", errorPattern.id);
       } else {
-        await admin.from("user_error_patterns").insert({
-          user_id: user.id,
-          pattern,
-          count: 1,
-        });
+        await admin.from("user_error_patterns").insert({ user_id: user.id, pattern, count: 1 });
       }
     }
 
-    const xp = correct ? 12 : 7;
     const today = localDateKey();
     const yesterday = previousLocalDateKey();
-
     const { data: profile } = await admin
       .from("profiles")
       .select("xp,current_streak,last_session_date")
@@ -248,10 +221,7 @@ export async function POST(req: Request) {
     const lastSessionDate = profile?.last_session_date;
 
     if (lastSessionDate !== today) {
-      streak =
-        lastSessionDate === yesterday
-          ? streak + 1
-          : 1;
+      streak = lastSessionDate === yesterday ? streak + 1 : 1;
     }
 
     await admin
@@ -273,13 +243,12 @@ export async function POST(req: Request) {
           session_id: body.sessionId,
           confidence: body.confidence,
           response_time_ms: body.responseTimeMs,
+          xp_awarded: xp,
         },
       },
       {
         user_id: user.id,
-        event_name: correct
-          ? "answer_correct"
-          : "answer_incorrect",
+        event_name: correct ? "answer_correct" : "answer_incorrect",
         properties: {
           challenge_id: body.challengeId,
           mode: body.mode,
@@ -293,34 +262,16 @@ export async function POST(req: Request) {
     let sessionCompleted = false;
 
     if (body.mode === "training") {
-      const [
-        { count: assignedCount },
-        { count: answeredCount },
-      ] = await Promise.all([
-        admin
-          .from("training_session_challenges")
-          .select("*", { count: "exact", head: true })
-          .eq("session_id", body.sessionId),
-        admin
-          .from("user_responses")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .eq("session_key", body.sessionId),
+      const [{ count: assignedCount }, { count: answeredCount }] = await Promise.all([
+        admin.from("training_session_challenges").select("*", { count: "exact", head: true }).eq("session_id", body.sessionId),
+        admin.from("user_responses").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("session_key", body.sessionId),
       ]);
 
-      if (
-        (assignedCount ?? 0) > 0 &&
-        (answeredCount ?? 0) >= (assignedCount ?? 0)
-      ) {
+      if ((assignedCount ?? 0) > 0 && (answeredCount ?? 0) >= (assignedCount ?? 0)) {
         sessionCompleted = true;
-
         await admin
           .from("training_sessions")
-          .update({
-            status: "completed",
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          .update({ status: "completed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq("id", body.sessionId)
           .eq("user_id", user.id);
       }
@@ -339,14 +290,8 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error(error);
-
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Invalid request",
-      },
+      { error: error instanceof Error ? error.message : "Invalid request" },
       { status: 400 },
     );
   }

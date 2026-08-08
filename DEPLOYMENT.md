@@ -5,12 +5,13 @@
 2. Choose an organisation, enter project name `cogni-mvp`, create a strong database password and choose the UK/EU region appropriate to your pilot.
 3. Wait until the project dashboard opens.
 4. Left menu -> **SQL Editor** -> **New query**.
-5. Open this repository file `supabase/migrations/001_initial.sql`, copy all text, paste into SQL Editor, click **Run**. Expected result: success with no blocking errors.
-6. Create another query. Copy all of `supabase/migrations/002_seed.sql`, paste and **Run**. Expected result: 100 rows in `challenges`.
-7. Create another query. Copy all of `supabase/migrations/003_training_sessions.sql`, paste and **Run**. This creates persisted/resumable daily training sessions.
-8. Project Settings / API (or **Connect**, depending on dashboard wording): copy Project URL, publishable key and service-role key. Never put the service-role key in a variable beginning `NEXT_PUBLIC_`.
-9. For easiest closed-pilot testing, Auth -> Providers -> Email: decide whether to disable email confirmation. For public use, keep confirmation enabled and configure redirect URLs.
-10. Table Editor -> `profiles`: after your first sign-up, set your own `is_admin` to `true` so the admin screens appear.
+5. Run `supabase/migrations/001_initial.sql`. Expected result: success with no blocking errors.
+6. Run `supabase/migrations/002_seed.sql`. Expected result: 100 rows in `challenges`.
+7. Run `supabase/migrations/003_training_sessions.sql`. This creates persisted/resumable daily training sessions.
+8. Run `supabase/migrations/004_learning_evidence.sql`. This adds exact per-response XP and skill-movement evidence for the richer profile/session summaries.
+9. Project Settings / API (or **Connect**, depending on dashboard wording): copy Project URL, publishable key and service-role key. Never put the service-role key in a variable beginning `NEXT_PUBLIC_`.
+10. For easiest closed-pilot testing, Auth -> Providers -> Email: decide whether to disable email confirmation. For public use, keep confirmation enabled and configure redirect URLs.
+11. Table Editor -> `profiles`: after your first sign-up, set your own `is_admin` to `true` so the admin screens appear.
 
 ## B. GitHub
 1. Create a new private repository called `cogni-mvp`.

@@ -7,18 +7,20 @@ import { patternCopy, sessionInsight, type ErrorPatternCount } from "@/lib/insig
 
 type SkillMovement = { name: string; before: number | null; after: number; delta: number | null; touches: number };
 
-function nestedSkillName(value: unknown) {
-  if (Array.isArray(value)) return (value[0] as { name?: string } | undefined)?.name ?? "Skill";
-  if (value && typeof value === "object" && "name" in value) return String((value as { name?: unknown }).name ?? "Skill");
-  return "Skill";
+type NestedSkill = { name?: string; slug?: string };
+function nestedSkill(value: unknown): NestedSkill {
+  if (Array.isArray(value)) return (value[0] as NestedSkill | undefined) ?? {};
+  if (value && typeof value === "object") return value as NestedSkill;
+  return {};
 }
+function nestedSkillName(value: unknown) { return nestedSkill(value).name ?? "Skill"; }
 
 export default async function SessionCompletePage() {
   const { user, supabase } = await requireUser();
   const [{ data: profile }, { data: session }, { data: scoreRows }] = await Promise.all([
     supabase.from("profiles").select("xp,current_streak").eq("id", user.id).single(),
     supabase.from("training_sessions").select("id,completed_at").eq("user_id", user.id).eq("status", "completed").order("completed_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("user_skill_scores").select("skill_id,score,skills(name)").eq("user_id", user.id).gt("attempts", 0),
+    supabase.from("user_skill_scores").select("skill_id,score,skills(name,slug)").eq("user_id", user.id).gt("attempts", 0),
   ]);
   if (!session?.id) redirect("/dashboard");
 
@@ -62,6 +64,9 @@ export default async function SessionCompletePage() {
   const focusSkill = movements[0]?.name ?? null;
   const insight = sessionInsight({ accuracy: alignment, averageConfidence, patterns, focusSkill });
   const completionTitle = alignment >= 80 ? "Excellent!" : alignment >= 60 ? "Strong session!" : "Session banked!";
+  const weakestRow = [...(scoreRows ?? [])].sort((a: any, b: any) => Number(a.score) - Number(b.score))[0] as any;
+  const weakestSkill = nestedSkill(weakestRow?.skills);
+  const extraTrainingHref = weakestSkill.slug ? `/practice/${weakestSkill.slug}` : "/skills";
 
   return (
     <div className="cg-mobile-page cg-results-screen">
@@ -71,9 +76,15 @@ export default async function SessionCompletePage() {
       <section className="cg-card cg-personal-insight-card"><div className="cg-kicker">Your insight</div><h2>What this session says</h2><p>{insight}</p></section>
       <section className="cg-card"><div className="cg-section-head flush"><h2>Skills affected</h2><span className="cg-pill">{movements.length}</span></div><div className="cg-session-skill-list">{movements.length ? movements.slice(0, 5).map((movement) => <div className="cg-session-skill" key={movement.name}><div><strong>{movement.name}</strong><small>{movement.touches > 1 ? `${movement.touches} questions` : "1 question"}</small></div><div className="cg-session-skill-score"><strong>{Math.round(movement.after)}</strong>{movement.delta === null ? <span className="cg-delta neutral">trained</span> : <span className={`cg-delta ${movement.delta > 0 ? "up" : movement.delta < 0 ? "down" : "neutral"}`}>{movement.delta > 0 ? "+" : ""}{movement.delta.toFixed(1)}</span>}</div></div>) : <p>No skill movement was recorded for this session.</p>}</div></section>
       <section className="cg-card"><div className="cg-section-head flush"><h2>Mistakes & patterns</h2><span className="cg-pill">{patterns.reduce((sum, item) => sum + item.count, 0)}</span></div>{patterns.length ? <div className="cg-pattern-list">{patterns.map((item) => { const copy = patternCopy(item.pattern); return <div className="cg-pattern-row" key={item.pattern}><div><strong>{copy?.label ?? item.pattern.replaceAll("_", " ")}</strong><small>{copy?.action}</small></div><span className="cg-pill">×{item.count}</span></div>; })}</div> : <div className="cg-clean-session"><strong>No reasoning-error pattern detected.</strong><p>That does not prove mastery; it means this session did not generate a clear error signal.</p></div>}</section>
-      <section className="cg-card cg-session-footer-card"><div><div className="cg-kicker">Total XP</div><strong>{profile?.xp ?? 0}</strong></div><div><div className="cg-kicker">Next focus</div><strong>{focusSkill ?? "Keep gathering evidence"}</strong></div></section>
+      <section className="cg-card cg-session-footer-card"><div><div className="cg-kicker">Total XP</div><strong>{profile?.xp ?? 0}</strong></div><div><div className="cg-kicker">Next focus</div><strong>{weakestSkill.name ?? focusSkill ?? "Keep gathering evidence"}</strong></div></section>
+      <section className="cg-card cg-extra-training-card">
+        <div className="cg-kicker">Want to keep going?</div>
+        <h2>Daily goal complete. Training stays open.</h2>
+        <p>{weakestSkill.name ? `Take 3 fresh questions focused on ${weakestSkill.name}.` : "Choose a skill and continue with fresh questions."} Extra practice is optional and still contributes to your Development Scores.</p>
+        <Link href={extraTrainingHref} className="cg-button cg-full">Keep training</Link>
+      </section>
       <SessionFeedback />
-      <div className="cg-results-actions"><Link href="/dashboard" className="cg-button cg-full">Back to Home</Link><Link href="/skills" className="cg-button secondary cg-full">Review skills</Link></div>
+      <div className="cg-results-actions"><Link href="/dashboard" className="cg-button cg-full">Back to Home</Link><Link href="/skills" className="cg-button secondary cg-full">Choose another skill</Link></div>
     </div>
   );
 }

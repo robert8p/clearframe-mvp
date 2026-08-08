@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 
 function skillName(value: any) { return Array.isArray(value) ? value[0]?.name : value?.name; }

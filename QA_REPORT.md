@@ -1,45 +1,13 @@
-# Cogni v0.4.0 — QA report
+# Cogni v0.5.0 QA
 
-## Upgrade delivered
-- Rich **Your Judgement Profile** after the diagnostic:
-  - emerging strength;
-  - highest-value measured development area;
-  - explicit evidence-confidence label;
-  - observed reasoning-error pattern and an actionable countermeasure;
-  - three-skill weekly focus path;
-  - diagnostic accuracy vs confidence calibration.
-- Rich **Session Complete** screen after every daily session:
-  - XP earned in that session;
-  - score and average confidence;
-  - current streak;
-  - exact skills affected and score movement where evidence exists;
-  - mistakes/reasoning patterns and their counts;
-  - one deterministic, data-grounded personalised insight;
-  - next skill focus.
-- AI Study Buddy grounding expanded to include evidence confidence, recurring error pattern and the three-skill weekly focus path.
+UI refresh based on the supplied Cogni reference.
 
-## Evidence model
-Migration `004_learning_evidence.sql` adds:
-- `user_responses.xp_awarded` so historical/session XP is stored rather than inferred from future rules;
-- `user_response_skill_updates`, which stores score/reliability/attempt before-and-after values for every skill touched by a response.
-
-Historical sessions created before migration 004 intentionally do **not** receive fabricated skill deltas. The UI labels those skills as `trained` instead.
-
-## Static QA performed
-- All 41 TypeScript/TSX source files passed TypeScript transpile/syntax validation.
-- Strict semantic TypeScript QA passed using temporary local declarations for external packages; the temporary QA declarations are not included in the shipped repository.
-- All local `@/...` imports resolve to real files.
-- No runtime source file contains the old Clearframe brand name.
-- No temporary debug API route is present.
-- Insight helper functions were executed with representative score/error data and returned the expected Early-evidence label, focus pathway, pattern narrative and session insight.
-
-## Environment limitation
-The build environment's internal npm mirror does not expose `@supabase/ssr@0.12.3`, so a genuine dependency-backed `next build` cannot be executed here. Vercel previously demonstrated that it can install the application's dependency set. The source has therefore been validated using syntax, strict semantic and local-import QA before packaging.
-
-
-## v0.4.1 domain update
-- Canonical production origin set to `https://gocogni.vercel.app`.
-- `NEXT_PUBLIC_APP_URL` default and `.env.example` updated.
-- Signup email redirect now uses the configured/canonical app origin.
-- Next.js metadataBase, canonical URL, Open Graph URL and PWA manifest added/updated.
-- Priority skill card text-wrap hotfix incorporated.
+Checks performed:
+- Exact supplied Cogni brain + wordmark asset included at `public/cogni-logo.png`.
+- Shared consumer shell renders Cogni branding on every consumer page.
+- Admin and analytics surfaces render Cogni branding in sidebar and content header.
+- Public landing, login and signup continue to use the shared CogniMark component.
+- Consumer bottom navigation changed to the four-tab reference pattern: Home, Explore, Progress, Profile.
+- Training/diagnostic/results/onboarding use immersive mode without the bottom nav, while retaining the Cogni brand header.
+- Priority skill labels explicitly wrap and no longer use ellipsis.
+- Production domain remains `https://gocogni.vercel.app`.

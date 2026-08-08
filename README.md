@@ -32,3 +32,9 @@ Cogni is a mobile-first adaptive human-judgement training product for the AI age
 6. Open `http://localhost:3000`.
 
 See `DEPLOYMENT.md` for literal click-by-click instructions.
+
+
+## v0.5.0 UI refresh
+- Exact Cogni brain + wordmark asset from the supplied reference is shown across public, consumer and internal pages.
+- Consumer navigation now follows the reference four-tab pattern: Home, Explore, Progress, Profile.
+- Shared mobile shell, card density, spacing and brand treatment were tightened to match the supplied reference more closely.

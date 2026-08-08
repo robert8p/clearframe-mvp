@@ -3,6 +3,7 @@ import { APP_URL } from "@/lib/app-url";
 import "./globals.css";
 import "./cogni-v081.css";
 import "./cogni-v082-readability.css";
+import "./cogni-v090-engagement.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),

@@ -6,6 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Cogni",
     description: "Short daily practice for clearer thinking and better decisions.",
     start_url: "/",
+    scope: "/",
     display: "standalone",
     background_color: "#070d1b",
     theme_color: "#070d1b",

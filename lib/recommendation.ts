@@ -40,20 +40,23 @@ async function loadSession(supabase: SupabaseClient, userId: string, session: { 
 }
 
 async function buildPlan(supabase: SupabaseClient, userId: string, audience: AudienceSegment, count: number, day: string): Promise<Assignment[]> {
-  const [{ data: scores }, { data: history }, { data: mappings }, { data: challengeRows }] = await Promise.all([
+  const [{ data: scores }, { data: history }, { data: mappings }, { data: challengeRows }, { data: answerRows }] = await Promise.all([
     supabase.from("user_skill_scores").select("skill_id,score,reliability,attempts").eq("user_id", userId),
     supabase.from("user_responses").select("challenge_id").eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
     supabase.from("challenge_skill_mapping").select("challenge_id,skill_id").limit(1200),
     supabase.from("challenges").select(FIELDS).eq("is_published", true).eq("is_diagnostic", false).limit(500),
+    supabase.from("challenge_answer_keys").select("challenge_id,correct_index").not("correct_index", "is", null).limit(1000),
   ]);
 
   const allChallenges = (challengeRows ?? []) as ChallengeRow[];
   const historyIds = new Set((history ?? []).map((row: { challenge_id: string }) => row.challenge_id));
   const promptById = new Map(allChallenges.map((challenge) => [challenge.id, promptKey(challenge.prompt)]));
   const recentPrompts = new Set<string>();
-  for (const id of historyIds) {
-    const key = promptById.get(id);
-    if (key) recentPrompts.add(key);
+  for (const id of historyIds) { const key = promptById.get(id); if (key) recentPrompts.add(key); }
+  const correctIndexByChallenge = new Map<string, number>();
+  for (const row of answerRows ?? []) {
+    const position = Number(row.correct_index);
+    if (position >= 0 && position <= 3) correctIndexByChallenge.set(String(row.challenge_id), position);
   }
 
   const audienceEligible = allChallenges.filter((challenge) => audienceMatches(challenge.audience_segments, audience));
@@ -65,6 +68,7 @@ async function buildPlan(supabase: SupabaseClient, userId: string, audience: Aud
 
   const usedIds = new Set<string>();
   const usedPrompts = new Set<string>();
+  const mcqPositionCounts = [0, 0, 0, 0];
   const plan: Assignment[] = [];
   const targetScore = measured[0] ? effectiveScore(measured[0]) : 50;
   const targetDifficulty = audienceDifficultyTarget(audience, targetScore);
@@ -76,10 +80,31 @@ async function buildPlan(supabase: SupabaseClient, userId: string, audience: Aud
     for (const item of plan) formats.set(item.challenge.interaction_type, (formats.get(item.challenge.interaction_type) ?? 0) + 1);
     const minimumFormatUse = Math.min(...available.map((challenge) => formats.get(challenge.interaction_type) ?? 0));
     const diverse = available.filter((challenge) => (formats.get(challenge.interaction_type) ?? 0) === minimumFormatUse);
-    const picked = rank(diverse.length ? diverse : available, targetDifficulty, `${userId}:${day}:${seed}`, recentPrompts)[0];
+    const ranked = rank(diverse.length ? diverse : available, targetDifficulty, `${userId}:${day}:${seed}`, recentPrompts);
+    let picked = ranked[0];
+
+    // If the best-ranked format is an MCQ, prefer a similarly suitable MCQ whose
+    // correct position has been used least in this five-question set. This prevents
+    // accidental B/B/B-style patterns without sacrificing skill or difficulty targeting.
+    if (picked?.interaction_type === "single_choice") {
+      const mcqs = ranked.filter((challenge) => challenge.interaction_type === "single_choice").slice(0, 12);
+      const balanced = [...mcqs].sort((a, b) => {
+        const ai = correctIndexByChallenge.get(a.id);
+        const bi = correctIndexByChallenge.get(b.id);
+        const ac = ai === undefined ? 99 : mcqPositionCounts[ai];
+        const bc = bi === undefined ? 99 : mcqPositionCounts[bi];
+        return ac - bc || mcqs.indexOf(a) - mcqs.indexOf(b);
+      })[0];
+      if (balanced) picked = balanced;
+    }
+
     if (!picked) return;
     usedIds.add(picked.id);
     usedPrompts.add(promptKey(picked.prompt));
+    if (picked.interaction_type === "single_choice") {
+      const position = correctIndexByChallenge.get(picked.id);
+      if (position !== undefined) mcqPositionCounts[position] += 1;
+    }
     plan.push({ challenge: picked, reason, skillId });
   }
 
@@ -130,9 +155,6 @@ export async function getOrCreateDailyTrainingSession(supabase: SupabaseClient, 
 
   const rows = plan.map((item, index) => ({ session_id: created.id, position: index + 1, challenge_id: item.challenge.id, selection_reason: item.reason, target_skill_id: item.skillId }));
   const { error: assignmentError } = await admin.from("training_session_challenges").insert(rows);
-  if (assignmentError) {
-    await admin.from("training_sessions").delete().eq("id", created.id);
-    throw assignmentError;
-  }
+  if (assignmentError) { await admin.from("training_sessions").delete().eq("id", created.id); throw assignmentError; }
   return loadSession(supabase, userId, created as { id: string; session_date: string; status: "in_progress" | "completed" });
 }

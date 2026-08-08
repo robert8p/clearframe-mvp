@@ -1,0 +1,15 @@
+/* Cogni v0.10.1 — final interaction-state and admin-authoring polish */
+
+/* The header counter describes the question being answered. Once feedback is open,
+   the result panel's remaining-count becomes the source of truth. */
+.cg-quiz-screen.is-correct .cg-question-count,
+.cg-quiz-screen.is-partial .cg-question-count,
+.cg-quiz-screen.is-learning .cg-question-count{opacity:0;pointer-events:none}
+
+.cg-admin-answer-builder{margin-top:12px;padding:13px;border:1px solid var(--line);border-radius:15px;background:#0d1629;display:grid;gap:8px}
+.cg-admin-answer-builder>strong{font-size:14px}.cg-admin-answer-builder>p{font-size:12px;margin:0;color:var(--muted)}
+.cg-admin-check{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:#aebbd5;font-weight:700}.cg-admin-check input{width:17px;height:17px}
+.cg-admin-author select.input{cursor:pointer}
+.cg-admin-author small{display:block;margin-top:6px;color:var(--muted);font-size:11px;line-height:1.45}
+
+.cg-skill-head>span{white-space:nowrap}

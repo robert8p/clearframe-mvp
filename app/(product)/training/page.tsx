@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { isAudienceSegment } from "@/lib/audience";
+import { getDiagnosticProgress } from "@/lib/diagnostic";
 import { ChallengeRunner } from "@/components/ChallengeRunner";
 import { getOrCreateDailyTrainingSession } from "@/lib/recommendation";
 import type { Challenge } from "@/lib/types";
@@ -13,6 +14,8 @@ export default async function TrainingPage() {
   const { user, supabase } = await requireUser();
   const { data: profile } = await supabase.from("profiles").select("audience_segment").eq("id", user.id).single();
   if (!isAudienceSegment(profile?.audience_segment)) redirect("/onboarding/audience");
+  const diagnostic = await getDiagnosticProgress(supabase, user.id);
+  if (!diagnostic.completedSessionKey) redirect("/onboarding");
 
   const session = await getOrCreateDailyTrainingSession(supabase, user.id, 5);
   if (session.id && session.status !== "completed" && !(await isDailyLessonComplete(supabase, user.id))) redirect("/lesson");

@@ -41,8 +41,8 @@ export function SkillsExplorer({ rows }: { rows: Row[] }) {
             <Link className="cg-skill-card cg-skill-link" href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} key={skill?.slug ?? index}>
               <div className="cg-skill-icon">{measuredRow ? Math.round(row.score) : "?"}</div>
               <div className="cg-skill-copy">
-                <div className="cg-skill-head"><strong>{skill?.name ?? "Skill"}</strong><span>{measuredRow ? `${Math.round(row.score)}%` : "Unmeasured"}</span></div>
-                <div className="progress"><span style={{ width: `${measuredRow ? Math.round(row.score) : 0}%` }} /></div>
+                <div className="cg-skill-head"><strong>{skill?.name ?? "Skill"}</strong><span>{measuredRow ? `${Math.round(row.score)}/100` : "Unmeasured"}</span></div>
+                <div className="progress" aria-label={measuredRow ? `Development Score ${Math.round(row.score)} out of 100` : "Not measured"}><span style={{ width: `${measuredRow ? Math.round(row.score) : 0}%` }} /></div>
                 <small>{measuredRow ? `Evidence confidence ${Math.round(row.reliability * 100)}%` : "Cogni will explore this capability in future sessions."}</small>
               </div>
               <span className="cg-card-chevron" aria-hidden="true">›</span>
@@ -50,7 +50,7 @@ export function SkillsExplorer({ rows }: { rows: Row[] }) {
           );
         })}
       </div>
-      {!visible.length && <section className="cg-card"><p>No skills match that search.</p></section>}
+      {!visible.length && <section className="cg-card"><p>No skills match that search.</p><button type="button" className="cg-button secondary cg-full" onClick={() => { setQuery(""); setFilter("all"); }}>Clear filters</button></section>}
     </>
   );
 }

@@ -7,5 +7,6 @@ export const dynamic = "force-dynamic";
 export default async function ProductLayout({ children }: { children: React.ReactNode }) {
   const { user, supabase } = await requireUser();
   const { data } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single();
-  return <><EngagementHeartbeat /><AppShell isAdmin={Boolean(data?.is_admin)}>{children}</AppShell></>;
+  const isAdmin = Boolean(data?.is_admin);
+  return <>{!isAdmin && <EngagementHeartbeat />}<AppShell isAdmin={isAdmin}>{children}</AppShell></>;
 }

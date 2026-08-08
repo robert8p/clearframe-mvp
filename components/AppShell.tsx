@@ -45,6 +45,8 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
     );
   }
 
+  const profileBranch = pathname.startsWith("/settings") || pathname.startsWith("/achievements") || pathname.startsWith("/support");
+
   return (
     <div className="cg-consumer-bg">
       <div className="cg-phone-app">
@@ -56,7 +58,9 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
         {!immersive && (
           <nav className="cg-bottom-nav" aria-label="Primary">
             {consumerItems.map(([href, label, icon]) => {
-              const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+              const active = href === "/settings"
+                ? profileBranch
+                : pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
               return (
                 <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
                   <NavIcon type={icon} />

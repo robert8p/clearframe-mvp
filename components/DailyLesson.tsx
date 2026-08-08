@@ -1,8 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DailyLesson as DailyLessonType } from "@/lib/types";
+
+function track(eventName: string, properties: Record<string, unknown> = {}) {
+  return fetch("/api/event", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventName, properties }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
   const [step, setStep] = useState(0);
@@ -20,6 +29,14 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
   ], [lesson]);
   const slide = slides[step];
   const progress = Math.round(((step + 1) / slides.length) * 100);
+
+  useEffect(() => {
+    void track("daily_lesson_started", { lesson_id: lesson.id, lesson_slug: lesson.slug, estimated_minutes: lesson.estimated_minutes });
+  }, [lesson.id, lesson.slug, lesson.estimated_minutes]);
+
+  useEffect(() => {
+    void track("daily_lesson_step", { lesson_id: lesson.id, step: step + 1, total_steps: slides.length, progress });
+  }, [lesson.id, progress, slides.length, step]);
 
   async function complete() {
     if (busy) return;
@@ -50,6 +67,11 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
     void complete();
   }
 
+  function reveal() {
+    setRevealed(true);
+    void track("daily_lesson_reveal", { lesson_id: lesson.id, reflection_length: reflection.trim().length });
+  }
+
   return (
     <div className="cg-lesson-screen">
       <div className="cg-lesson-topline">
@@ -77,7 +99,7 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
               placeholder="Write one sentence. This stays on your device and is not graded."
             />
             {!revealed ? (
-              <button className="cg-button secondary cg-full" disabled={reflection.trim().length < 3} onClick={() => setRevealed(true)}>
+              <button className="cg-button secondary cg-full" disabled={reflection.trim().length < 3} onClick={reveal}>
                 Reveal the thinking move
               </button>
             ) : (

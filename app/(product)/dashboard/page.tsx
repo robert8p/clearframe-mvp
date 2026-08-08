@@ -38,9 +38,12 @@ export default async function DashboardPage() {
 
   const lessonDone = Boolean(lessonCompletion);
   const dailyUnits = assigned + 1;
-  const dailyProgress = todaySession?.status === "completed" ? 100 : Math.min(100, Math.round(((answered + (lessonDone ? 1 : 0)) / dailyUnits) * 100));
-  const continueHref = todaySession?.status === "completed" ? "/session-complete" : lessonDone ? "/training" : "/lesson";
+  const dailyComplete = todaySession?.status === "completed";
+  const dailyProgress = dailyComplete ? 100 : Math.min(100, Math.round(((answered + (lessonDone ? 1 : 0)) / dailyUnits) * 100));
+  const continueHref = dailyComplete ? "/session-complete" : lessonDone ? "/training" : "/lesson";
   const weakest = scores?.[0];
+  const weakestSkill = skillInfo(weakest?.skills);
+  const extraTrainingHref = weakestSkill?.slug ? `/practice/${weakestSkill.slug}` : "/skills";
   const recentSkills = (scores ?? []).slice(0, 3);
   const firstName = profile?.full_name?.split(" ")[0] ?? "there";
 
@@ -59,17 +62,32 @@ export default async function DashboardPage() {
         <div className="cg-kicker">Daily goal</div>
         <div className="cg-goal-row">
           <div className="cg-ring" style={{ ["--progress" as string]: `${dailyProgress * 3.6}deg` }}><span>{dailyProgress}%</span></div>
-          <div><h2>{todaySession?.status === "completed" ? "Goal complete" : lessonDone ? "Lesson done — time to practise" : `A ${audience?.shortLabel ?? "personalised"} lesson is ready`}</h2><p>{lessonDone ? "✓ Lesson" : "1 lesson"} • {answered} / {assigned} questions</p></div>
+          <div><h2>{dailyComplete ? "Goal complete — keep going if you want" : lessonDone ? "Lesson done — time to practise" : `A ${audience?.shortLabel ?? "personalised"} lesson is ready`}</h2><p>{lessonDone ? "✓ Lesson" : "1 lesson"} • {answered} / {assigned} questions</p></div>
         </div>
         <div className="progress" aria-label={`${dailyProgress}% of today's learning complete`}><span style={{ width: `${dailyProgress}%` }} /></div>
+        {dailyComplete && (
+          <div className="cg-daily-actions">
+            <Link href={extraTrainingHref} className="cg-button">Keep training</Link>
+            <Link href="/session-complete" className="cg-button secondary">Review today</Link>
+          </div>
+        )}
       </section>
 
-      <section className="cg-section-head"><h2>Continue learning</h2><Link href={continueHref}>Open</Link></section>
-      <Link href={continueHref} className="cg-course-card" aria-label="Open today's learning">
+      <section className="cg-section-head"><h2>{dailyComplete ? "Today’s session" : "Continue learning"}</h2><Link href={continueHref}>{dailyComplete ? "Review" : "Open"}</Link></section>
+      <Link href={continueHref} className="cg-course-card" aria-label={dailyComplete ? "Review today's learning" : "Open today's learning"}>
         <div className="cg-course-icon">{lessonDone ? "◎" : "✦"}</div>
-        <div className="cg-course-copy"><strong>{todaySession?.status === "completed" ? "Today complete" : lessonDone ? "Daily judgement challenge" : "Today’s mini lesson"}</strong><span>{todaySession?.status === "completed" ? "Lesson + challenge complete" : lessonDone ? `${Math.max(assigned - answered, 0)} questions left` : `Built around ${audience?.label.toLowerCase()} decisions`}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
+        <div className="cg-course-copy"><strong>{dailyComplete ? "Today complete" : lessonDone ? "Daily judgement challenge" : "Today’s mini lesson"}</strong><span>{dailyComplete ? "Review your result and learning signals" : lessonDone ? `${Math.max(assigned - answered, 0)} questions left` : `Built around ${audience?.label.toLowerCase()} decisions`}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
         <div className="cg-play" aria-hidden="true">▶</div>
       </Link>
+
+      {dailyComplete && (
+        <section className="cg-card cg-extra-training-card">
+          <div className="cg-kicker">Optional extra training</div>
+          <h2>{weakestSkill?.name ? `Sharpen ${weakestSkill.name}` : "Keep building judgement"}</h2>
+          <p>Your daily goal is complete. Extra practice is optional and uses fresh questions from your current highest-value development area.</p>
+          <Link href={extraTrainingHref} className="cg-button cg-full">Train another 3 questions</Link>
+        </section>
+      )}
 
       <section className="cg-section-head"><h2>Priority skills</h2><Link href="/skills">View all</Link></section>
       <div className="cg-topic-grid">
@@ -89,9 +107,9 @@ export default async function DashboardPage() {
 
       <section className="cg-card cg-focus-card">
         <div className="cg-kicker">Highest-value focus</div>
-        <h2>{skillInfo(weakest?.skills)?.name ?? "Keep building evidence"}</h2>
+        <h2>{weakestSkill?.name ?? "Keep building evidence"}</h2>
         <p>{weakest ? `Current Development Score ${Math.round(weakest.score)} with ${Math.round((weakest.reliability ?? 0) * 100)}% evidence confidence.` : "Cogni will refine your focus as more observed evidence accumulates."}</p>
-        <Link href={continueHref} className="cg-button cg-full">{todaySession?.status === "completed" ? "Review today’s result" : !lessonDone ? "Start today’s lesson" : answered ? "Continue challenge" : "Start challenge"}</Link>
+        <Link href={dailyComplete ? extraTrainingHref : continueHref} className="cg-button cg-full">{dailyComplete ? "Train this skill" : !lessonDone ? "Start today’s lesson" : answered ? "Continue challenge" : "Start challenge"}</Link>
       </section>
     </div>
   );

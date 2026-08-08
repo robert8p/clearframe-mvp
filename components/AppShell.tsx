@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CogniMark } from "./CogniMark";
 import { SignOutButton } from "./SignOutButton";
+import { SessionFeedback } from "./SessionFeedback";
 
 const consumerItems = [
   ["/dashboard", "Home", "home"],
@@ -52,7 +53,10 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
           <CogniMark href="/dashboard" compact />
           {isAdmin && pathname === "/settings" ? <Link href="/admin" className="cg-mini-admin">Admin</Link> : null}
         </header>
-        <main className={`cg-consumer-main ${immersive ? "immersive" : ""}`}>{children}</main>
+        <main className={`cg-consumer-main ${immersive ? "immersive" : ""}`}>
+          {children}
+          {pathname.startsWith("/session-complete") ? <SessionFeedback /> : null}
+        </main>
         {!immersive && (
           <nav className="cg-bottom-nav" aria-label="Primary">
             {consumerItems.map(([href, label, icon]) => {

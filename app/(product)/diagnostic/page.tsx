@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { ChallengeRunner } from "@/components/ChallengeRunner";
@@ -20,7 +21,16 @@ export default async function DiagnosticPage() {
 
   const challenges = (data ?? []) as Challenge[];
   if (!challenges.length) {
-    return <div className="cg-mobile-page"><section className="cg-card"><h2>Diagnostic unavailable</h2><p>Cogni could not load the baseline questions. Return Home and try again shortly.</p></section></div>;
+    return (
+      <div className="cg-mobile-page cg-state-view">
+        <div className="cg-state-icon">↻</div>
+        <div className="cg-kicker">Diagnostic unavailable</div>
+        <h1 className="cg-screen-title">We couldn’t load your baseline.</h1>
+        <p>Nothing has been lost. Return to the diagnostic setup and try again, or use Help if the issue continues.</p>
+        <Link className="cg-button cg-full" href="/onboarding">Back to diagnostic setup</Link>
+        <Link className="cg-button secondary cg-full" href="/support">Get help</Link>
+      </div>
+    );
   }
 
   const progress = await getDiagnosticProgress(supabase, user.id, challenges.map((challenge) => challenge.id));

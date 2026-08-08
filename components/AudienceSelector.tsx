@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AUDIENCE_SEGMENTS, type AudienceSegment } from "@/lib/audience";
+
+function track(eventName: string, properties: Record<string, unknown> = {}) {
+  return fetch("/api/event", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventName, properties }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 export function AudienceSelector({
   initialValue,
@@ -17,6 +26,10 @@ export function AudienceSelector({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
+
+  useEffect(() => {
+    if (!compact) void track("onboarding_started", { step: "audience" });
+  }, [compact]);
 
   async function save() {
     if (!selected || busy) return;
@@ -33,11 +46,17 @@ export function AudienceSelector({
       setMessage(body.error || "Could not save your learning context.");
       return;
     }
+
+    const eventName = initialValue && initialValue !== selected ? "audience_changed" : "audience_selected";
+    await track(eventName, { audience_segment: selected, previous_segment: initialValue ?? null, source: compact ? "settings" : "onboarding" });
+
     if (compact) {
       setMessage("Learning context saved. Future lessons and sessions will use it.");
       router.refresh();
       return;
     }
+
+    await track("onboarding_completed", { step: "audience", audience_segment: selected });
     router.push(nextHref);
     router.refresh();
   }

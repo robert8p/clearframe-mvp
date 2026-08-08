@@ -1,32 +1,26 @@
 import Link from "next/link";
 
-export default function Onboarding() {
+export default function OnboardingPage() {
   return (
     <>
-      <div className="kicker">Before we personalise</div>
-      <h1>Measure first. Train second.</h1>
-      <div className="grid grid-2">
-        <section className="card hero-card">
+      <div className="cg-kicker">Welcome to Cogni</div>
+      <h1>Measure first. Personalise second.</h1>
+      <div className="cg-grid two">
+        <section className="cg-card">
           <h2>Your diagnostic</h2>
           <p>
-            12 challenges across evidence evaluation, reasoning, AI verification,
-            bias recognition and confidence calibration. Expect roughly 10–15 minutes.
+            12 questions. About 10–15 minutes. Enough to establish your first measured judgement profile.
           </p>
           <div className="callout" style={{ margin: "18px 0" }}>
-            <strong>Important:</strong> these are development scores, not psychometric percentiles.
+            <strong>Important:</strong> these are adaptive development scores, not psychometric percentile claims.
           </div>
-          <Link className="button" href="/diagnostic">
-            Begin diagnostic
-          </Link>
+          <Link href="/diagnostic" className="cg-button">Begin diagnostic</Link>
         </section>
-
-        <section className="card">
-          <h2>How to answer well</h2>
-          <div className="section-stack">
-            <p><strong>Choose the strongest answer.</strong> We want your reasoning, not speed.</p>
-            <p><strong>Rate your confidence honestly.</strong> Calibration is part of the skill.</p>
-            <p><strong>Expect useful feedback.</strong> Cogni tracks the pattern behind mistakes, not just correctness.</p>
-          </div>
+        <section className="cg-card">
+          <h2>How to approach it</h2>
+          <p><strong>Choose the strongest answer.</strong> We care about quality of thought, not speed theatre.</p>
+          <p><strong>Rate confidence honestly.</strong> Calibration is part of the skill.</p>
+          <p><strong>Expect explanation.</strong> Cogni tracks patterns behind mistakes, not just right vs wrong.</p>
         </section>
       </div>
     </>

@@ -3,12 +3,12 @@ import { SignOutButton } from "./SignOutButton";
 import { CogniMark } from "./CogniMark";
 
 const items = [
-  ["/dashboard", "Today"],
+  ["/dashboard", "Home"],
   ["/training", "Train"],
-  ["/skills", "Skills"],
   ["/progress", "Progress"],
+  ["/skills", "Skills"],
   ["/achievements", "Achievements"],
-  ["/settings", "Settings"],
+  ["/settings", "Profile"],
 ] as const;
 
 export function AppShell({
@@ -19,37 +19,32 @@ export function AppShell({
   isAdmin?: boolean;
 }) {
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <CogniMark href="/dashboard" />
+    <div className="cg-page">
+      <div className="cg-shell">
+        <aside className="cg-sidebar">
+          <CogniMark href="/dashboard" />
+          <nav className="cg-nav">
+            {items.map(([href, label]) => (
+              <Link key={href} href={href}>
+                <span>{label}</span>
+              </Link>
+            ))}
+            {isAdmin && <Link href="/admin"><span>Content admin</span></Link>}
+            {isAdmin && <Link href="/analytics"><span>Analytics</span></Link>}
+          </nav>
 
-        <nav className="nav">
-          {items.map(([href, label]) => (
-            <Link key={href} href={href}>
-              {label}
-            </Link>
-          ))}
-          {isAdmin && (
-            <>
-              <Link href="/admin">Content admin</Link>
-              <Link href="/analytics">Analytics</Link>
-            </>
-          )}
-        </nav>
+          <div className="cg-tip">
+            <div className="cg-kicker">Study buddy</div>
+            <p>Your daily edge comes from better questions, not just faster answers.</p>
+          </div>
 
-        <div className="card" style={{ marginTop: 22, padding: 16 }}>
-          <div className="kicker">Daily principle</div>
-          <p style={{ margin: "10px 0 0" }}>
-            Good judgement is not just knowing more. It is questioning better.
-          </p>
-        </div>
+          <div style={{ marginTop: 16 }}>
+            <SignOutButton />
+          </div>
+        </aside>
 
-        <div style={{ marginTop: 18 }}>
-          <SignOutButton />
-        </div>
-      </aside>
-
-      <main className="main">{children}</main>
+        <main className="cg-main">{children}</main>
+      </div>
     </div>
   );
 }

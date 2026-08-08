@@ -2,35 +2,35 @@ import Link from "next/link";
 import { AuthForm } from "@/components/AuthForm";
 import { CogniMark } from "@/components/CogniMark";
 
-export default function Page() {
+export default function LoginPage() {
   return (
     <main className="auth-wrap">
       <div className="auth-shell">
         <section className="auth-panel">
-          <CogniMark href="/" />
-          <div className="kicker" style={{ marginTop: 28 }}>Welcome back</div>
-          <h1>Train your mind for the AI age.</h1>
-          <p className="lead" style={{ fontSize: 18 }}>
-            Continue building stronger judgement, better evidence evaluation and sharper AI verification.
+          <CogniMark />
+          <div className="cg-kicker" style={{ marginTop: 28 }}>Welcome back</div>
+          <h1>Continue your learning journey.</h1>
+          <p style={{ fontSize: 18, color: "#c8d2eb" }}>
+            Train judgement, challenge AI output and build better decision quality.
           </p>
-          <div className="grid grid-2" style={{ marginTop: 26 }}>
-            <div className="stat-card">
-              <div className="kicker">Daily habit</div>
-              <div className="stat">5–10 min</div>
-              <p className="muted">Designed for senior professionals, not generic e-learning.</p>
+          <div className="metric-list" style={{ marginTop: 28 }}>
+            <div className="metric-box">
+              <div className="cg-kicker">Daily focus</div>
+              <h2>Five high-value questions</h2>
+              <p>Fast enough to sustain. Strong enough to sharpen how you think.</p>
             </div>
-            <div className="stat-card">
-              <div className="kicker">Outcome</div>
-              <div className="stat">Better judgement</div>
-              <p className="muted">Challenge weak assumptions before they become costly decisions.</p>
+            <div className="metric-box">
+              <div className="cg-kicker">Built for professionals</div>
+              <h2>Modern, serious, evidence-led</h2>
+              <p>No gimmicks. Just better human judgement for an AI-shaped world.</p>
             </div>
           </div>
         </section>
 
-        <section className="auth-panel auth-card">
-          <div className="kicker">Sign in</div>
+        <section className="auth-panel">
+          <div className="cg-kicker">Sign in</div>
           <h2 style={{ fontSize: 34, marginTop: 10 }}>Welcome back</h2>
-          <p className="muted">Continue your Cogni training.</p>
+          <p className="muted">Enter your details to continue with Cogni.</p>
           <AuthForm mode="login" />
           <p className="muted" style={{ fontSize: 13, marginTop: 18 }}>
             New here? <Link href="/signup"><strong>Create an account</strong></Link>

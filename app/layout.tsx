@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cogni — Train your mind for the AI age",
+  title: "Cogni",
   description:
-    "Adaptive human judgement training for critical thinking, evidence evaluation and AI-output verification.",
+    "Adaptive judgement training for the AI age.",
 };
 
 export default function RootLayout({

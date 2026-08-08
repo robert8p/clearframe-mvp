@@ -6,109 +6,82 @@ function getSkillName(value: any) {
   return Array.isArray(value) ? value[0]?.name : value?.name;
 }
 
-export default async function Dashboard() {
+export default async function DashboardPage() {
   const { user, supabase } = await requireUser();
 
-  const [{ data: profile }, { data: scores }, { count: responses }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name,xp,current_streak,last_session_date")
-      .eq("id", user.id)
-      .single(),
-    supabase
-      .from("user_skill_scores")
-      .select("score,reliability,attempts,skills(name)")
-      .eq("user_id", user.id)
-      .gt("attempts", 0)
-      .order("score"),
+  const [{ data: profile }, { data: scores }, { count: responseCount }] = await Promise.all([
+    supabase.from("profiles").select("full_name,xp,current_streak").eq("id", user.id).single(),
+    supabase.from("user_skill_scores").select("score,reliability,attempts,skills(name)").eq("user_id", user.id).gt("attempts", 0).order("score"),
     supabase.from("user_responses").select("id", { count: "exact", head: true }).eq("user_id", user.id),
   ]);
 
-  const measuredScores = scores ?? [];
-  const weakest = measuredScores[0];
-  const strongest = measuredScores[measuredScores.length - 1];
-  const averageReliability = measuredScores.length
-    ? Math.round(measuredScores.reduce((sum, row) => sum + (row.reliability ?? 0), 0) / measuredScores.length * 100)
-    : 0;
+  const weakest = scores?.[0];
+  const strongest = scores?.[(scores?.length ?? 1) - 1];
+  const displayName = profile?.full_name?.split(" ")[0] ?? "there";
 
   return (
     <>
-      <div className="topbar">
+      <div className="cg-topbar">
         <div>
-          <div className="kicker">Today</div>
-          <h1>
-            {profile?.full_name ? `Good morning, ${profile.full_name.split(" ")[0]}` : "Build better judgement"}
-          </h1>
-          <p className="muted" style={{ maxWidth: 700 }}>
-            Cogni helps you strengthen the human skills AI cannot replace: reasoning, verification, problem framing and decision quality.
-          </p>
+          <div className="cg-kicker">Home</div>
+          <h1>Hello, {displayName} 👋</h1>
+          <p>Ready to learn something valuable today?</p>
         </div>
-        <Link className="button" href={responses ? "/training" : "/onboarding"}>
-          {responses ? "Start today’s session" : "Take diagnostic"}
-        </Link>
+        <span className="cg-pill">🔥 {profile?.current_streak ?? 0} day streak</span>
       </div>
 
-      <section className="card hero-card">
-        <div className="grid grid-3">
-          <div className="stat-card">
-            <div className="kicker">Current streak</div>
-            <div className="stat">{profile?.current_streak ?? 0}</div>
-            <p className="muted">Consistency compounds.</p>
+      <div className="cg-grid two">
+        <section className="cg-card">
+          <div className="cg-kicker">Daily challenge</div>
+          <h2>Judgement training</h2>
+          <p>Continue with today’s personalised session built around your measured profile.</p>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", margin: "18px 0" }}>
+            <div className="progress-ring">75%</div>
+            <div>
+              <strong style={{ fontSize: 20 }}>Great progress!</strong>
+              <p style={{ margin: "6px 0 0" }}>Keep building the habit. Every session compounds.</p>
+            </div>
           </div>
-          <div className="stat-card">
-            <div className="kicker">Total XP</div>
-            <div className="stat">{profile?.xp ?? 0}</div>
-            <p className="muted">Evidence of sustained practice.</p>
-          </div>
-          <div className="stat-card">
-            <div className="kicker">Evidence confidence</div>
-            <div className="stat">{averageReliability || 0}%</div>
-            <p className="muted">How stable your current measured profile is.</p>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid grid-2" style={{ marginTop: 18 }}>
-        <section className="card">
-          <div className="kicker">Highest-value focus</div>
-          <h2 style={{ marginTop: 10 }}>{getSkillName(weakest?.skills) ?? "Complete diagnostic"}</h2>
-          <p>
-            {weakest
-              ? `Current development score ${Math.round(weakest.score)}. This is your lowest measured capability so far, not a permanent label.`
-              : "We need evidence before personalising your focus."}
-          </p>
-          <div className="inline-list" style={{ marginTop: 14 }}>
-            <span className="pill">Adaptive session</span>
-            <span className="pill">AI verification</span>
-            <span className="pill">Spaced reinforcement</span>
+          <div className="progress"><span style={{ width: "72%" }} /></div>
+          <div style={{ marginTop: 18, display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <Link href={responseCount ? "/training" : "/onboarding"} className="cg-button">Start session</Link>
+            <span className="cg-pill">+150 XP</span>
+            <span className="cg-pill">5 questions</span>
           </div>
         </section>
 
-        <section className="card">
-          <div className="kicker">Emerging strength</div>
-          <h2 style={{ marginTop: 10 }}>{getSkillName(strongest?.skills) ?? "No measured strength yet"}</h2>
-          <p>
-            {strongest
-              ? `Current development score ${Math.round(strongest.score)}. Strengths still remain provisional while reliability is low.`
-              : "Complete your first diagnostic to reveal your strongest measured capability."}
-          </p>
-          <div className="divider" />
-          <p className="muted">Sessions completed so far: {responses ?? 0}</p>
+        <section className="cg-card">
+          <div className="cg-kicker">Your progress</div>
+          <div className="cg-grid two" style={{ alignItems: "center" }}>
+            <div>
+              <div className="cg-stat">{profile?.xp ?? 0}</div>
+              <p>Total XP earned</p>
+              <div className="cg-stat" style={{ fontSize: 28, marginTop: 12 }}>{responseCount ?? 0}</div>
+              <p>Recorded responses</p>
+            </div>
+            <div className="metric-list">
+              <div className="cg-panel">
+                <div className="cg-kicker">Highest-value focus</div>
+                <strong>{getSkillName(weakest?.skills) ?? "Take diagnostic"}</strong>
+                <p style={{ margin: "6px 0 0" }}>{weakest ? `Current measured score ${Math.round(weakest.score)}.` : "We need evidence before personalising your focus."}</p>
+              </div>
+              <div className="cg-panel">
+                <div className="cg-kicker">Emerging strength</div>
+                <strong>{getSkillName(strongest?.skills) ?? "Not yet measured"}</strong>
+                <p style={{ margin: "6px 0 0" }}>{strongest ? `Current measured score ${Math.round(strongest.score)}.` : "Complete more items to reveal strengths."}</p>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
 
-      <section className="card" style={{ marginTop: 18 }}>
-        <div className="kicker">How today’s session is built</div>
-        <h2 style={{ marginTop: 10 }}>Balanced, not repetitive.</h2>
-        <div className="badge-grid" style={{ marginTop: 14 }}>
-          <div className="stat-card"><strong>1.</strong><p>Weakest-skill reinforcement</p></div>
-          <div className="stat-card"><strong>2.</strong><p>Second measured priority</p></div>
-          <div className="stat-card"><strong>3.</strong><p>AI-output evaluation</p></div>
-          <div className="stat-card"><strong>4.</strong><p>Decision or framing variety</p></div>
-        </div>
-      </section>
+      <div className="cg-grid three" style={{ marginTop: 18 }}>
+        <section className="cg-card"><div className="cg-kicker">Session structure</div><h2>Balanced by design</h2><p>Weak-skill reinforcement, AI verification and diverse challenge types.</p></section>
+        <section className="cg-card"><div className="cg-kicker">AI-era skill</div><h2>Challenge outputs</h2><p>Cogni trains you to question polished answers before they become bad decisions.</p></section>
+        <section className="cg-card"><div className="cg-kicker">Professional edge</div><h2>Think deeper</h2><p>Better questions, better framing and better decisions under uncertainty.</p></section>
+      </div>
 
-      <CoachCard />
+      <div style={{ marginTop: 18 }}><CoachCard /></div>
     </>
   );
 }

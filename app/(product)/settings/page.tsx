@@ -1,2 +1,16 @@
-import {requireUser} from "@/lib/auth";import {ProfileForm} from "@/components/ProfileForm";
-export default async function Settings(){const{user,supabase}=await requireUser();const{data}=await supabase.from("profiles").select("full_name,industry,job_role").eq("id",user.id).single();return <><div className="kicker">Settings</div><h1>Your account</h1><ProfileForm initialName={data?.full_name??""} initialIndustry={data?.industry??""} initialRole={data?.job_role??""}/><p className="muted" style={{fontSize:13,maxWidth:620}}>Account deletion is deliberately not a one-click browser database operation in this MVP. The schema is designed for deletion; production release should add a verified server-side deletion workflow and privacy notice.</p></>}
+import { requireUser } from "@/lib/auth";
+import { ProfileForm } from "@/components/ProfileForm";
+
+export default async function SettingsPage() {
+  const { user, supabase } = await requireUser();
+  const { data } = await supabase.from("profiles").select("full_name,industry,job_role").eq("id", user.id).single();
+
+  return (
+    <>
+      <div className="cg-kicker">Profile</div>
+      <h1>Your account</h1>
+      <p>Keep your profile details current so Cogni can feel more personal without becoming noisy.</p>
+      <ProfileForm initialName={data?.full_name ?? ""} initialIndustry={data?.industry ?? ""} initialRole={data?.job_role ?? ""} />
+    </>
+  );
+}

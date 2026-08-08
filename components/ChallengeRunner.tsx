@@ -12,26 +12,14 @@ type Props = {
 };
 
 function createRuntimeSessionId() {
-  if (
-    typeof globalThis.crypto !== "undefined" &&
-    typeof globalThis.crypto.randomUUID === "function"
-  ) {
+  if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
   }
-
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function ChallengeRunner({
-  challenges,
-  mode,
-  sessionId,
-  initialAnsweredChallengeIds = [],
-}: Props) {
-  const initiallyAnswered = useMemo(
-    () => new Set(initialAnsweredChallengeIds),
-    [initialAnsweredChallengeIds],
-  );
+export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredChallengeIds = [] }: Props) {
+  const initiallyAnswered = useMemo(() => new Set(initialAnsweredChallengeIds), [initialAnsweredChallengeIds]);
 
   const firstPendingIndex = Math.max(
     0,
@@ -52,8 +40,8 @@ export function ChallengeRunner({
 
   const progress = useMemo(() => {
     if (!challenges.length) return 0;
-    return Math.round((answered.size / challenges.length) * 100);
-  }, [answered, challenges.length]);
+    return Math.round(((index + (result ? 1 : 0)) / challenges.length) * 100);
+  }, [challenges.length, index, result]);
 
   useEffect(() => {
     void fetch("/api/event", {
@@ -61,43 +49,29 @@ export function ChallengeRunner({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         eventName: mode === "diagnostic" ? "diagnostic_started" : "session_started",
-        properties: {
-          session_id: runtimeSessionId,
-          resumed: mode === "training" && initialAnsweredChallengeIds.length > 0,
-        },
+        properties: { session_id: runtimeSessionId },
       }),
     });
-  }, [mode, runtimeSessionId, initialAnsweredChallengeIds.length]);
+  }, [mode, runtimeSessionId]);
 
   useEffect(() => {
     if (!challenge) return;
-
     void fetch("/api/event", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         eventName: "challenge_viewed",
-        properties: {
-          session_id: runtimeSessionId,
-          challenge_id: challenge.id,
-          index,
-        },
+        properties: { session_id: runtimeSessionId, challenge_id: challenge.id, index },
       }),
     });
   }, [challenge, index, runtimeSessionId]);
 
   if (!challenge) {
-    return (
-      <section className="card">
-        <h2>No challenges available</h2>
-        <p className="muted">Run the seed migration, then refresh this page.</p>
-      </section>
-    );
+    return <section className="cg-card"><h2>No challenges available</h2></section>;
   }
 
   async function submit() {
     if (selected === null) return;
-
     setBusy(true);
 
     const response = await fetch("/api/answer", {
@@ -130,29 +104,16 @@ export function ChallengeRunner({
   }
 
   function finishSession() {
-    void fetch("/api/event", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        eventName: mode === "diagnostic" ? "diagnostic_completed" : "session_completed",
-        properties: { session_id: runtimeSessionId },
-      }),
-    });
-
     router.push(mode === "diagnostic" ? "/diagnostic/results" : "/session-complete");
     router.refresh();
   }
 
   function next() {
-    const nextIndex = challenges.findIndex(
-      (candidate, candidateIndex) => candidateIndex > index && !answered.has(candidate.id),
-    );
-
+    const nextIndex = challenges.findIndex((candidate, candidateIndex) => candidateIndex > index && !answered.has(candidate.id));
     if (nextIndex === -1) {
       finishSession();
       return;
     }
-
     setIndex(nextIndex);
     setSelected(null);
     setResult(null);
@@ -161,50 +122,34 @@ export function ChallengeRunner({
   }
 
   return (
-    <div className="training-wrap">
-      <div className="challenge-head">
+    <div style={{ maxWidth: 760, margin: "0 auto" }}>
+      <div className="topbar">
         <div>
-          <div className="kicker">
-            {mode} · {index + 1} of {challenges.length}
-          </div>
-          <h1 style={{ fontSize: 34, marginBottom: 6 }}>Stay sharp.</h1>
+          <div className="cg-kicker">{mode} · Question {index + 1} of {challenges.length}</div>
+          <h1 style={{ fontSize: 42, marginBottom: 8 }}>Stay sharp.</h1>
+          <p className="muted">Think before you commit. Cogni rewards reasoning quality.</p>
         </div>
         <div className="inline-list">
-          <span className="pill">Difficulty {challenge.difficulty}/100</span>
-          <span className="pill">Progress {progress}%</span>
+          <span className="cg-pill">Difficulty {challenge.difficulty}/100</span>
+          <span className="cg-pill">Progress {progress}%</span>
         </div>
       </div>
 
-      <div className="progress" style={{ marginBottom: 20 }}>
-        <span style={{ width: `${progress}%` }} />
-      </div>
+      <div className="progress" style={{ marginBottom: 20 }}><span style={{ width: `${progress}%` }} /></div>
 
-      <section className="card challenge-card">
-        <div className="challenge-stage">
-          <span className="pill">{challenge.challenge_type.replaceAll("_", " ")}</span>
-          <span className="muted" style={{ fontSize: 13 }}>
-            Focus on reasoning quality, not speed.
-          </span>
-        </div>
+      <section className="cg-card">
+        <span className="cg-pill">{challenge.challenge_type.replaceAll("_", " ")}</span>
+        <h2 style={{ fontSize: 30, marginTop: 16 }}>{challenge.title}</h2>
+        <p style={{ color: "#eff2ff", fontSize: 18 }}>{challenge.prompt}</p>
 
-        <h2 style={{ fontSize: 29, marginTop: 14 }}>{challenge.title}</h2>
-        <p className="challenge-question">{challenge.prompt}</p>
-
-        <div>
+        <div style={{ marginTop: 18 }}>
           {challenge.options.map((option, optionIndex) => {
             let className = "option";
-
             if (selected === optionIndex) className += " selected";
             if (result && optionIndex === result.correctIndex) className += " correct";
             if (result && selected === optionIndex && !result.correct) className += " incorrect";
-
             return (
-              <button
-                disabled={Boolean(result)}
-                className={className}
-                key={optionIndex}
-                onClick={() => setSelected(optionIndex)}
-              >
+              <button key={optionIndex} className={className} disabled={Boolean(result)} onClick={() => setSelected(optionIndex)}>
                 <strong>{String.fromCharCode(65 + optionIndex)}.</strong> {option}
               </button>
             );
@@ -212,69 +157,41 @@ export function ChallengeRunner({
         </div>
 
         {challenge.confidence_required && !result && (
-          <div style={{ marginTop: 20 }}>
-            <div className="slider-caption">
+          <div style={{ marginTop: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <label style={{ margin: 0 }}>How confident are you?</label>
-              <span className="pill">{confidence}%</span>
+              <span className="cg-pill">{confidence}%</span>
             </div>
             <input
-              style={{ width: "100%", marginTop: 12 }}
               type="range"
               min="20"
               max="100"
               step="10"
               value={confidence}
+              style={{ width: "100%", marginTop: 12, accentColor: "#7c5cff" }}
               onChange={(event) => setConfidence(Number(event.target.value))}
             />
           </div>
         )}
 
         {!result ? (
-          <button
-            className="button"
-            style={{ marginTop: 22 }}
-            disabled={selected === null || busy}
-            onClick={submit}
-          >
+          <button className="cg-button" style={{ marginTop: 20 }} disabled={selected === null || busy} onClick={submit}>
             {busy ? "Checking…" : "Submit answer"}
           </button>
         ) : (
-          <div
-            style={{ marginTop: 24 }}
-            onMouseEnter={() => {
-              void fetch("/api/event", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                  eventName: "explanation_viewed",
-                  properties: {
-                    session_id: runtimeSessionId,
-                    challenge_id: challenge.id,
-                  },
-                }),
-              });
-            }}
-          >
+          <div style={{ marginTop: 22 }}>
             <div className="callout">
               <strong>{result.correct ? "Correct" : "Not quite"}.</strong> {result.explanation}
             </div>
-
             <h3>Thinking principle</h3>
             <p>{result.thinkingPrinciple}</p>
-
             <h3>AI-age application</h3>
-            <p className="muted">{result.application}</p>
-
+            <p>{result.application}</p>
             {result.errorPattern && !result.correct && (
-              <p>
-                <span className="pill">
-                  Likely pattern: {result.errorPattern.replaceAll("_", " ")}
-                </span>
-              </p>
+              <p><span className="cg-pill">Likely pattern: {result.errorPattern.replaceAll("_", " ")}</span></p>
             )}
-
-            <button className="button" onClick={next}>
-              {answered.size >= challenges.length ? "See results" : "Next challenge"}
+            <button className="cg-button" onClick={next}>
+              {answered.size >= challenges.length ? "See results" : "Next question"}
             </button>
           </div>
         )}

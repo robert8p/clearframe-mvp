@@ -27,20 +27,16 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         options: { data: { full_name: name } },
       });
 
-      if (error) {
-        setError(error.message);
-      } else if (!data.session) {
-        setMessage("Account created. Check your email to confirm, then sign in.");
-      } else {
+      if (error) setError(error.message);
+      else if (!data.session) setMessage("Account created. Check your email to confirm, then sign in.");
+      else {
         router.push("/onboarding");
         router.refresh();
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        setError(error.message);
-      } else {
+      if (error) setError(error.message);
+      else {
         router.push("/dashboard");
         router.refresh();
       }
@@ -50,47 +46,25 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   }
 
   return (
-    <form onSubmit={submit} className="section-stack">
+    <form onSubmit={submit}>
       {mode === "signup" && (
-        <div>
+        <>
           <label>Name</label>
-          <input
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </div>
+          <input className="input" required value={name} onChange={(e) => setName(e.target.value)} />
+        </>
       )}
 
-      <div>
-        <label>Email</label>
-        <input
-          className="input"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </div>
+      <label>Email</label>
+      <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
 
-      <div>
-        <label>Password</label>
-        <input
-          className="input"
-          type="password"
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </div>
+      <label>Password</label>
+      <input className="input" type="password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
 
-      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
-      {message && <p style={{ color: "var(--success)" }}>{message}</p>}
+      {error && <p style={{ color: "#ff93bc" }}>{error}</p>}
+      {message && <p style={{ color: "#86f6b8" }}>{message}</p>}
 
-      <button className="button" style={{ width: "100%", marginTop: 8 }} disabled={busy}>
-        {busy ? "Working…" : mode === "signup" ? "Start your journey" : "Sign in"}
+      <button className="cg-button" style={{ width: "100%", marginTop: 18 }} disabled={busy}>
+        {busy ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
       </button>
     </form>
   );

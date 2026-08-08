@@ -18,7 +18,15 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     setBusy(true); setError(""); setMessage("");
     const supabase = createClient();
     if (mode === "signup") {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, "");
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: `${appUrl}/login`,
+        },
+      });
       if (signUpError) setError(signUpError.message);
       else if (!data.session) setMessage("Account created. Check your email to confirm, then sign in.");
       else { router.push("/onboarding"); router.refresh(); }

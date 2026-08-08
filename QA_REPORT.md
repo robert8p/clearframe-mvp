@@ -35,3 +35,11 @@ Historical sessions created before migration 004 intentionally do **not** receiv
 
 ## Environment limitation
 The build environment's internal npm mirror does not expose `@supabase/ssr@0.12.3`, so a genuine dependency-backed `next build` cannot be executed here. Vercel previously demonstrated that it can install the application's dependency set. The source has therefore been validated using syntax, strict semantic and local-import QA before packaging.
+
+
+## v0.4.1 domain update
+- Canonical production origin set to `https://gocogni.vercel.app`.
+- `NEXT_PUBLIC_APP_URL` default and `.env.example` updated.
+- Signup email redirect now uses the configured/canonical app origin.
+- Next.js metadataBase, canonical URL, Open Graph URL and PWA manifest added/updated.
+- Priority skill card text-wrap hotfix incorporated.

@@ -1,3 +1,7 @@
+# Cogni
+
+**Production URL:** https://gocogni.vercel.app
+
 # Cogni MVP
 
 Cogni is a mobile-first adaptive human-judgement training product for the AI age.
@@ -28,8 +32,3 @@ Cogni is a mobile-first adaptive human-judgement training product for the AI age
 6. Open `http://localhost:3000`.
 
 See `DEPLOYMENT.md` for literal click-by-click instructions.
-
-
-## Learning evidence upgrade (0.4)
-
-Migration `004_learning_evidence.sql` adds exact per-response skill movement and XP evidence. The diagnostic results page now presents an evidence-led Judgement Profile, and each completed daily session reports session XP, skills affected, reasoning-error patterns, streak and a deterministic personalised insight. Historical sessions without per-response deltas are shown as skills trained rather than reconstructing unsupported score changes.

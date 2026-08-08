@@ -5,13 +5,12 @@
 2. Choose an organisation, enter project name `cogni-mvp`, create a strong database password and choose the UK/EU region appropriate to your pilot.
 3. Wait until the project dashboard opens.
 4. Left menu -> **SQL Editor** -> **New query**.
-5. Run `supabase/migrations/001_initial.sql`. Expected result: success with no blocking errors.
-6. Run `supabase/migrations/002_seed.sql`. Expected result: 100 rows in `challenges`.
-7. Run `supabase/migrations/003_training_sessions.sql`. This creates persisted/resumable daily training sessions.
-8. Run `supabase/migrations/004_learning_evidence.sql`. This adds exact per-response XP and skill-movement evidence for the richer profile/session summaries.
-9. Project Settings / API (or **Connect**, depending on dashboard wording): copy Project URL, publishable key and service-role key. Never put the service-role key in a variable beginning `NEXT_PUBLIC_`.
-10. For easiest closed-pilot testing, Auth -> Providers -> Email: decide whether to disable email confirmation. For public use, keep confirmation enabled and configure redirect URLs.
-11. Table Editor -> `profiles`: after your first sign-up, set your own `is_admin` to `true` so the admin screens appear.
+5. Open this repository file `supabase/migrations/001_initial.sql`, copy all text, paste into SQL Editor, click **Run**. Expected result: success with no blocking errors.
+6. Create another query. Copy all of `supabase/migrations/002_seed.sql`, paste and **Run**. Expected result: 100 rows in `challenges`.
+7. Create another query. Copy all of `supabase/migrations/003_training_sessions.sql`, paste and **Run**. This creates persisted/resumable daily training sessions.
+8. Project Settings / API (or **Connect**, depending on dashboard wording): copy Project URL, publishable key and service-role key. Never put the service-role key in a variable beginning `NEXT_PUBLIC_`.
+9. For easiest closed-pilot testing, Auth -> Providers -> Email: decide whether to disable email confirmation. For public use, keep confirmation enabled and configure redirect URLs.
+10. Table Editor -> `profiles`: after your first sign-up, set your own `is_admin` to `true` so the admin screens appear.
 
 ## B. GitHub
 1. Create a new private repository called `cogni-mvp`.
@@ -21,7 +20,7 @@
 1. Sign into Vercel -> **Add New -> Project**.
 2. Import the `cogni-mvp` GitHub repository.
 3. Framework should be detected as Next.js. Do not change the build command.
-4. Add environment variables from `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. `OPENAI_API_KEY` is optional. Set `NEXT_PUBLIC_APP_URL` to the final Vercel URL after first deployment, then redeploy.
+4. Add environment variables from `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. `OPENAI_API_KEY` is optional. Set `NEXT_PUBLIC_APP_URL` to `https://gocogni.vercel.app` for Production (and Preview if you want preview builds to use the canonical production origin), then redeploy.
 5. Click **Deploy**.
 6. Expected result: landing page appears; create account; complete diagnostic; see skill scores; run training.
 
@@ -31,3 +30,15 @@
 - Sign-up succeeds but login fails: check email confirmation settings and spam folder.
 - Admin page redirects to dashboard: set your `profiles.is_admin=true` in Supabase Table Editor.
 - No challenges: verify `select count(*) from public.challenges;` returns 100.
+
+
+## Production domain — Cogni
+Canonical production URL: `https://gocogni.vercel.app`
+
+After changing the Vercel domain, also update these external settings:
+1. Vercel -> Project -> Settings -> Environment Variables -> set `NEXT_PUBLIC_APP_URL=https://gocogni.vercel.app` for Production.
+2. Supabase -> Authentication -> URL Configuration -> set **Site URL** to `https://gocogni.vercel.app`.
+3. In the same Supabase screen, add `https://gocogni.vercel.app/**` to **Redirect URLs**.
+4. Redeploy Cogni after changing the Vercel environment variable.
+
+The app uses `NEXT_PUBLIC_APP_URL` for canonical metadata and signup email redirects, with `https://gocogni.vercel.app` as its production fallback.

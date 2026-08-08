@@ -20,10 +20,19 @@ function NavIcon({ type }: { type: string }) {
   return <svg {...common}><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>;
 }
 
+function immersiveBack(pathname: string) {
+  if (pathname === "/diagnostic") return { href: "/onboarding", label: "Exit diagnostic" };
+  if (pathname.startsWith("/practice")) return { href: "/skills", label: "Exit practice" };
+  if (pathname.startsWith("/lesson")) return { href: "/dashboard", label: "Exit lesson" };
+  return { href: "/dashboard", label: "Exit challenge" };
+}
+
 export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
   const pathname = usePathname();
   const internal = pathname.startsWith("/admin") || pathname.startsWith("/analytics");
-  const immersive = pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/practice") || pathname.startsWith("/diagnostic") || pathname.startsWith("/session-complete") || pathname.startsWith("/onboarding");
+  const onboarding = pathname.startsWith("/onboarding");
+  const activeDiagnostic = pathname === "/diagnostic";
+  const immersive = pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/practice") || activeDiagnostic;
 
   if (internal) {
     return (
@@ -46,23 +55,41 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
   }
 
   const profileBranch = pathname.startsWith("/settings") || pathname.startsWith("/achievements") || pathname.startsWith("/support");
+  const homeBranch = pathname === "/dashboard" || onboarding || pathname === "/session-complete" || pathname.startsWith("/diagnostic/results");
+  const back = immersiveBack(pathname);
+  const brandHref = activeDiagnostic || onboarding ? "/onboarding" : pathname.startsWith("/practice") ? "/skills" : "/dashboard";
 
   return (
     <div className="cg-consumer-bg">
       <div className="cg-phone-app">
         <header className="cg-app-brandbar">
-          <CogniMark href="/dashboard" compact />
+          <CogniMark href={brandHref} compact />
           {isAdmin && pathname === "/settings" ? <Link href="/admin" className="cg-mini-admin">Admin</Link> : null}
         </header>
+
+        {immersive && (
+          <nav className="cg-immersive-toolbar" aria-label="Learning session navigation">
+            <Link href={back.href} className="cg-immersive-back">← {back.label}</Link>
+            <div className="cg-immersive-shortcuts">
+              <Link href="/skills" className="cg-immersive-shortcut">Explore</Link>
+              <Link href="/settings" className="cg-immersive-shortcut">Profile</Link>
+            </div>
+          </nav>
+        )}
+
         <main className={`cg-consumer-main ${immersive ? "immersive" : ""}`}>{children}</main>
+
         {!immersive && (
           <nav className="cg-bottom-nav" aria-label="Primary">
             {consumerItems.map(([href, label, icon]) => {
-              const active = href === "/settings"
-                ? profileBranch
-                : pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+              const resolvedHref = onboarding && href === "/dashboard" ? "/onboarding" : href;
+              const active = href === "/dashboard"
+                ? homeBranch
+                : href === "/settings"
+                  ? profileBranch
+                  : pathname === href || pathname.startsWith(href);
               return (
-                <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
+                <Link key={href} href={resolvedHref} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
                   <NavIcon type={icon} />
                   <span>{label}</span>
                 </Link>

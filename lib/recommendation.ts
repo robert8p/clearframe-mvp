@@ -16,6 +16,7 @@ const FIELDS = "id,title,prompt,options,challenge_type,interaction_type,interact
 function effectiveScore(row: ScoreRow) { const reliability = Math.max(0, Math.min(1, Number(row.reliability ?? 0))); return 50 + (Number(row.score) - 50) * reliability; }
 function hash(text: string) { let value = 2166136261; for (let index = 0; index < text.length; index += 1) { value ^= text.charCodeAt(index); value = Math.imul(value, 16777619); } return value >>> 0; }
 function promptKey(value: string) { return value.trim().toLowerCase().replace(/\s+/g, " "); }
+function scenarioKey(value: string | null) { return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? null; }
 function rank(rows: ChallengeRow[], target: number, seed: string, recentPrompts: Set<string>) {
   return [...rows].sort((a, b) => {
     const recentA = recentPrompts.has(promptKey(a.prompt)) ? 1 : 0;
@@ -42,10 +43,10 @@ async function loadSession(supabase: SupabaseClient, userId: string, session: { 
 async function buildPlan(supabase: SupabaseClient, userId: string, audience: AudienceSegment, count: number, day: string): Promise<Assignment[]> {
   const [{ data: scores }, { data: history }, { data: mappings }, { data: challengeRows }, { data: answerRows }] = await Promise.all([
     supabase.from("user_skill_scores").select("skill_id,score,reliability,attempts").eq("user_id", userId),
-    supabase.from("user_responses").select("challenge_id").eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
-    supabase.from("challenge_skill_mapping").select("challenge_id,skill_id").limit(1200),
-    supabase.from("challenges").select(FIELDS).eq("is_published", true).eq("is_diagnostic", false).limit(500),
-    supabase.from("challenge_answer_keys").select("challenge_id,correct_index").not("correct_index", "is", null).limit(1000),
+    supabase.from("user_responses").select("challenge_id").eq("user_id", userId).order("created_at", {ascending:false}).limit(30),
+    supabase.from("challenge_skill_mapping").select("challenge_id,skill_id").limit(3000),
+    supabase.from("challenges").select(FIELDS).eq("is_published", true).eq("is_diagnostic", false).limit(2000),
+    supabase.from("challenge_answer_keys").select("challenge_id,correct_index").not("correct_index", "is", null).limit(3000),
   ]);
 
   const allChallenges = (challengeRows ?? []) as ChallengeRow[];
@@ -68,14 +69,20 @@ async function buildPlan(supabase: SupabaseClient, userId: string, audience: Aud
 
   const usedIds = new Set<string>();
   const usedPrompts = new Set<string>();
+  const usedScenarios = new Set<string>();
   const mcqPositionCounts = [0, 0, 0, 0];
   const plan: Assignment[] = [];
   const targetScore = measured[0] ? effectiveScore(measured[0]) : 50;
   const targetDifficulty = audienceDifficultyTarget(audience, targetScore);
 
   function choose(pool: ChallengeRow[], reason: Assignment["reason"], skillId: string | null, seed: string) {
-    const available = pool.filter((challenge) => !usedIds.has(challenge.id) && !usedPrompts.has(promptKey(challenge.prompt)));
-    if (!available.length) return;
+    const availableAnyScenario = pool.filter((challenge) => !usedIds.has(challenge.id) && !usedPrompts.has(promptKey(challenge.prompt)));
+    if (!availableAnyScenario.length) return;
+    const scenarioFresh = availableAnyScenario.filter((challenge) => {
+      const key = scenarioKey(challenge.scenario_context);
+      return !key || !usedScenarios.has(key);
+    });
+    const available = scenarioFresh.length ? scenarioFresh : availableAnyScenario;
     const formats = new Map<string, number>();
     for (const item of plan) formats.set(item.challenge.interaction_type, (formats.get(item.challenge.interaction_type) ?? 0) + 1);
     const minimumFormatUse = Math.min(...available.map((challenge) => formats.get(challenge.interaction_type) ?? 0));
@@ -101,6 +108,8 @@ async function buildPlan(supabase: SupabaseClient, userId: string, audience: Aud
     if (!picked) return;
     usedIds.add(picked.id);
     usedPrompts.add(promptKey(picked.prompt));
+    const pickedScenario = scenarioKey(picked.scenario_context);
+    if (pickedScenario) usedScenarios.add(pickedScenario);
     if (picked.interaction_type === "single_choice") {
       const position = correctIndexByChallenge.get(picked.id);
       if (position !== undefined) mcqPositionCounts[position] += 1;
@@ -130,31 +139,19 @@ async function buildPlan(supabase: SupabaseClient, userId: string, audience: Aud
 
 export async function getOrCreateDailyTrainingSession(supabase: SupabaseClient, userId: string, count = 5): Promise<DailyTrainingSession> {
   const day = localDateKey();
-  const [{ data: profile, error: profileError }, { data: existing, error: existingError }] = await Promise.all([
-    supabase.from("profiles").select("audience_segment").eq("id", userId).single(),
-    supabase.from("training_sessions").select("id,session_date,status").eq("user_id", userId).eq("session_date", day).maybeSingle(),
+  const [{data:profile,error:pe},{data:existing,error:ee}] = await Promise.all([
+    supabase.from("profiles").select("audience_segment").eq("id",userId).single(),
+    supabase.from("training_sessions").select("id,session_date,status").eq("user_id",userId).eq("session_date",day).maybeSingle(),
   ]);
-  if (profileError) throw profileError;
-  if (existingError) throw existingError;
-  if (existing) return loadSession(supabase, userId, existing as { id: string; session_date: string; status: "in_progress" | "completed" });
-  if (!isAudienceSegment(profile?.audience_segment)) return { id: null, sessionDate: day, status: "in_progress", challenges: [], answeredChallengeIds: [] };
-
-  const plan = await buildPlan(supabase, userId, profile.audience_segment, count, day);
-  if (!plan.length) return { id: null, sessionDate: day, status: "in_progress", challenges: [], answeredChallengeIds: [] };
-
-  const admin = createAdminClient();
-  const { data: created, error: createError } = await admin.from("training_sessions").insert({ user_id: userId, session_date: day, status: "in_progress" }).select("id,session_date,status").single();
-  if (createError) {
-    if (createError.code === "23505") {
-      const { data: raced, error } = await supabase.from("training_sessions").select("id,session_date,status").eq("user_id", userId).eq("session_date", day).single();
-      if (error) throw error;
-      return loadSession(supabase, userId, raced as { id: string; session_date: string; status: "in_progress" | "completed" });
-    }
-    throw createError;
-  }
-
-  const rows = plan.map((item, index) => ({ session_id: created.id, position: index + 1, challenge_id: item.challenge.id, selection_reason: item.reason, target_skill_id: item.skillId }));
-  const { error: assignmentError } = await admin.from("training_session_challenges").insert(rows);
-  if (assignmentError) { await admin.from("training_sessions").delete().eq("id", created.id); throw assignmentError; }
-  return loadSession(supabase, userId, created as { id: string; session_date: string; status: "in_progress" | "completed" });
+  if(pe)throw pe; if(ee)throw ee;
+  if(existing) return loadSession(supabase,userId,existing as {id:string;session_date:string;status:"in_progress"|"completed"});
+  if(!isAudienceSegment(profile?.audience_segment)) return {id:null,sessionDate:day,status:"in_progress",challenges:[],answeredChallengeIds:[]};
+  const plan=await buildPlan(supabase,userId,profile.audience_segment,count,day);
+  if(!plan.length) return {id:null,sessionDate:day,status:"in_progress",challenges:[],answeredChallengeIds:[]};
+  const admin=createAdminClient();
+  const {data:created,error:ce}=await admin.from("training_sessions").insert({user_id:userId,session_date:day,status:"in_progress"}).select("id,session_date,status").single();
+  if(ce){ if(ce.code==="23505"){ const {data:raced,error}=await supabase.from("training_sessions").select("id,session_date,status").eq("user_id",userId).eq("session_date",day).single(); if(error)throw error; return loadSession(supabase,userId,raced as {id:string;session_date:string;status:"in_progress"|"completed"}); } throw ce; }
+  const rows=plan.map((p,i)=>({session_id:created.id,position:i+1,challenge_id:p.challenge.id,selection_reason:p.reason,target_skill_id:p.skillId}));
+  const {error:ae}=await admin.from("training_session_challenges").insert(rows); if(ae){await admin.from("training_sessions").delete().eq("id",created.id);throw ae;}
+  return loadSession(supabase,userId,created as {id:string;session_date:string;status:"in_progress"|"completed"});
 }

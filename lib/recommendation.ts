@@ -43,7 +43,7 @@ async function loadSession(supabase: SupabaseClient, userId: string, session: { 
 async function buildPlan(supabase: SupabaseClient, userId: string, audience: AudienceSegment, count: number, day: string): Promise<Assignment[]> {
   const [{ data: scores }, { data: history }, { data: mappings }, { data: challengeRows }, { data: answerRows }] = await Promise.all([
     supabase.from("user_skill_scores").select("skill_id,score,reliability,attempts").eq("user_id", userId),
-    supabase.from("user_responses").select("challenge_id").eq("user_id", userId).order("created_at", {ascending:false}).limit(30),
+    supabase.from("user_responses").select("challenge_id").eq("user_id", userId).limit(5000),
     supabase.from("challenge_skill_mapping").select("challenge_id,skill_id").limit(3000),
     supabase.from("challenges").select(FIELDS).eq("is_published", true).eq("is_diagnostic", false).limit(2000),
     supabase.from("challenge_answer_keys").select("challenge_id,correct_index").not("correct_index", "is", null).limit(3000),
@@ -90,9 +90,6 @@ async function buildPlan(supabase: SupabaseClient, userId: string, audience: Aud
     const ranked = rank(diverse.length ? diverse : available, targetDifficulty, `${userId}:${day}:${seed}`, recentPrompts);
     let picked = ranked[0];
 
-    // If the best-ranked format is an MCQ, prefer a similarly suitable MCQ whose
-    // correct position has been used least in this five-question set. This prevents
-    // accidental B/B/B-style patterns without sacrificing skill or difficulty targeting.
     if (picked?.interaction_type === "single_choice") {
       const mcqs = ranked.filter((challenge) => challenge.interaction_type === "single_choice").slice(0, 12);
       const balanced = [...mcqs].sort((a, b) => {

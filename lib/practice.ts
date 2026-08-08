@@ -39,32 +39,32 @@ export async function getOrCreatePracticeSession(supabase: SupabaseClient, userI
   const { data: existing } = await admin.from("practice_sessions").select("id").eq("user_id", userId).eq("skill_id", skill.id).eq("status", "in_progress").order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (existing?.id) return loadPractice(admin, userId, existing.id);
 
-  const [{ data: mappings }, { data: recent }] = await Promise.all([
-    admin.from("challenge_skill_mapping").select("challenge_id").eq("skill_id", skill.id).limit(500),
-    admin.from("user_responses").select("challenge_id,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
+  const [{ data: mappings }, { data: history }] = await Promise.all([
+    admin.from("challenge_skill_mapping").select("challenge_id").eq("skill_id", skill.id).limit(1000),
+    admin.from("user_responses").select("challenge_id").eq("user_id", userId).limit(5000),
   ]);
   const mappedIds = (mappings ?? []).map((row: { challenge_id: string }) => row.challenge_id);
   if (!mappedIds.length) return null;
 
-  const { data: challengeRows, error: challengeError } = await admin.from("challenges").select(FIELDS).in("id", mappedIds).eq("is_published", true).eq("is_diagnostic", false).limit(300);
+  const { data: challengeRows, error: challengeError } = await admin.from("challenges").select(FIELDS).in("id", mappedIds).eq("is_published", true).eq("is_diagnostic", false).limit(1000);
   if (challengeError) throw challengeError;
   const all = (challengeRows ?? []) as Challenge[];
-  const recentIds = new Set((recent ?? []).map((row: { challenge_id: string }) => row.challenge_id));
+  const seenIds = new Set((history ?? []).map((row: { challenge_id: string }) => row.challenge_id));
   const promptById = new Map(all.map((challenge) => [challenge.id, promptKey(challenge.prompt)]));
-  const recentPrompts = new Set<string>();
-  for (const id of recentIds) {
+  const seenPrompts = new Set<string>();
+  for (const id of seenIds) {
     const key = promptById.get(id);
-    if (key) recentPrompts.add(key);
+    if (key) seenPrompts.add(key);
   }
 
   const eligible = all.filter((challenge) => audienceMatches(challenge.audience_segments, audience));
   const audienceSpecific = eligible.filter((challenge) => challenge.audience_segments?.includes(audience));
   const basePool = audienceSpecific.length >= count ? audienceSpecific : eligible;
-  const fresh = basePool.filter((challenge) => !recentIds.has(challenge.id) && !recentPrompts.has(promptKey(challenge.prompt)));
+  const fresh = basePool.filter((challenge) => !seenIds.has(challenge.id) && !seenPrompts.has(promptKey(challenge.prompt)));
   const candidates = [...(fresh.length >= count ? fresh : basePool)].sort((a, b) => {
-    const recentA = recentPrompts.has(promptKey(a.prompt)) ? 1 : 0;
-    const recentB = recentPrompts.has(promptKey(b.prompt)) ? 1 : 0;
-    return recentA - recentB || hash(`${userId}:${skillSlug}:${a.id}`) - hash(`${userId}:${skillSlug}:${b.id}`);
+    const seenA = seenPrompts.has(promptKey(a.prompt)) ? 1 : 0;
+    const seenB = seenPrompts.has(promptKey(b.prompt)) ? 1 : 0;
+    return seenA - seenB || hash(`${userId}:${skillSlug}:${a.id}`) - hash(`${userId}:${skillSlug}:${b.id}`);
   });
 
   const picked: Challenge[] = [];

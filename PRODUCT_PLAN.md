@@ -1,7 +1,7 @@
 # Product Plan A–J
 
 ## A. Product architecture
-Clearframe is a daily professional judgement gym. A diagnostic estimates starting capability; a lightweight learner model selects short challenges; every answer teaches an explicit thinking principle; evidence accumulates into a transparent profile. B2B is an aggregation layer on top of the same learning evidence, with minimum-cohort and consent controls rather than manager access to detailed individual answers.
+Cogni is a daily professional judgement gym. A diagnostic estimates starting capability; a lightweight learner model selects short challenges; every answer teaches an explicit thinking principle; evidence accumulates into a transparent profile. B2B is an aggregation layer on top of the same learning evidence, with minimum-cohort and consent controls rather than manager access to detailed individual answers.
 
 ## B. MVP scope
 Must: auth, diagnostic, 15-skill profile, 100 seed challenges, adaptive 5-item session, explanations, confidence, error patterns, XP/streak, mobile web, admin creation, basic analytics, RLS. Should: AI coach, industry tags, achievements, progress trends, content review workflow. Later: Stripe, leagues, team competitions, normative percentiles, full IRT, SSO/SCIM, native mobile, enterprise data exports.

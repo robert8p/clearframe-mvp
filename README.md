@@ -1,13 +1,13 @@
-# Clearframe MVP
+# Cogni MVP
 
-Working codename for a Duolingo-style adaptive human-judgement training product.
+Cogni is a mobile-first adaptive human-judgement training product for the AI age.
 
 ## What is implemented
 
 - Email/password authentication with Supabase Auth
 - 12-item diagnostic selected from a 100-challenge seed bank
 - Adaptive 0–100 Development Scores with reliability shown separately
-- Five-item daily training prioritising weaker skills
+- Persisted, resumable five-item daily training with adaptive targeting, diversity and AI-verification coverage
 - Deterministic server-side grading with answer keys hidden from browser clients
 - Confidence capture, response-time capture and error-pattern logging
 - XP and streaks
@@ -21,7 +21,7 @@ Working codename for a Duolingo-style adaptive human-judgement training product.
 ## Local start
 
 1. Create a Supabase project.
-2. In SQL Editor run `supabase/migrations/001_initial.sql`, then `002_seed.sql`.
+2. In SQL Editor run `supabase/migrations/001_initial.sql`, then `002_seed.sql`, then `003_training_sessions.sql`.
 3. Copy `.env.example` to `.env.local` and fill the four Supabase values. OpenAI is optional.
 4. Run `npm install`.
 5. Run `npm run dev`.

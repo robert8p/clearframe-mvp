@@ -269,9 +269,13 @@ async function fetchMappedPool(
     mappingsBySkill.set(mapping.skill_id, existing);
   }
 
-  const mappedIds = [
-    ...new Set((mappings ?? []).map((mapping) => mapping.challenge_id)),
-  ].filter((id) => !excludedIds.has(id));
+  const mappedIds: string[] = Array.from(
+    new Set<string>(
+      (mappings ?? []).map(
+        (mapping: { challenge_id: string; skill_id: string }) => mapping.challenge_id,
+      ),
+    ),
+  ).filter((id: string) => !excludedIds.has(id));
 
   const pool = await fetchChallenges(supabase, mappedIds);
 
@@ -745,7 +749,7 @@ async function loadSession(
   if (responsesError) throw responsesError;
 
   const challengeIds = (assignments ?? []).map(
-    (row) => row.challenge_id,
+    (row: { challenge_id: string }) => row.challenge_id,
   );
 
   const challenges = await fetchChallenges(
@@ -761,10 +765,10 @@ async function loadSession(
   );
 
   const orderedChallenges = (assignments ?? [])
-    .map((row) => byId.get(row.challenge_id))
+    .map((row: { challenge_id: string }) => byId.get(row.challenge_id))
     .filter(
       (
-        challenge,
+        challenge: ChallengeRow | undefined,
       ): challenge is ChallengeRow =>
         Boolean(challenge),
     );
@@ -775,7 +779,7 @@ async function loadSession(
     status: session.status,
     challenges: orderedChallenges,
     answeredChallengeIds: (responses ?? []).map(
-      (row) => row.challenge_id,
+      (row: { challenge_id: string }) => row.challenge_id,
     ),
   };
 }

@@ -20,7 +20,7 @@ export default async function TrainingPage() {
       <section className="card">
         <h2>No challenges available</h2>
         <p className="muted">
-          Clearframe could not build today&apos;s training session. Confirm
+          Cogni could not build today&apos;s training session. Confirm
           that the seed migration has been loaded, then refresh this page.
         </p>
       </section>

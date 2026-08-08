@@ -15,9 +15,9 @@ export default async function SessionCompletePage() {
   if (session?.id) {
     const { data: responses } = await supabase.from("user_responses").select("is_correct,error_pattern").eq("user_id", user.id).eq("session_key", session.id);
     total = responses?.length ?? 0;
-    correct = responses?.filter((r) => r.is_correct).length ?? 0;
-    sessionXp = (responses ?? []).reduce((sum, r) => sum + (r.is_correct ? 12 : 7), 0);
-    patterns = [...new Set((responses ?? []).map((r) => r.error_pattern).filter(Boolean) as string[])];
+    correct = responses?.filter((r: { is_correct: boolean }) => r.is_correct).length ?? 0;
+    sessionXp = (responses ?? []).reduce((sum: number, r: { is_correct: boolean }) => sum + (r.is_correct ? 12 : 7), 0);
+    patterns = [...new Set((responses ?? []).map((r: { error_pattern: string | null }) => r.error_pattern).filter(Boolean) as string[])];
   }
   const score = total ? Math.round(correct / total * 100) : 0;
   const weakest = scores?.[0];

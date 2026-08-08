@@ -1,6 +1,6 @@
 {
-  "name": "clearframe-mvp",
-  "version": "0.1.0",
+  "name": "cogni-mvp",
+  "version": "0.3.1",
   "private": true,
   "scripts": {
     "dev": "next dev",

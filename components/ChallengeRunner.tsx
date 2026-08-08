@@ -27,8 +27,27 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
   const progress = challenges.length ? Math.round(((answered.size + (result && !answered.has(challenge?.id) ? 1 : 0)) / challenges.length) * 100) : 0;
 
   useEffect(() => {
-    void fetch("/api/event", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventName: mode === "diagnostic" ? "diagnostic_started" : "session_started", properties: { session_id: runtimeSessionId } }) });
-  }, [mode, runtimeSessionId]);
+    void fetch("/api/event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        eventName: mode === "diagnostic" ? "diagnostic_started" : "session_started",
+        properties: { session_id: runtimeSessionId, resumed: initialAnsweredChallengeIds.length > 0 },
+      }),
+    });
+  }, [mode, runtimeSessionId, initialAnsweredChallengeIds.length]);
+
+  useEffect(() => {
+    if (!challenge) return;
+    void fetch("/api/event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        eventName: "challenge_viewed",
+        properties: { session_id: runtimeSessionId, challenge_id: challenge.id, index },
+      }),
+    });
+  }, [challenge, index, runtimeSessionId]);
 
   if (!challenge) return <section className="cg-card"><h2>No challenges available</h2></section>;
 
@@ -43,11 +62,23 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
     setAnswered((current) => new Set([...current, challenge.id]));
   }
 
+  function finishSession() {
+    void fetch("/api/event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        eventName: mode === "diagnostic" ? "diagnostic_completed" : "session_completed",
+        properties: { session_id: runtimeSessionId },
+      }),
+    });
+    router.push(mode === "diagnostic" ? "/diagnostic/results" : "/session-complete");
+    router.refresh();
+  }
+
   function next() {
     const nextIndex = challenges.findIndex((candidate, candidateIndex) => candidateIndex > index && !answered.has(candidate.id));
     if (nextIndex === -1) {
-      router.push(mode === "diagnostic" ? "/diagnostic/results" : "/session-complete");
-      router.refresh();
+      finishSession();
       return;
     }
     setIndex(nextIndex); setSelected(null); setResult(null); setConfidence(60); setStartedAt(Date.now());
@@ -81,7 +112,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
       {challenge.confidence_required && !result && (
         <div className="cg-confidence">
           <div><strong>Confidence</strong><span>{confidence}%</span></div>
-          <input type="range" min="20" max="100" step="10" value={confidence} onChange={(e) => setConfidence(Number(e.target.value))} />
+          <input type="range" min="20" max="100" step="10" value={confidence} onChange={(event: { target: { value: string } }) => setConfidence(Number(event.target.value))} />
         </div>
       )}
 

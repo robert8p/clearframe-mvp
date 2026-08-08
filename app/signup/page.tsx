@@ -2,32 +2,25 @@ import Link from "next/link";
 import { AuthForm } from "@/components/AuthForm";
 import { CogniMark } from "@/components/CogniMark";
 
-export default function SignupPage() {
+export default function Page() {
   return (
-    <main className="auth-wrap">
-      <div className="auth-shell">
-        <section className="auth-panel">
+    <main className="cg-auth-wrap">
+      <div className="cg-auth-layout">
+        <section className="cg-auth-visual">
           <CogniMark />
-          <div className="cg-kicker" style={{ marginTop: 28 }}>Start strong</div>
+          <div className="cg-brain-orb small"><span>◌</span></div>
           <h1>Build your judgement profile.</h1>
-          <p style={{ fontSize: 18, color: "#c8d2eb" }}>
-            Start with a short diagnostic, then get daily training built around how you actually reason.
-          </p>
-          <div className="metric-list" style={{ marginTop: 28 }}>
-            <div className="metric-box"><strong>Critical thinking</strong><p>Evaluate evidence, assumptions and arguments more effectively.</p></div>
-            <div className="metric-box"><strong>AI verification</strong><p>Challenge AI confidently instead of accepting plausible output too quickly.</p></div>
-            <div className="metric-box"><strong>Decision quality</strong><p>Train the human edge that matters when stakes are real.</p></div>
+          <p>Start with a short diagnostic, then get a personalised learning pathway.</p>
+          <div className="cg-auth-benefits">
+            <span>Critical thinking</span><span>AI verification</span><span>Decision quality</span>
           </div>
         </section>
-
-        <section className="auth-panel">
+        <section className="cg-card cg-auth-card">
           <div className="cg-kicker">Create account</div>
-          <h2 style={{ fontSize: 34, marginTop: 10 }}>Join Cogni</h2>
-          <p className="muted">Create your account to begin the diagnostic.</p>
+          <h2>Start your journey</h2>
+          <p>Create your Cogni account to begin.</p>
           <AuthForm mode="signup" />
-          <p className="muted" style={{ fontSize: 13, marginTop: 18 }}>
-            Already have an account? <Link href="/login"><strong>Sign in</strong></Link>
-          </p>
+          <p className="cg-auth-switch">Already have an account? <Link href="/login"><strong>Sign in</strong></Link></p>
         </section>
       </div>
     </main>

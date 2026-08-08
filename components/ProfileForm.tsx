@@ -20,12 +20,12 @@ export function ProfileForm({ initialName, initialIndustry, initialRole }: { ini
   return (
     <section className="cg-card cg-form-card">
       <label>Name</label>
-      <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+      <input className="input" value={name} onChange={(event: { target: { value: string } }) => setName(event.target.value)} />
       <label>Industry <span className="muted">optional</span></label>
-      <input className="input" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Construction, finance, legal…" />
+      <input className="input" value={industry} onChange={(event: { target: { value: string } }) => setIndustry(event.target.value)} placeholder="Construction, finance, legal…" />
       <label>Role <span className="muted">optional</span></label>
-      <input className="input" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Commercial director, analyst…" />
-      <button className="cg-button" style={{ width: "100%", marginTop: 18 }} onClick={save}>Save profile</button>
+      <input className="input" value={role} onChange={(event: { target: { value: string } }) => setRole(event.target.value)} placeholder="Commercial director, analyst…" />
+      <button className="cg-button cg-full" style={{ marginTop: 18 }} onClick={save}>Save profile</button>
       {message && <p className="cg-form-message">{message}</p>}
     </section>
   );

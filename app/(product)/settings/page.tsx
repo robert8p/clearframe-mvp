@@ -9,7 +9,7 @@ export default async function SettingsPage() {
     supabase.from("profiles").select("full_name,industry,job_role,xp,current_streak,is_admin").eq("id", user.id).single(),
     supabase.from("user_responses").select("id", { count: "exact", head: true }).eq("user_id", user.id),
   ]);
-  const initials = (profile?.full_name || user.email || "C").split(/\s|@/).filter(Boolean).slice(0,2).map((x) => x[0]?.toUpperCase()).join("");
+  const initials = (profile?.full_name || user.email || "C").split(/\s|@/).filter(Boolean).slice(0,2).map((x: string) => x[0]?.toUpperCase()).join("");
 
   return (
     <div className="cg-mobile-page">

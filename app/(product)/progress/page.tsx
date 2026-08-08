@@ -12,12 +12,12 @@ export default async function ProgressPage() {
   ]);
 
   const rows = responses ?? [];
-  const accuracy = rows.length ? Math.round(rows.filter((x) => x.is_correct).length / rows.length * 100) : 0;
-  const avgConfidence = rows.length ? Math.round(rows.reduce((a, b) => a + (b.confidence ?? 0), 0) / rows.length) : 0;
+  const accuracy = rows.length ? Math.round(rows.filter((x: { is_correct: boolean }) => x.is_correct).length / rows.length * 100) : 0;
+  const avgConfidence = rows.length ? Math.round(rows.reduce((a: number, b: { confidence: number | null }) => a + (b.confidence ?? 0), 0) / rows.length) : 0;
   const dayCounts = Array.from({ length: 7 }, (_, offset) => {
     const d = new Date(Date.now() - (6 - offset) * 86400000);
     const key = d.toISOString().slice(0,10);
-    return { label: d.toLocaleDateString("en-GB", { weekday: "narrow" }), count: rows.filter((r) => r.created_at.slice(0,10) === key).length };
+    return { label: d.toLocaleDateString("en-GB", { weekday: "narrow" }), count: rows.filter((r: { created_at: string }) => r.created_at.slice(0,10) === key).length };
   });
   const maxCount = Math.max(1, ...dayCounts.map((d) => d.count));
 

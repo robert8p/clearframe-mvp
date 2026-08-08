@@ -28,10 +28,14 @@ export function SessionCelebration({ xp, streak, title }: { xp: number; streak: 
   }, [xp]);
 
   useEffect(() => {
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate([20, 45, 25, 60, 30]);
-    }
-  }, []);
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate([20, 45, 25, 60, 30]);
+    void fetch("/api/event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ eventName: "reward_viewed", properties: { xp, streak, title } }),
+      keepalive: true,
+    }).catch(() => undefined);
+  }, [streak, title, xp]);
 
   return (
     <div className="cg-session-celebration" aria-live="polite">

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { isAudienceSegment } from "@/lib/audience";
 import { ChallengeRunner } from "@/components/ChallengeRunner";
 import { getOrCreateDailyTrainingSession } from "@/lib/recommendation";
 import type { Challenge } from "@/lib/types";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 
 export default async function TrainingPage() {
   const { user, supabase } = await requireUser();
+  const { data: profile } = await supabase.from("profiles").select("audience_segment").eq("id", user.id).single();
+  if (!isAudienceSegment(profile?.audience_segment)) redirect("/onboarding/audience");
 
   const session = await getOrCreateDailyTrainingSession(
     supabase,

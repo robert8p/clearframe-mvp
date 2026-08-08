@@ -57,6 +57,7 @@ export function DailyLesson({ lesson }: { lesson: DailyLessonType }) {
         <span>{step + 1}/{slides.length}</span>
       </div>
       <div className="progress cg-animated-progress"><span style={{ width: `${progress}%` }} /></div>
+      {lesson.scenario_context && <div className="cg-context-strip"><span>Context</span><strong>{lesson.scenario_context}</strong></div>}
 
       <section key={step} className="cg-lesson-story-card cg-question-stage">
         <div className="cg-lesson-emoji" aria-hidden="true">{slide.icon}</div>

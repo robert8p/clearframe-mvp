@@ -15,6 +15,8 @@ export type Challenge = {
   interaction_config: Record<string, unknown>;
   difficulty: number;
   confidence_required: boolean;
+  audience_segments?: string[];
+  scenario_context?: string | null;
 };
 
 export type AnswerResult = {
@@ -37,6 +39,9 @@ export type DailyLesson = {
   subtitle: string;
   emoji: string;
   estimated_minutes: number;
+  difficulty?: number;
+  audience_segments?: string[];
+  scenario_context?: string | null;
   content: {
     story: string;
     twist: string;

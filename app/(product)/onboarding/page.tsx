@@ -1,10 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
+import { audienceMeta, isAudienceSegment } from "@/lib/audience";
 
-export default function Onboarding() {
+export default async function Onboarding() {
+  const { user, supabase } = await requireUser();
+  const { data: profile } = await supabase.from("profiles").select("audience_segment").eq("id", user.id).single();
+  if (!isAudienceSegment(profile?.audience_segment)) redirect("/onboarding/audience");
+  const audience = audienceMeta(profile.audience_segment);
+
   return (
     <div className="cg-mobile-page">
       <div className="cg-kicker">Welcome to Cogni</div>
       <h1 className="cg-screen-title">Measure first. Train second.</h1>
+      <section className="cg-card cg-context-callout">
+        <span className="cg-audience-icon" aria-hidden="true">{audience?.icon}</span>
+        <div><small>Your learning context</small><strong>{audience?.label}</strong><p>Your diagnostic measures judgement. Your daily lessons and examples will then use situations relevant to this context.</p></div>
+        <Link href="/onboarding/audience">Change</Link>
+      </section>
       <section className="cg-card">
         <div className="cg-brain-orb mini"><span>◌</span></div>
         <h2>Your diagnostic</h2>

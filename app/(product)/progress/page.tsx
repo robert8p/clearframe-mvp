@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 
-function skillName(value: any) { return Array.isArray(value) ? value[0]?.name : value?.name; }
+function skillInfo(value: any) { return Array.isArray(value) ? value[0] : value; }
 
 export default async function ProgressPage() {
   const { user, supabase } = await requireUser();
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const [{ data: responses }, { data: scores }] = await Promise.all([
     supabase.from("user_responses").select("is_correct,confidence,response_time_ms,created_at").eq("user_id", user.id).gte("created_at", since).order("created_at"),
-    supabase.from("user_skill_scores").select("score,attempts,skills(name)").eq("user_id", user.id).gt("attempts", 0).order("score", { ascending: false }).limit(4),
+    supabase.from("user_skill_scores").select("score,attempts,skills(name,slug)").eq("user_id", user.id).gt("attempts", 0).order("score", { ascending: false }).limit(4),
   ]);
 
   const rows = responses ?? [];
@@ -40,7 +40,7 @@ export default async function ProgressPage() {
 
       <section className="cg-section-head"><h2>Topics mastered</h2><Link href="/skills">See all</Link></section>
       <div className="cg-master-list">
-        {(scores ?? []).map((row: any, i: number) => <div className="cg-master-row" key={i}><div className="cg-course-icon">{i + 1}</div><div className="cg-course-copy"><strong>{skillName(row.skills)}</strong><div className="progress"><span style={{ width: `${Math.round(row.score)}%` }} /></div></div><span>{Math.round(row.score)}%</span></div>)}
+        {(scores ?? []).map((row: any, i: number) => { const skill = skillInfo(row.skills); return <Link href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} className="cg-master-row" key={skill?.slug ?? i}><div className="cg-course-icon">{i + 1}</div><div className="cg-course-copy"><strong>{skill?.name ?? "Skill"}</strong><div className="progress"><span style={{ width: `${Math.round(row.score)}%` }} /></div></div><span>{Math.round(row.score)}% ›</span></Link>; })}
       </div>
     </div>
   );

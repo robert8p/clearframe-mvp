@@ -6,9 +6,11 @@ import type { AnswerResult, Challenge } from "@/lib/types";
 
 type Props = {
   challenges: Challenge[];
-  mode: "diagnostic" | "training";
+  mode: "diagnostic" | "training" | "practice";
   sessionId?: string;
   initialAnsweredChallengeIds?: string[];
+  completionHref?: string;
+  modeLabel?: string;
 };
 
 type Category = { id: string; label: string };
@@ -49,7 +51,7 @@ function asStringMap(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, string> : {};
 }
 
-export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredChallengeIds = [] }: Props) {
+export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredChallengeIds = [], completionHref, modeLabel }: Props) {
   const initiallyAnswered = useMemo(() => new Set(initialAnsweredChallengeIds), [initialAnsweredChallengeIds]);
   const pending = challenges.findIndex((challenge) => !initiallyAnswered.has(challenge.id));
   const [index, setIndex] = useState(Math.max(0, pending));
@@ -75,7 +77,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
     void fetch("/api/event", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ eventName: mode === "diagnostic" ? "diagnostic_started" : "session_started", properties: { session_id: runtimeSessionId, resumed: initialAnsweredChallengeIds.length > 0 } }),
+      body: JSON.stringify({ eventName: mode === "diagnostic" ? "diagnostic_started" : mode === "practice" ? "practice_started" : "session_started", properties: { session_id: runtimeSessionId, resumed: initialAnsweredChallengeIds.length > 0 } }),
     });
   }, [mode, runtimeSessionId, initialAnsweredChallengeIds.length]);
 
@@ -133,9 +135,9 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
     void fetch("/api/event", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ eventName: mode === "diagnostic" ? "diagnostic_completed" : "session_completed", properties: { session_id: runtimeSessionId } }),
+      body: JSON.stringify({ eventName: mode === "diagnostic" ? "diagnostic_completed" : mode === "practice" ? "practice_completed" : "session_completed", properties: { session_id: runtimeSessionId } }),
     });
-    router.push(mode === "diagnostic" ? "/diagnostic/results" : "/session-complete");
+    router.push(completionHref ?? (mode === "diagnostic" ? "/diagnostic/results" : mode === "practice" ? "/skills" : "/session-complete"));
     router.refresh();
   }
 
@@ -255,12 +257,13 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
   return (
     <div className={`cg-quiz-screen ${result ? (result.correct ? "is-correct" : scoreFraction >= 0.5 ? "is-partial" : "is-learning") : ""}`}>
       <div className="cg-quiz-header">
-        <span className="cg-kicker">{mode === "diagnostic" ? "Diagnostic" : "Daily challenge"}</span>
+        <span className="cg-kicker">{modeLabel ?? (mode === "diagnostic" ? "Diagnostic" : mode === "practice" ? "Skill practice" : "Daily challenge")}</span>
         <span className="cg-pill cg-question-count">{index + 1} of {challenges.length}</span>
       </div>
       <div className="progress cg-animated-progress" aria-label={`${progress}% complete`}><span style={{ width: `${Math.max(progress, (index / challenges.length) * 100)}%` }} /></div>
 
       <div key={challenge.id} className="cg-question-stage">
+        {challenge.scenario_context && <div className="cg-context-strip">{challenge.scenario_context}</div>}
         <div className="cg-format-banner"><span>{meta.icon}</span><div><strong>{meta.label}</strong><small>{String(challenge.interaction_config?.instructions ?? meta.instruction)}</small></div></div>
         <div className="cg-question-meta"><span>{challenge.challenge_type.replaceAll("_", " ")}</span><span>Difficulty {challenge.difficulty}</span></div>
         <h1 className="cg-question-title">{challenge.title}</h1>

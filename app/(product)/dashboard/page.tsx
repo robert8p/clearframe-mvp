@@ -1,19 +1,27 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { CoachCard } from "@/components/CoachCard";
 import { localDateKey } from "@/lib/dates";
+import { audienceMeta, isAudienceSegment } from "@/lib/audience";
 
-function skillName(value: any) { return Array.isArray(value) ? value[0]?.name : value?.name; }
+function skillInfo(value: unknown) {
+  if (Array.isArray(value)) return value[0] as { name?: string; slug?: string } | undefined;
+  return value as { name?: string; slug?: string } | undefined;
+}
 
 export default async function DashboardPage() {
   const { user, supabase } = await requireUser();
   const day = localDateKey();
   const [{ data: profile }, { data: scores }, { data: todaySession }, { data: lessonCompletion }] = await Promise.all([
-    supabase.from("profiles").select("full_name,xp,current_streak").eq("id", user.id).single(),
-    supabase.from("user_skill_scores").select("score,reliability,attempts,skills(name)").eq("user_id", user.id).gt("attempts", 0).order("score"),
+    supabase.from("profiles").select("full_name,xp,current_streak,audience_segment").eq("id", user.id).single(),
+    supabase.from("user_skill_scores").select("score,reliability,attempts,skills(name,slug)").eq("user_id", user.id).gt("attempts", 0).order("score"),
     supabase.from("training_sessions").select("id,status,lesson_id").eq("user_id", user.id).eq("session_date", day).maybeSingle(),
     supabase.from("user_lesson_completions").select("id").eq("user_id", user.id).eq("lesson_date", day).maybeSingle(),
   ]);
+
+  if (!isAudienceSegment(profile?.audience_segment)) redirect("/onboarding/audience");
+  const audience = audienceMeta(profile.audience_segment);
 
   let assigned = 5, answered = 0;
   if (todaySession?.id) {
@@ -21,7 +29,8 @@ export default async function DashboardPage() {
       supabase.from("training_session_challenges").select("*", { count: "exact", head: true }).eq("session_id", todaySession.id),
       supabase.from("user_responses").select("*", { count: "exact", head: true }).eq("session_key", todaySession.id),
     ]);
-    assigned = assignmentCount ?? 5; answered = answeredCount ?? 0;
+    assigned = assignmentCount ?? 5;
+    answered = answeredCount ?? 0;
   }
 
   const lessonDone = Boolean(lessonCompletion);
@@ -35,42 +44,49 @@ export default async function DashboardPage() {
   return (
     <div className="cg-mobile-page">
       <header className="cg-mobile-header">
-        <div><h1>Hello, {firstName} 👋</h1><p>Ready to sharpen your thinking today?</p></div>
+        <div>
+          <h1>Hello, {firstName} 👋</h1>
+          <p>Ready to sharpen your thinking today?</p>
+          <Link href="/settings#learning-context" className="cg-context-pill">{audience?.icon} {audience?.label}</Link>
+        </div>
         <span className="cg-streak">🔥 {profile?.current_streak ?? 0}</span>
       </header>
 
       <section className="cg-card cg-daily-card">
         <div className="cg-kicker">Daily goal</div>
         <div className="cg-goal-row">
-          <div className="cg-ring" style={{ ['--progress' as string]: `${dailyProgress * 3.6}deg` }}><span>{dailyProgress}%</span></div>
-          <div><h2>{todaySession?.status === "completed" ? "Goal complete" : lessonDone ? "Lesson done — time to practise" : "Start with today’s 3-min lesson"}</h2><p>{lessonDone ? "✓ Lesson" : "1 lesson"} • {answered} / {assigned} questions</p></div>
+          <div className="cg-ring" style={{ ["--progress" as string]: `${dailyProgress * 3.6}deg` }}><span>{dailyProgress}%</span></div>
+          <div><h2>{todaySession?.status === "completed" ? "Goal complete" : lessonDone ? "Lesson done — time to practise" : `A ${audience?.shortLabel ?? "personalised"} lesson is ready`}</h2><p>{lessonDone ? "✓ Lesson" : "1 lesson"} • {answered} / {assigned} questions</p></div>
         </div>
         <div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div>
       </section>
 
-      <section className="cg-section-head"><h2>Continue learning</h2><Link href={continueHref}>See all</Link></section>
+      <section className="cg-section-head"><h2>Continue learning</h2><Link href={continueHref}>Open</Link></section>
       <Link href={continueHref} className="cg-course-card">
         <div className="cg-course-icon">{lessonDone ? "◎" : "✦"}</div>
-        <div className="cg-course-copy"><strong>{todaySession?.status === "completed" ? "Today complete" : lessonDone ? "Daily judgement challenge" : "Today’s mini lesson"}</strong><span>{todaySession?.status === "completed" ? "Lesson + challenge complete" : lessonDone ? `${Math.max(assigned - answered, 0)} questions left` : "3 fun minutes, then 5 mixed-format questions"}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
+        <div className="cg-course-copy"><strong>{todaySession?.status === "completed" ? "Today complete" : lessonDone ? "Daily judgement challenge" : "Today’s mini lesson"}</strong><span>{todaySession?.status === "completed" ? "Lesson + challenge complete" : lessonDone ? `${Math.max(assigned - answered, 0)} questions left` : `Built around ${audience?.label.toLowerCase()} decisions`}</span><div className="progress"><span style={{ width: `${dailyProgress}%` }} /></div></div>
         <div className="cg-play">▶</div>
       </Link>
 
       <section className="cg-section-head"><h2>Priority skills</h2><Link href="/skills">View all</Link></section>
       <div className="cg-topic-grid">
-        {recentSkills.map((row: any, index: number) => (
-          <Link href="/skills" className="cg-topic-card" key={index}>
-            <div className="cg-topic-icon">{index + 1}</div>
-            <strong>{skillName(row.skills)}</strong>
-            <span>{Math.round(row.score)}%</span>
-          </Link>
-        ))}
+        {recentSkills.map((row: any, index: number) => {
+          const skill = skillInfo(row.skills);
+          return (
+            <Link href={skill?.slug ? `/skills/${skill.slug}` : "/skills"} className="cg-topic-card" key={skill?.slug ?? index}>
+              <div className="cg-topic-icon">{index + 1}</div>
+              <strong>{skill?.name ?? "Skill"}</strong>
+              <span>{Math.round(row.score)}%</span>
+            </Link>
+          );
+        })}
       </div>
 
       <CoachCard />
 
       <section className="cg-card cg-focus-card">
         <div className="cg-kicker">Highest-value focus</div>
-        <h2>{skillName(weakest?.skills) ?? "Complete your diagnostic"}</h2>
+        <h2>{skillInfo(weakest?.skills)?.name ?? "Complete your diagnostic"}</h2>
         <p>{weakest ? `Current score ${Math.round(weakest.score)} with ${Math.round((weakest.reliability ?? 0) * 100)}% evidence confidence.` : "Cogni needs measured evidence before personalising your focus."}</p>
         <Link href={continueHref} className="cg-button cg-full">{todaySession?.status === "completed" ? "Review today’s result" : !lessonDone ? "Start today’s lesson" : answered ? "Continue challenge" : "Start challenge"}</Link>
       </section>

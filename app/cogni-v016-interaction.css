@@ -1,0 +1,129 @@
+/* Cogni v0.16 — unmistakable training entry points and interaction affordances. */
+
+/* Main navigation: Train is always the obvious route back into learning. */
+.cg-bottom-nav{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  overflow:visible;
+  padding:10px 8px max(9px,env(safe-area-inset-bottom));
+  bottom:max(10px,env(safe-area-inset-bottom));
+}
+.cg-bottom-nav a{
+  min-width:0;
+  min-height:46px;
+  justify-content:center;
+  border-radius:13px;
+  transition:transform .16s ease,color .16s ease,background .16s ease;
+}
+.cg-bottom-nav a:active{transform:scale(.94)}
+.cg-bottom-nav .cg-nav-train{
+  width:60px;
+  height:60px;
+  min-height:60px;
+  justify-self:center;
+  align-self:center;
+  margin-top:-24px;
+  padding:7px 5px 6px;
+  color:#fff;
+  border:1px solid rgba(143,125,255,.65);
+  border-radius:20px;
+  background:linear-gradient(145deg,#0e9bff 0%,#5963ff 48%,#a63cff 100%);
+  box-shadow:0 10px 28px rgba(73,88,255,.42),0 0 24px rgba(29,205,255,.16);
+}
+.cg-bottom-nav .cg-nav-train svg{width:24px;height:24px}
+.cg-bottom-nav .cg-nav-train span{font-size:10px;font-weight:800;color:#fff}
+.cg-bottom-nav .cg-nav-train.active{color:#fff;box-shadow:0 12px 32px rgba(73,88,255,.55),0 0 28px rgba(29,205,255,.24)}
+
+/* Today's training card is the primary Home action, not passive information. */
+.cg-daily-launch{
+  display:block;
+  position:relative;
+  overflow:hidden;
+  border-color:rgba(76,113,255,.58);
+  background:radial-gradient(circle at 90% 10%,rgba(157,61,255,.24),transparent 35%),radial-gradient(circle at 0 90%,rgba(23,213,255,.11),transparent 32%),linear-gradient(180deg,#111c3d,#0c1530);
+  box-shadow:0 18px 42px rgba(0,0,0,.26),0 0 0 1px rgba(90,100,255,.08),0 0 34px rgba(72,82,255,.10);
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.cg-daily-launch:before{
+  content:"";
+  position:absolute;
+  width:150px;
+  height:150px;
+  right:-55px;
+  top:-70px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(31,215,255,.24),transparent 67%);
+  pointer-events:none;
+}
+.cg-daily-launch:hover{border-color:rgba(87,137,255,.82);box-shadow:0 20px 48px rgba(0,0,0,.30),0 0 38px rgba(86,91,255,.15)}
+.cg-daily-launch:active{transform:scale(.988)}
+.cg-daily-launch-head{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative;z-index:1}
+.cg-daily-launch-head>span{font-size:12px;color:#aebbd8}
+.cg-daily-launch .cg-goal-row{position:relative;z-index:1;margin:18px 0 16px}
+.cg-daily-launch .cg-goal-row h2{font-size:21px;line-height:1.18;margin-bottom:6px}
+.cg-daily-launch .cg-goal-row p{font-size:13px;line-height:1.5;margin:0;color:#b8c4e0}
+.cg-launch-cta{
+  min-height:50px;
+  margin-top:16px;
+  padding:0 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border-radius:15px;
+  background:linear-gradient(90deg,#0f91ff,#5b62ff 52%,#ac3dff);
+  color:#fff;
+  font-weight:800;
+  box-shadow:0 10px 24px rgba(72,82,255,.25);
+  position:relative;
+  z-index:1;
+}
+.cg-launch-cta strong{font-size:23px;transition:transform .18s ease}
+.cg-daily-launch:hover .cg-launch-cta strong{transform:translateX(4px)}
+.cg-tap-hint{display:block;text-align:center;margin-top:8px;font-size:11px;color:#7f8eae;position:relative;z-index:1}
+.cg-daily-complete .cg-daily-actions{margin-top:16px}
+
+/* Clickable content should look clickable. Static cards remain visually quiet. */
+a.cg-topic-card,
+a.cg-course-card,
+a.cg-skill-card,
+a.cg-master-row,
+.cg-profile-links a,
+a.cg-context-pill,
+a.cg-context-strip{
+  cursor:pointer;
+  transition:transform .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease;
+}
+a.cg-topic-card:active,
+a.cg-course-card:active,
+a.cg-skill-card:active,
+a.cg-master-row:active,
+.cg-profile-links a:active,
+a.cg-context-pill:active,
+a.cg-context-strip:active{transform:scale(.985)}
+
+.cg-action-tile{position:relative;border-color:#2d3d62!important}
+.cg-action-tile:hover{border-color:#5064a8!important;background:linear-gradient(180deg,#14203c,#0e172d)!important;box-shadow:0 10px 26px rgba(0,0,0,.18)}
+.cg-topic-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cg-action-arrow{font-size:20px!important;color:#8b9ac1!important;line-height:1;align-self:auto!important;transition:transform .16s ease,color .16s ease}
+.cg-action-tile:hover .cg-action-arrow{transform:translateX(3px);color:#54d6ff!important}
+
+.cg-context-pill:after{content:"›";margin-left:2px;color:#8fa7df;font-size:17px;line-height:1}
+.cg-context-strip:after{content:"›";margin-left:4px;color:#8fa7df;font-size:16px;line-height:1}
+
+/* Keep non-actions calm so visual language remains trustworthy. */
+.cg-buddy-card,.cg-progress-summary,.cg-profile-stats{cursor:default}
+
+/* Reserve enough room for the raised Train button on mobile browsers. */
+.cg-consumer-main:not(.immersive){padding-bottom:132px}
+
+@media(max-width:390px){
+  .cg-bottom-nav{width:min(calc(100% - 18px),392px);padding-left:5px;padding-right:5px}
+  .cg-bottom-nav a{font-size:9px;padding-left:2px;padding-right:2px}
+  .cg-bottom-nav .cg-nav-train{width:56px;height:56px;min-height:56px}
+  .cg-daily-launch .cg-goal-row{gap:12px}
+  .cg-daily-launch .cg-goal-row h2{font-size:19px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .cg-bottom-nav a,.cg-daily-launch,.cg-launch-cta strong,a.cg-topic-card,a.cg-course-card,a.cg-skill-card,a.cg-master-row,.cg-profile-links a,a.cg-context-pill,a.cg-context-strip,.cg-action-arrow{transition:none!important}
+}

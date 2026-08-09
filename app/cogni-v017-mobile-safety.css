@@ -1,0 +1,99 @@
+/* Cogni v0.17 — mobile containment, clear affordances and long-content safety. */
+
+/* Nothing in the learner experience should create accidental horizontal scrolling. */
+html,body{max-width:100%;overflow-x:clip}
+.cg-consumer-bg,.cg-phone-app,.cg-consumer-main,.cg-mobile-page,.cg-lesson-screen,.cg-quiz-screen,.cg-question-stage,.cg-card,.cg-course-card,.cg-skill-card,.cg-topic-card,.cg-focus-card,.cg-result-panel{min-width:0;max-width:100%}
+.cg-mobile-page>*{min-width:0;max-width:100%}
+.cg-card,.cg-question-stage,.cg-lesson-story-card{overflow-wrap:anywhere}
+.cg-card h1,.cg-card h2,.cg-card h3,.cg-card p,.cg-question-stage h1,.cg-question-stage p,.cg-lesson-story-card h1,.cg-lesson-story-card p{max-width:100%;overflow-wrap:anywhere;word-break:normal}
+
+/* Situation/context text must wrap; it is content, not a one-line chip. */
+.cg-context-strip{
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box;
+  white-space:normal!important;
+  overflow:hidden;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  line-height:1.45;
+}
+.cg-lesson-screen .cg-context-strip{
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:8px 10px;
+  align-items:start;
+}
+.cg-lesson-screen .cg-context-strip>span{
+  min-width:0;
+  color:#8da0c2;
+  white-space:nowrap;
+}
+.cg-lesson-screen .cg-context-strip>strong{
+  min-width:0;
+  white-space:normal!important;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  line-height:1.45;
+}
+/* Only linked context rows get an affordance arrow. */
+.cg-context-strip:not(a)::after{content:none!important}
+a.cg-context-strip{display:flex;align-items:center;gap:6px;width:max-content!important;max-width:100%!important}
+a.cg-context-strip::after{content:"›";flex:0 0 auto;margin-left:2px;color:#8fa7df;font-size:16px;line-height:1}
+
+/* Question formats and answer controls must contain arbitrary real-world text. */
+.option,.cg-multi-option,.cg-ranked-item,.cg-rank-pool button,.cg-classification-card,.cg-triage-card,.cg-format-banner,.cg-confidence,.cg-correct-order>div{min-width:0;max-width:100%}
+.option>span:not(.cg-option-letter):not(.cg-check-box):not(.cg-answer-check),
+.cg-multi-option>span:not(.cg-check-box):not(.cg-answer-check),
+.cg-ranked-item strong,.cg-rank-pool button,.cg-classification-card>strong,.cg-triage-card strong,.cg-format-banner div,.cg-format-banner small,.cg-correct-order span{
+  min-width:0;
+  white-space:normal!important;
+  overflow-wrap:anywhere;
+  word-break:normal;
+}
+.cg-category-buttons{min-width:0;display:flex;flex-wrap:wrap;gap:7px}
+.cg-category-buttons button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+textarea.input,input.input,select.input{max-width:100%;min-width:0}
+
+/* Learning navigation cannot force the page wider on small phones. */
+.cg-immersive-toolbar{min-width:0;max-width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.cg-immersive-back{min-width:0;max-width:100%;white-space:normal;line-height:1.25}
+.cg-immersive-shortcuts{min-width:0;flex-shrink:0}
+.cg-autosave-note{max-width:100%;overflow-wrap:anywhere;padding-inline:8px}
+
+/* The five-tab nav matches the actual information architecture. */
+.cg-bottom-nav{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+.cg-bottom-nav a{min-width:0;overflow:hidden}
+.cg-bottom-nav a span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:clip}
+
+/* Primary actions should feel obviously actionable. */
+.cg-daily-launch,.cg-action-tile{cursor:pointer}
+.cg-daily-launch:focus-visible,.cg-action-tile:focus-visible{outline:3px solid rgba(23,213,255,.72);outline-offset:3px}
+.cg-launch-cta{font-size:15px}
+.cg-launch-cta span{min-width:0;overflow-wrap:anywhere}
+
+/* A few common two-column layouts should collapse before they become cramped. */
+@media(max-width:520px){
+  .cg-lesson-screen .cg-context-strip{grid-template-columns:1fr;gap:4px}
+  .cg-lesson-screen .cg-context-strip>span{white-space:normal}
+  .cg-review-answer-grid,.cg-profile-facts,.cg-session-footer-card{grid-template-columns:1fr}
+}
+
+@media(max-width:400px){
+  .cg-immersive-toolbar{grid-template-columns:minmax(0,1fr) auto;gap:4px;margin-inline:12px}
+  .cg-immersive-shortcuts .cg-immersive-shortcut:first-child{display:none}
+  .cg-immersive-back,.cg-immersive-shortcut{font-size:12px;padding-inline:6px}
+  .cg-bottom-nav{width:min(calc(100% - 12px),392px);padding-inline:4px}
+  .cg-bottom-nav a{font-size:9px;padding-inline:1px}
+}
+
+@media(max-width:350px){
+  .cg-question-title{font-size:22px}
+  .cg-question-prompt{font-size:16px}
+  .cg-lesson-story-card h1{font-size:32px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .cg-daily-launch,.cg-action-tile{transition:none!important}
+}

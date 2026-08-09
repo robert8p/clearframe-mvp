@@ -9,6 +9,11 @@ function nestedSkillName(value: unknown) {
   return "Skill";
 }
 
+function sentenceFragment(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toLocaleLowerCase() + value.slice(1);
+}
+
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -18,7 +23,7 @@ export async function GET() {
     supabase.from("user_skill_scores").select("score,reliability,attempts,skills(name)").eq("user_id", user.id).gt("attempts", 0).order("score"),
     supabase.from("user_error_patterns").select("pattern,count").eq("user_id", user.id).order("count", { ascending: false }).limit(3),
   ]);
-  if (!scoreRows?.length) return NextResponse.json({ insight: "Complete the diagnostic so Cogni can ground coaching in your actual performance." });
+  if (!scoreRows?.length) return NextResponse.json({ insight: "Complete the starting check so Cogni can ground coaching in your actual performance." });
 
   const skills: MeasuredSkill[] = scoreRows.map((row: any) => ({ name: nestedSkillName(row.skills), score: Number(row.score), reliability: Number(row.reliability), attempts: Number(row.attempts) }));
   const patterns: ErrorPatternCount[] = (patternRows ?? []).map((row: any) => ({ pattern: String(row.pattern), count: Number(row.count) }));
@@ -27,7 +32,10 @@ export async function GET() {
   const confidence = evidenceConfidence(skills);
   const focus = focusPath(skills, 3);
   const topPattern = patternCopy(patterns[0]?.pattern);
-  const deterministic = `Your strongest measured area is ${strongest.name}; your highest-value development area is ${weakest.name}. ${topPattern ? topPattern.narrative : "No recurring reasoning-error pattern is strong enough to call yet."} This week: ${focus.join(" → ")}. Evidence confidence is ${confidence.label.toLowerCase()}.`;
+  const strongestText = sentenceFragment(strongest.name);
+  const weakestText = sentenceFragment(weakest.name);
+  const focusText = focus.map(sentenceFragment).join(" → ");
+  const deterministic = `Your strongest measured area is ${strongestText}; the skill that would help you most right now is ${weakestText}. ${topPattern ? topPattern.narrative : "No recurring reasoning pattern is strong enough to call yet."} This week: ${focusText}. Your evidence level is ${confidence.label.toLowerCase()}.`;
 
   if (!process.env.OPENAI_API_KEY) return NextResponse.json({ insight: deterministic, source: "grounded_fallback" });
 
@@ -35,7 +43,7 @@ export async function GET() {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const response = await client.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-5-mini",
-      input: `You are Cogni, a concise learning coach. Write one useful paragraph, maximum 70 words. Do not make psychometric or personality claims. Use only these facts:\n- strongest measured skill: ${strongest.name}, score ${strongest.score}\n- highest-value development area: ${weakest.name}, score ${weakest.score}\n- evidence confidence: ${confidence.label}\n- top recurring reasoning pattern: ${topPattern?.label ?? "none strong enough yet"}\n- pattern interpretation: ${topPattern?.narrative ?? "no stable error pattern"}\n- weekly focus order: ${focus.join(" -> ")}\nExplain the learner's most useful focus for the coming week.`,
+      input: `You are Cogni, a concise learning coach. Write one useful paragraph, maximum 70 words. Do not make psychometric or personality claims. Use only these facts:\n- strongest measured skill: ${strongestText}, score ${strongest.score}\n- skill that would help most now: ${weakestText}, score ${weakest.score}\n- evidence level: ${confidence.label}\n- top recurring reasoning pattern: ${topPattern?.label ?? "none strong enough yet"}\n- pattern interpretation: ${topPattern?.narrative ?? "no stable error pattern"}\n- weekly focus order: ${focusText}\nUse natural sentence case. Skill names inside sentences should not be capitalised like headings. Explain the learner's most useful focus for the coming week in clear everyday language.`,
     });
     return NextResponse.json({ insight: response.output_text || deterministic, source: response.output_text ? "ai" : "grounded_fallback" });
   } catch (error) {

@@ -39,7 +39,7 @@ export default async function DashboardPage() {
   const contextLine = contextSummary(audience, context);
   const scores = (scoreData ?? []) as ScoreRow[];
 
-  let assigned = audienceQuestionCount(audience);
+  let assigned: number = audienceQuestionCount(audience);
   let answered = 0;
   if (todaySession?.id) {
     const [{ count: assignedCount }, { count: answeredCount }] = await Promise.all([

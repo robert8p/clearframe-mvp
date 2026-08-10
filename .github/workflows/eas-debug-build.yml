@@ -1,4 +1,4 @@
-name: EAS verify replacement Android build
+name: EAS check replacement Android build
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
       - ".github/workflows/eas-debug-build.yml"
 
 jobs:
-  verify-build:
+  check-build:
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -17,32 +17,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: "mobile/package-lock.json"
-      - name: Install mobile dependencies
-        working-directory: mobile
-        run: npm ci --include=dev --no-audit --no-fund
-      - name: Wait for replacement build
+      - name: Check replacement build status
         working-directory: mobile
         run: |
-          for attempt in $(seq 1 24); do
-            npx eas-cli@latest build:view "$BUILD_ID" --json > /tmp/build.json
-            STATUS=$(node -e 'const b=require("/tmp/build.json"); console.log(String(b.status || "").toUpperCase())')
-            echo "Attempt $attempt: $STATUS"
-            if [ "$STATUS" = "FINISHED" ]; then
-              cat /tmp/build.json
-              exit 0
+          npx eas-cli@latest build:view "$BUILD_ID" --json > /tmp/build.json
+          cat /tmp/build.json
+          STATUS=$(node -e 'const b=require("/tmp/build.json"); console.log(String(b.status || "").toUpperCase())')
+          echo "STATUS=$STATUS"
+          if [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELED" ]; then
+            URL=$(node -e 'const b=require("/tmp/build.json"); console.log(b.logFiles?.[0] || "")')
+            if [ -n "$URL" ]; then
+              curl --compressed -fsSL "$URL" -o /tmp/eas-build.log
+              echo "===== EAS BUILD LOG ====="
+              cat /tmp/eas-build.log
             fi
-            if [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELED" ]; then
-              cat /tmp/build.json
-              URL=$(node -e 'const b=require("/tmp/build.json"); console.log(b.logFiles?.[0] || "")')
-              if [ -n "$URL" ]; then
-                curl --compressed -fsSL "$URL" -o /tmp/eas-build.log
-                echo "===== EAS BUILD LOG ====="
-                cat /tmp/eas-build.log
-              fi
-              exit 1
-            fi
-            sleep 15
-          done
-          echo "Build is still running; it can be checked in Expo."
+            exit 1
+          fi

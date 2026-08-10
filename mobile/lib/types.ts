@@ -1,0 +1,78 @@
+export type InteractionType = "single_choice" | "multi_select" | "ranking" | "classification" | "triage";
+export type Challenge = {
+  id: string;
+  title: string;
+  prompt: string;
+  options: string[];
+  challenge_type: string;
+  interaction_type: InteractionType;
+  interaction_config: Record<string, unknown>;
+  difficulty: number;
+  confidence_required: boolean;
+  audience_segments?: string[];
+  scenario_context?: string | null;
+  scenario_category?: string | null;
+};
+export type AnswerResult = {
+  correct: boolean;
+  correctIndex?: number | null;
+  correctAnswer?: unknown;
+  scoreFraction: number;
+  explanation: string;
+  thinkingPrinciple: string;
+  application: string;
+  errorPattern?: string | null;
+  skillUpdates: { slug: string; name?: string; score: number; reliability: number; delta?: number }[];
+  xpEarned: number;
+  sessionCompleted?: boolean;
+};
+export type DailyLesson = {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  emoji: string;
+  estimated_minutes: number;
+  scenario_context?: string | null;
+  content: { story: string; twist: string; principle: string; try_it: string; reveal: string; ai_age: string };
+};
+export type TrainingSession = { id: string; sessionDate?: string; status?: string; challenges: Challenge[]; answeredChallengeIds: string[] };
+export type TodayResponse = {
+  state: "onboarding" | "diagnostic" | "lesson" | "training" | "complete" | "unavailable";
+  profile?: Record<string, unknown>;
+  sessionId?: string;
+  answeredChallengeIds?: string[];
+  challenges?: Challenge[];
+  session?: TrainingSession;
+  lesson?: DailyLesson;
+  modeLabel?: string;
+  message?: string;
+};
+export type SkillScore = {
+  skill_id: string;
+  score: number;
+  reliability: number;
+  attempts: number;
+  last_seen_at?: string | null;
+  skills?: { name?: string; slug?: string; description?: string } | { name?: string; slug?: string; description?: string }[] | null;
+};
+export type MobileProfileResponse = {
+  profile: {
+    id: string;
+    email?: string;
+    full_name?: string | null;
+    audience_segment?: string | null;
+    function_area?: string | null;
+    industry?: string | null;
+    primary_goal?: string | null;
+    study_stage?: string | null;
+    role_focus?: string | null;
+    responsibility_scope?: string | null;
+    organisation_scale?: string | null;
+    xp?: number;
+    current_streak?: number;
+    last_session_date?: string | null;
+  };
+  skillScores: SkillScore[];
+  summary: { answers: number; averageScore: number | null };
+};

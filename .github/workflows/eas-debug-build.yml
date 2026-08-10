@@ -16,7 +16,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "mobile/package-lock.json"
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci --include=dev --no-audit --no-fund
       - name: List recent Android builds
         working-directory: mobile
-        run: |
-          npx eas-cli@21.7.1 build:list --platform android --limit 5 --json --non-interactive
+        run: npx eas-cli@21.7.1 build:list --platform android --limit 5 --json --non-interactive

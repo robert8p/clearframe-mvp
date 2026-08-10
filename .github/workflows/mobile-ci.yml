@@ -1,0 +1,31 @@
+name: Expo mobile CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+
+jobs:
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Expo dependency check
+        run: npx expo install --check
+      - name: TypeScript
+        run: npm run typecheck

@@ -1,0 +1,26 @@
+import React, { useEffect, useState } from "react";
+import { Redirect, router } from "expo-router";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
+import type { MobileProfileResponse } from "@/lib/types";
+import { Body, Card, Eyebrow, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
+
+const audiences = [
+  { slug: "university_student", icon: "🎓", label: "University student", text: "Sharper thinking for study, AI use and the move into work" },
+  { slug: "graduate_early_career", icon: "🚀", label: "Graduate / early career", text: "Build the judgement that makes people trust your work" },
+  { slug: "junior_professional", icon: "💼", label: "Junior professional", text: "Turn analysis into stronger recommendations and decisions" },
+  { slug: "management", icon: "🧭", label: "Management", text: "Make clearer decisions about people, priorities, resources and risk" },
+  { slug: "executive", icon: "♟", label: "Executive", text: "Sharpen strategic judgement under uncertainty" },
+] as const;
+
+export default function OnboardingScreen() {
+  const { session, loading: authLoading } = useAuth(); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const [audience, setAudience] = useState(""); const [functionArea, setFunctionArea] = useState(""); const [industry, setIndustry] = useState(""); const [goal, setGoal] = useState("");
+  useEffect(() => { if (!session) { setLoading(false); return; } apiFetch<MobileProfileResponse>("/api/mobile/profile").then((data) => { setAudience(data.profile.audience_segment ?? ""); setFunctionArea(data.profile.function_area ?? ""); setIndustry(data.profile.industry ?? ""); setGoal(data.profile.primary_goal ?? ""); }).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load your profile.")).finally(() => setLoading(false)); }, [session]);
+  if (authLoading || loading) return <LoadingState />; if (!session) return <Redirect href="/login" />;
+  async function save() { if (!audience) return; setBusy(true); setError(""); try { await apiFetch("/api/mobile/profile", { method: "POST", body: JSON.stringify({ audienceSegment: audience, functionArea: functionArea || null, industry: industry || null, primaryGoal: goal || null }) }); router.replace("/(tabs)/train"); } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not save your learning context."); } finally { setBusy(false); } }
+  const isStudent = audience === "university_student";
+  return <Screen><Eyebrow>Make Cogni relevant to you</Eyebrow><Title>Where are you in your journey?</Title><Body muted>Cogni keeps one skill history, but changes the situations it uses to match the decisions you face.</Body><View style={{ gap: 10 }}>{audiences.map((item) => <Pressable key={item.slug} onPress={() => setAudience(item.slug)} style={{ minHeight: 82, padding: 14, borderRadius: 19, borderCurve: "continuous", borderWidth: 1, borderColor: audience === item.slug ? colors.violet : colors.line, backgroundColor: audience === item.slug ? "rgba(105,92,255,.15)" : colors.panel, flexDirection: "row", alignItems: "center", gap: 13 }}><Text style={{ fontSize: 28 }}>{item.icon}</Text><View style={{ flex: 1, gap: 3 }}><Text style={{ color: colors.text, fontSize: 17, fontWeight: "800" }}>{item.label}</Text><Text style={{ color: colors.muted, fontSize: 14, lineHeight: 20 }}>{item.text}</Text></View>{audience === item.slug ? <Text style={{ color: colors.cyan, fontSize: 20, fontWeight: "900" }}>✓</Text> : null}</Pressable>)}</View>{audience ? <Card><Eyebrow>Optional — make scenarios even closer to your world</Eyebrow><Text style={{ color: colors.text, fontWeight: "700" }}>{isStudent ? "Study area" : "Function / discipline"}</Text><TextInput value={functionArea} onChangeText={setFunctionArea} placeholder={isStudent ? "e.g. Economics, Engineering, Law" : "e.g. Finance, Technology, Marketing"} placeholderTextColor={colors.soft} style={{ minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel2, color: colors.text, paddingHorizontal: 13, fontSize: 16 }} /><Text style={{ color: colors.text, fontWeight: "700" }}>Industry</Text><TextInput value={industry} onChangeText={setIndustry} placeholder="Optional" placeholderTextColor={colors.soft} style={{ minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel2, color: colors.text, paddingHorizontal: 13, fontSize: 16 }} /><Text style={{ color: colors.text, fontWeight: "700" }}>What do you most want to improve?</Text><TextInput value={goal} onChangeText={setGoal} placeholder="e.g. Make better recommendations" placeholderTextColor={colors.soft} style={{ minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel2, color: colors.text, paddingHorizontal: 13, fontSize: 16 }} /></Card> : null}{error ? <Text selectable style={{ color: "#ff9ac0", lineHeight: 21 }}>{error}</Text> : null}<PrimaryButton label={busy ? "Saving…" : "Continue to Cogni"} disabled={!audience || busy} onPress={() => void save()} /></Screen>;
+}

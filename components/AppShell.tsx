@@ -22,11 +22,10 @@ function NavIcon({ type }: { type: string }) {
   return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>;
 }
 
-function immersiveBack(pathname: string) {
-  if (pathname === "/diagnostic") return { href: "/onboarding", label: "Exit starting check" };
-  if (pathname.startsWith("/practice")) return { href: "/skills", label: "Exit practice" };
-  if (pathname.startsWith("/lesson")) return { href: "/dashboard", label: "Exit lesson" };
-  return { href: "/dashboard", label: "Exit questions" };
+function learningBack(pathname: string) {
+  if (pathname === "/diagnostic") return { href: "/onboarding", label: "Back" };
+  if (pathname.startsWith("/practice")) return { href: "/skills", label: "Back to skills" };
+  return { href: "/dashboard", label: "Back" };
 }
 
 function AmbientLayer() {
@@ -38,20 +37,30 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
   const internal = pathname.startsWith("/admin") || pathname.startsWith("/analytics");
   const onboarding = pathname.startsWith("/onboarding");
   const activeDiagnostic = pathname === "/diagnostic";
-  const immersive = pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/practice") || activeDiagnostic;
+  const learning = pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/practice") || activeDiagnostic;
 
   if (internal) return <div className="cg-admin-page"><a className="cg-skip-link" href="#main-content">Skip to content</a><AmbientLayer /><aside className="cg-admin-sidebar"><CogniMark href="/dashboard" /><nav className="cg-admin-nav" aria-label="Internal tools"><Link href="/dashboard">Consumer app</Link><Link href="/admin">Content</Link><Link href="/analytics">Engagement</Link><Link href="/analytics/audience">Audience quality</Link></nav><SignOutButton /></aside><main id="main-content" className="cg-admin-main"><div className="cg-admin-brandline"><CogniMark href="/dashboard" compact /></div>{children}</main></div>;
 
   const profileBranch = pathname.startsWith("/settings") || pathname.startsWith("/achievements") || pathname.startsWith("/support");
   const homeBranch = pathname === "/dashboard" || onboarding || pathname.startsWith("/diagnostic/results");
-  const trainBranch = pathname === "/train" || pathname === "/session-complete";
-  const back = immersiveBack(pathname);
-  const brandHref = activeDiagnostic || onboarding ? "/onboarding" : pathname.startsWith("/practice") ? "/skills" : "/dashboard";
+  const trainBranch = pathname === "/train" || pathname === "/session-complete" || pathname.startsWith("/lesson") || pathname.startsWith("/training") || pathname.startsWith("/practice");
+  const back = learningBack(pathname);
+  const brandHref = activeDiagnostic || onboarding ? "/onboarding" : "/dashboard";
 
-  return <div className="cg-consumer-bg"><div className="cg-phone-app"><a className="cg-skip-link" href="#main-content">Skip to content</a><AmbientLayer /><header className="cg-app-brandbar"><CogniMark href={brandHref} compact />{isAdmin && pathname === "/settings" ? <Link href="/admin" className="cg-mini-admin">Admin</Link> : null}</header>{immersive && <><nav className="cg-immersive-toolbar" aria-label="Learning navigation"><Link href={back.href} className="cg-immersive-back">← {back.label}</Link><div className="cg-immersive-shortcuts"><Link href="/skills" className="cg-immersive-shortcut">Skills</Link><Link href="/settings" className="cg-immersive-shortcut">Profile</Link></div></nav><div className="cg-autosave-note"><strong>✓ Progress saves automatically</strong></div></>}<main id="main-content" className={`cg-consumer-main ${immersive ? "immersive" : ""}`}>{children}</main>{!immersive && <nav className="cg-bottom-nav" aria-label="Main navigation">{consumerItems.map(([href, label, icon]) => {
-    const resolvedHref = onboarding && href === "/dashboard" ? "/onboarding" : href;
-    const active = href === "/dashboard" ? homeBranch : href === "/train" ? trainBranch : href === "/settings" ? profileBranch : pathname === href || pathname.startsWith(href);
-    const className = `${active ? "active " : ""}${icon === "train" ? "cg-nav-train" : ""}`.trim();
-    return <Link key={href} href={resolvedHref} className={className} aria-current={active ? "page" : undefined}><NavIcon type={icon} /><span>{label}</span></Link>;
-  })}</nav>}</div></div>;
+  return <div className="cg-consumer-bg"><div className="cg-phone-app"><a className="cg-skip-link" href="#main-content">Skip to content</a><AmbientLayer />
+    <div className={`cg-persistent-top ${learning ? "is-learning" : ""}`}>
+      <header className="cg-app-brandbar"><CogniMark href={brandHref} compact />{isAdmin && pathname === "/settings" ? <Link href="/admin" className="cg-mini-admin">Admin</Link> : null}</header>
+      {learning && <nav className="cg-immersive-toolbar" aria-label="Learning navigation">
+        <Link href={back.href} className="cg-immersive-back">← {back.label}</Link>
+        <div className="cg-immersive-shortcuts"><Link href="/dashboard" className="cg-immersive-shortcut">Home</Link><Link href="/settings" className="cg-immersive-shortcut">Profile</Link></div>
+      </nav>}
+    </div>
+    <main id="main-content" className={`cg-consumer-main ${learning ? "immersive" : ""}`}>{children}</main>
+    <nav className="cg-bottom-nav" aria-label="Main navigation">{consumerItems.map(([href, label, icon]) => {
+      const resolvedHref = onboarding && href === "/dashboard" ? "/onboarding" : href;
+      const active = href === "/dashboard" ? homeBranch : href === "/train" ? trainBranch : href === "/settings" ? profileBranch : pathname === href || pathname.startsWith(href);
+      const className = `${active ? "active " : ""}${icon === "train" ? "cg-nav-train" : ""}`.trim();
+      return <Link key={href} href={resolvedHref} className={className} aria-current={active ? "page" : undefined}><NavIcon type={icon} /><span>{label}</span></Link>;
+    })}</nav>
+  </div></div>;
 }

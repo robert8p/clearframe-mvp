@@ -2,6 +2,12 @@ name: EAS Android preview
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/app.json"
+      - "mobile/eas.json"
+      - ".github/workflows/eas-android-preview.yml"
 
 permissions:
   contents: write
@@ -21,30 +27,40 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Require Expo token
+      - name: Check Expo token
+        id: expo_auth
         run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "Missing GitHub Actions secret EXPO_TOKEN."
-            exit 1
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Expo token is available; continuing with EAS link and build."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "EXPO_TOKEN is not configured yet; skipping EAS link/build safely."
           fi
 
       - name: Install mobile dependencies
+        if: steps.expo_auth.outputs.available == 'true'
         run: npm install --no-audit --no-fund
 
       - name: Check Expo dependencies
+        if: steps.expo_auth.outputs.available == 'true'
         run: npx expo install --check
 
       - name: TypeScript check
+        if: steps.expo_auth.outputs.available == 'true'
         run: npm run typecheck
 
       - name: Link existing Expo project
+        if: steps.expo_auth.outputs.available == 'true'
         run: npx eas-cli@latest init --account cogniapp --force --json --non-interactive
 
       - name: Verify EAS project ID was persisted
+        if: steps.expo_auth.outputs.available == 'true'
         run: |
           node -e 'const c=require("./app.json"); const id=c.expo?.extra?.eas?.projectId; if(!id){console.error("EAS project ID was not written to app.json"); process.exit(1)} console.log(`Linked EAS project: ${id}`)'
 
       - name: Persist Expo project link to repository
+        if: steps.expo_auth.outputs.available == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -55,4 +71,5 @@ jobs:
           fi
 
       - name: Start installable Android preview build
+        if: steps.expo_auth.outputs.available == 'true'
         run: npx eas-cli@latest build --platform android --profile preview --non-interactive --no-wait

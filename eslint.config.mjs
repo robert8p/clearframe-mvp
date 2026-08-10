@@ -21,5 +21,7 @@ export default defineConfig([
       "react-hooks/purity": "off",
     },
   },
-  globalIgnores([".next/**", "node_modules/**"]),
+  // The Expo app has its own TypeScript/tooling lifecycle under /mobile. Do not make
+  // the Next.js/Vercel pipeline parse React Native source with the web ESLint config.
+  globalIgnores([".next/**", "node_modules/**", "mobile/**"]),
 ]);

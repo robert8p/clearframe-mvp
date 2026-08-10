@@ -19,9 +19,12 @@ jobs:
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm install --no-audit --no-fund
-      - name: Show recent Android builds
+      - name: Fetch failed build log
         working-directory: mobile
-        run: npx eas-cli@latest build:list --platform android --limit 3 --json --non-interactive
-      - name: Show failed build details
-        working-directory: mobile
-        run: npx eas-cli@latest build:view 0b5b455d-27da-43ae-bfd8-2445f74cb036 --json || true
+        run: |
+          npx eas-cli@latest build:view 0b5b455d-27da-43ae-bfd8-2445f74cb036 --json > /tmp/build.json
+          URL=$(node -e 'const b=require("/tmp/build.json"); console.log(b.logFiles?.[0] || "")')
+          test -n "$URL"
+          curl -fsSL "$URL" -o /tmp/eas-build.log
+          echo "===== EAS BUILD LOG ====="
+          cat /tmp/eas-build.log

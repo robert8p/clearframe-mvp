@@ -74,4 +74,4 @@ jobs:
         if: steps.expo_auth.outputs.available == 'true'
         run: npx eas-cli@latest build --platform android --profile preview --non-interactive --no-wait
 
-      # This comment intentionally triggers a fresh run after EXPO_TOKEN is added.
+      # Fresh trigger after EXPO_TOKEN was confirmed as a repository secret.

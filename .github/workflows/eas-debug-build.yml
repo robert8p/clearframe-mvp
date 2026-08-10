@@ -19,12 +19,37 @@ jobs:
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm install --no-audit --no-fund
-      - name: Fetch failed build log
+      - name: Fetch and decode failed build log
         working-directory: mobile
         run: |
           npx eas-cli@latest build:view 0b5b455d-27da-43ae-bfd8-2445f74cb036 --json > /tmp/build.json
           URL=$(node -e 'const b=require("/tmp/build.json"); console.log(b.logFiles?.[0] || "")')
           test -n "$URL"
           curl -fsSL "$URL" -o /tmp/eas-build.log
-          echo "===== EAS BUILD LOG ====="
-          cat /tmp/eas-build.log
+          file /tmp/eas-build.log
+          xxd -l 32 /tmp/eas-build.log
+          python - <<'PY'
+          from pathlib import Path
+          import gzip, bz2, lzma, zlib
+          p=Path('/tmp/eas-build.log')
+          data=p.read_bytes()
+          decoders=[
+              ('gzip', gzip.decompress),
+              ('bz2', bz2.decompress),
+              ('lzma', lzma.decompress),
+              ('zlib', zlib.decompress),
+          ]
+          text=None
+          for name, fn in decoders:
+              try:
+                  out=fn(data)
+                  text=out.decode('utf-8','replace')
+                  print(f'===== decoded with {name} =====')
+                  break
+              except Exception:
+                  pass
+          if text is None:
+              text=data.decode('utf-8','replace')
+              print('===== raw utf-8 fallback =====')
+          print(text)
+          PY

@@ -5,12 +5,14 @@ on:
   push:
     branches: [main]
     paths:
+      - "mobile/package.json"
+      - "mobile/package-lock.json"
       - "mobile/app.json"
       - "mobile/eas.json"
       - ".github/workflows/eas-android-preview.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-preview:
@@ -26,52 +28,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "mobile/package-lock.json"
 
-      - name: Check Expo token
-        id: expo_auth
+      - name: Require Expo token
         run: |
-          if [ -n "$EXPO_TOKEN" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "Expo token is available; continuing with EAS link and build."
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "EXPO_TOKEN is not configured yet; skipping EAS link/build safely."
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN is not configured."
+            exit 1
           fi
 
-      - name: Install mobile dependencies
-        if: steps.expo_auth.outputs.available == 'true'
-        run: npm install --no-audit --no-fund
+      - name: Strict mobile dependency install
+        run: npm ci --include=dev --no-audit --no-fund
 
       - name: Check Expo dependencies
-        if: steps.expo_auth.outputs.available == 'true'
         run: npx expo install --check
 
       - name: TypeScript check
-        if: steps.expo_auth.outputs.available == 'true'
         run: npm run typecheck
 
-      - name: Link existing Expo project
-        if: steps.expo_auth.outputs.available == 'true'
-        run: npx eas-cli@latest init --account cogniapp --force --json --non-interactive
-
-      - name: Verify EAS project ID was persisted
-        if: steps.expo_auth.outputs.available == 'true'
+      - name: Verify Expo project link
         run: |
-          node -e 'const c=require("./app.json"); const id=c.expo?.extra?.eas?.projectId; if(!id){console.error("EAS project ID was not written to app.json"); process.exit(1)} console.log(`Linked EAS project: ${id}`)'
-
-      - name: Persist Expo project link to repository
-        if: steps.expo_auth.outputs.available == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Persist Expo EAS project link"
-            git push origin HEAD:main
-          fi
+          node -e 'const c=require("./app.json"); const id=c.expo?.extra?.eas?.projectId; if(id!=="24fc0fea-5e66-4365-a82c-ac668aded7d0"){console.error(`Unexpected EAS project ID: ${id}`); process.exit(1)} console.log(`Linked EAS project: ${id}`)'
 
       - name: Start installable Android preview build
-        if: steps.expo_auth.outputs.available == 'true'
         run: npx eas-cli@latest build --platform android --profile preview --non-interactive --no-wait
-
-      # Fresh trigger after EXPO_TOKEN was confirmed as a repository secret.

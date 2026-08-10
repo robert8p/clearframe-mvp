@@ -1,4 +1,4 @@
-name: EAS check replacement Android build
+name: EAS list recent Android builds
 
 on:
   push:
@@ -7,29 +7,16 @@ on:
       - ".github/workflows/eas-debug-build.yml"
 
 jobs:
-  check-build:
+  list-builds:
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      BUILD_ID: "4fabb187-08fc-4f82-a6dd-1c3913d1738a"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Check replacement build status
+      - name: List recent Android builds
         working-directory: mobile
         run: |
-          npx eas-cli@latest build:view "$BUILD_ID" --json > /tmp/build.json
-          cat /tmp/build.json
-          STATUS=$(node -e 'const b=require("/tmp/build.json"); console.log(String(b.status || "").toUpperCase())')
-          echo "STATUS=$STATUS"
-          if [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELED" ]; then
-            URL=$(node -e 'const b=require("/tmp/build.json"); console.log(b.logFiles?.[0] || "")')
-            if [ -n "$URL" ]; then
-              curl --compressed -fsSL "$URL" -o /tmp/eas-build.log
-              echo "===== EAS BUILD LOG ====="
-              cat /tmp/eas-build.log
-            fi
-            exit 1
-          fi
+          npx eas-cli@21.7.1 build:list --platform android --limit 5 --json --non-interactive

@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Cogni",
+    "slug": "cogni",
+    "owner": "cogniapp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "cogni",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.gocogni.cogni"
+    },
+    "android": {
+      "package": "app.gocogni.cogni",
+      "adaptiveIcon": {
+        "backgroundColor": "#070d1b"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -125,3 +125,25 @@ where answered > 12
      having count(*) > 1
    )
 order by user_id, first_at;
+
+-- 5. Profile XP should reconcile exactly to persisted response XP plus one-time lesson XP.
+with response_xp as (
+  select user_id, coalesce(sum(xp_awarded), 0)::bigint as response_xp
+  from public.user_responses
+  group by user_id
+), lesson_xp as (
+  select user_id, count(*)::bigint * 5 as lesson_xp
+  from public.user_lesson_completions
+  group by user_id
+)
+select
+  p.id,
+  p.xp,
+  coalesce(r.response_xp, 0) as response_xp,
+  coalesce(l.lesson_xp, 0) as lesson_xp,
+  p.xp - (coalesce(r.response_xp, 0) + coalesce(l.lesson_xp, 0)) as unexplained_delta
+from public.profiles p
+left join response_xp r on r.user_id = p.id
+left join lesson_xp l on l.user_id = p.id
+where p.xp <> coalesce(r.response_xp, 0) + coalesce(l.lesson_xp, 0)
+order by p.created_at;

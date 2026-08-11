@@ -18,51 +18,43 @@ The existing Next.js app remains the web, admin and analytics surface. Both clie
 - extra three-question skill practice after the daily session
 - animated Cogni orb and native mobile layout
 
+## Current build status
+
+The Expo/EAS project is linked and the first installable Android internal-preview build has completed successfully.
+
+Routine mobile changes are validated by the `Expo mobile CI` GitHub Actions workflow. Installable Android previews are intentionally created only when requested through the `EAS Android preview` workflow, so ordinary source commits do not start unnecessary EAS builds.
+
 ## Run in Expo Go
 
 From the repository:
 
 ```bash
 cd mobile
-npm install
+npm ci
 npx expo start
 ```
 
-Scan the QR code with Expo Go. The app defaults to the live Cogni Supabase project and `https://gocogni.vercel.app` API. You can override the public values by copying `.env.example` to `.env`.
+Scan the QR code with Expo Go. The app defaults to the live Cogni backend. You can override public values by copying `.env.example` to `.env`.
 
-## Link to the Expo project you already created
+## Build an installable Android preview
 
-The source deliberately does not guess an Expo owner or EAS project ID.
+In GitHub, open **Actions**, choose **EAS Android preview**, then choose **Run workflow** on `main`.
 
-Either set:
+The workflow first runs a strict dependency install, Expo dependency compatibility check, TypeScript check and Expo-project-link check. It then requests an internal Android preview build from EAS.
 
-```bash
-EXPO_OWNER=<your Expo account or organisation>
-EXPO_PROJECT_ID=<your EAS project UUID>
-```
-
-or, from this directory, run:
+Local equivalent:
 
 ```bash
-npx eas-cli@latest init
+cd mobile
+npm ci
+npx expo install --check
+npm run typecheck
+npx eas-cli@21.7.1 build --platform android --profile preview
 ```
 
-and choose the existing Cogni project. EAS will add/link the project ID.
+## Production builds
 
-## Build
-
-After the project is linked:
-
-```bash
-npx eas-cli@latest build --platform android --profile preview
-npx eas-cli@latest build --platform ios --profile preview
-```
-
-For store-ready builds:
-
-```bash
-npx eas-cli@latest build --platform all --profile production
-```
+Store-ready builds are not automated yet. When store release work begins, use the production build profile and configure the Android/iOS store credentials and submission path deliberately.
 
 App identifiers are currently:
 

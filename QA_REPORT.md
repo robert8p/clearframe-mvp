@@ -9,12 +9,15 @@ Cogni is at internal-alpha stage across the production web app and native Androi
 - Production web/API: `https://gocogni.vercel.app`
 - Supabase project: `dhklfrqhsmofqrawfdjz`
 - Expo/EAS project: `24fc0fea-5e66-4365-a82c-ac668aded7d0`
+- Final Android internal-preview build: `4ee40b09-7a91-43e7-a3dd-df2eaded166e`
+- Final APK SHA-256: `3ebed1aaa91777e2d72cc76ea76659cf98d8b0243176bde1cdcd3eabe7b05f65`
 - Mobile dependency / Expo compatibility / TypeScript CI: passing
 - Production Vercel deployments after the integrity hardening: READY
 - Production error/fatal runtime-log check: clean
 - Android package: `app.gocogni.cogni`
+- Android version: `0.1.0` / version code `1`
+- Android min SDK: 24
 - Android target SDK: 36
-- Android internal-preview APK build and binary verification path: working
 
 ## Production content integrity
 
@@ -129,16 +132,24 @@ The consolidated native CI passed after these changes.
 
 ### Android permission minimisation
 
-Binary inspection of the validated Android APK surfaced `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, none of which are required by Cogni's current feature set.
+Binary inspection of an earlier Android APK surfaced `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, none of which are required by Cogni's current feature set.
 
-The Expo Android config now explicitly blocks all three permissions. A permission-minimised EAS preview build has been initiated and must pass final APK manifest inspection before it supersedes the previously validated internal APK.
+The Android config now blocks all three. Final binary inspection of build `4ee40b09-7a91-43e7-a3dd-df2eaded166e` proved they are absent from the built manifest.
 
-## Android APK binary verification already proven
+The final manifest requests only:
 
-For the pre-permission-minimisation internal build, GitHub Actions downloaded the actual EAS APK and verified:
+- `app.gocogni.cogni.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
+- `android.permission.INTERNET`
+- `android.permission.VIBRATE`
+
+## Final Android APK binary verification
+
+GitHub Actions downloaded and inspected the actual final EAS APK. Verification passed for:
 
 - valid APK/ZIP archive
-- valid Android v2 signature with one signer
+- SHA-256 `3ebed1aaa91777e2d72cc76ea76659cf98d8b0243176bde1cdcd3eabe7b05f65`
+- valid Android v2 signature
+- one RSA 2048-bit signer
 - package `app.gocogni.cogni`
 - version name `0.1.0`
 - version code `1`
@@ -146,14 +157,24 @@ For the pre-permission-minimisation internal build, GitHub Actions downloaded th
 - target SDK 36
 - production Cogni API endpoint embedded
 - production Cogni Supabase endpoint embedded
+- unnecessary overlay/storage permissions absent
 
-The final permission-minimised artifact will be subjected to the same binary-level check before release acceptance.
+This artifact supersedes the earlier internal-preview APK for alpha testing.
+
+## CI/release workflow position
+
+The repository retains only two intended mobile workflows:
+
+- `Expo mobile CI`
+- `EAS Android preview`
+
+Both maintained workflows use current Node-24 GitHub Action runtimes. Android preview builds remain manual-only so normal commits do not consume EAS build capacity.
 
 ## Supabase security-advisor position
 
 Post-DDL security advisors showed no new function/privilege warnings from the new RPCs.
 
-The remaining material Auth hardening item is **leaked-password protection disabled**. This requires enabling in Supabase Auth settings before wider external access.
+The remaining material Auth hardening item is **leaked-password protection disabled**. This should be enabled in Supabase Auth settings before wider external access.
 
 Several RLS-enabled/no-policy notices remain informational for intentionally server-only tables such as answer keys; they should continue to be reviewed if any such table is later exposed directly to clients.
 
@@ -172,13 +193,12 @@ Several RLS-enabled/no-policy notices remain informational for intentionally ser
 
 ## Known next QA priorities
 
-1. Complete final binary inspection of the permission-minimised Android APK.
-2. Device-level walkthrough of the final Android APK for each of the five audiences.
-3. Test interruption/resume behaviour during diagnostic, lesson and daily training on a physical device.
-4. Validate accessibility, keyboard handling and small-screen layout on representative Android devices.
-5. Enable Supabase Auth leaked-password protection before wider external access.
-6. Add automated behavioural tests around answer/session integrity.
-7. Instrument internal-alpha retention and completion funnels before recruiting a wider pilot group.
+1. Device-level walkthrough of the final Android APK for each of the five audiences.
+2. Test interruption/resume behaviour during diagnostic, lesson and daily training on a physical device.
+3. Validate accessibility, keyboard handling and small-screen layout on representative Android devices.
+4. Enable Supabase Auth leaked-password protection before wider external access.
+5. Add automated behavioural tests around answer/session integrity.
+6. Instrument internal-alpha retention and completion funnels before recruiting a wider pilot group.
 
 ## Scientific boundary
 

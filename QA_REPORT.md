@@ -9,9 +9,12 @@ Cogni is at internal-alpha stage across the production web app and native Androi
 - Production web/API: `https://gocogni.vercel.app`
 - Supabase project: `dhklfrqhsmofqrawfdjz`
 - Expo/EAS project: `24fc0fea-5e66-4365-a82c-ac668aded7d0`
-- Installable Android internal-preview build: completed successfully
 - Mobile dependency / Expo compatibility / TypeScript CI: passing
-- Latest production Vercel deployment after the integrity hardening: READY
+- Production Vercel deployments after the integrity hardening: READY
+- Production error/fatal runtime-log check: clean
+- Android package: `app.gocogni.cogni`
+- Android target SDK: 36
+- Android internal-preview APK build and binary verification path: working
 
 ## Production content integrity
 
@@ -26,7 +29,7 @@ Current live content:
 - 16 audience-tagged lessons per active audience
 - 7 shared core diagnostic questions plus 5 audience-applied diagnostic questions per audience
 
-The following production checks currently return zero issues:
+The production integrity audit currently returns zero issues for:
 
 - published challenge without answer key
 - published challenge without skill mapping
@@ -38,8 +41,9 @@ The following production checks currently return zero issues:
 - invalid complexity value
 - streak date without a matching completed core training session
 - suspicious diagnostic sessions with more than 12 unique answers or fragmented session keys
+- profile XP not reconciling to persisted response XP plus one-time lesson XP
 
-The repeatable read-only version of these checks is stored in `scripts/internal_alpha_integrity.sql`.
+The repeatable read-only version is stored in `scripts/internal_alpha_integrity.sql`.
 
 ## Audience-depth checks
 
@@ -47,7 +51,7 @@ Audience difficulty and complexity increase progressively from university to exe
 
 The native and web flows share the same audience-aware engine, lesson assignment, persisted training sessions, scoring and skill history.
 
-## Integrity defects found and fixed during internal-alpha QA
+## Integrity and security defects found and fixed
 
 ### Diagnostic session binding
 
@@ -59,6 +63,7 @@ Fixed in both web and mobile answer APIs:
 - a partially completed starting check must continue under its existing session key
 - already-completed diagnostics cannot be resubmitted
 - already-answered starting-check challenges cannot be submitted again
+- training and practice challenge submissions are bound to a user-owned persisted session and assignment
 
 Shared protection is implemented in `lib/answer-guards.ts`.
 
@@ -73,7 +78,34 @@ Fixed so that:
 - practice and diagnostic responses do not extend the daily streak
 - the streak is changed at most once per local day
 
-One historical stale streak created by the previous behaviour was identified in production and corrected. A post-correction integrity audit returns zero streak inconsistencies.
+One historical stale streak created by the previous behaviour was identified in production and corrected. Post-correction integrity checks return zero streak inconsistencies.
+
+### Atomic XP and streak updates
+
+The previous server implementation used read-then-write profile updates. Concurrent requests could theoretically overwrite one another's XP increments.
+
+Production now uses `public.award_xp_and_maybe_streak(...)`:
+
+- one atomic database update for XP plus optional streak transition
+- `SECURITY INVOKER`
+- fixed empty `search_path`
+- negative XP rejected
+- execution revoked from `PUBLIC`, `anon` and `authenticated`
+- execution granted only to `service_role`
+
+The function was smoke-tested under `service_role` inside a rollback transaction without changing production values.
+
+### Atomic daily lesson completion
+
+Lesson completion previously inserted the completion row and updated XP as two separate database actions. A failure between them could persist completion without the +5 XP award.
+
+Production now uses `public.complete_daily_lesson_with_xp(...)`:
+
+- completion row and XP increment execute in one database transaction
+- duplicate completion for the same user/day returns 0 XP
+- client roles cannot execute the RPC directly; `service_role` only
+- test transaction proved first completion = +5 XP, duplicate = +0 XP, one total XP increment
+- test transaction was rolled back and verified not to persist any synthetic completion or XP
 
 ### Answer payload hardening
 
@@ -83,6 +115,47 @@ Both web and mobile answer APIs now reject malformed client payloads before scor
 - multi-select indexes are de-duplicated and must be valid
 - ranking responses must be a valid permutation containing every option exactly once
 - classification responses must classify every expected statement
+
+### Native authentication routing
+
+Native authenticated routes are now protected at the router layer rather than relying on downstream API failures:
+
+- signed-out users are constrained to public auth/entry screens
+- signed-in users are routed to onboarding/app screens
+- splash remains visible until initial auth state is resolved
+- native signup explicitly redirects email confirmation to the live Cogni login URL
+
+The consolidated native CI passed after these changes.
+
+### Android permission minimisation
+
+Binary inspection of the validated Android APK surfaced `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, none of which are required by Cogni's current feature set.
+
+The Expo Android config now explicitly blocks all three permissions. A permission-minimised EAS preview build has been initiated and must pass final APK manifest inspection before it supersedes the previously validated internal APK.
+
+## Android APK binary verification already proven
+
+For the pre-permission-minimisation internal build, GitHub Actions downloaded the actual EAS APK and verified:
+
+- valid APK/ZIP archive
+- valid Android v2 signature with one signer
+- package `app.gocogni.cogni`
+- version name `0.1.0`
+- version code `1`
+- min SDK 24
+- target SDK 36
+- production Cogni API endpoint embedded
+- production Cogni Supabase endpoint embedded
+
+The final permission-minimised artifact will be subjected to the same binary-level check before release acceptance.
+
+## Supabase security-advisor position
+
+Post-DDL security advisors showed no new function/privilege warnings from the new RPCs.
+
+The remaining material Auth hardening item is **leaked-password protection disabled**. This requires enabling in Supabase Auth settings before wider external access.
+
+Several RLS-enabled/no-policy notices remain informational for intentionally server-only tables such as answer keys; they should continue to be reviewed if any such table is later exposed directly to clients.
 
 ## Existing learning/content QA retained
 
@@ -95,16 +168,17 @@ Both web and mobile answer APIs now reject malformed client payloads before scor
 - persisted daily training sessions
 - idempotent lesson completion with +5 XP once per local day
 - audience-aware difficulty targeting and contextual selection
-- existing challenge XP of 7–12 based on score fraction
+- challenge XP of 7–12 based on score fraction
 
 ## Known next QA priorities
 
-1. Device-level walkthrough of the finished Android APK for each of the five audiences.
-2. Test interruption/resume behaviour during diagnostic, lesson and daily training on a physical device.
-3. Validate accessibility, keyboard handling and small-screen layout on representative Android devices.
-4. Review Supabase Auth leaked-password protection before wider external access.
-5. Add automated behavioural tests around answer/session integrity rather than relying only on build/type checks.
-6. Instrument internal-alpha retention and completion funnels before recruiting a wider pilot group.
+1. Complete final binary inspection of the permission-minimised Android APK.
+2. Device-level walkthrough of the final Android APK for each of the five audiences.
+3. Test interruption/resume behaviour during diagnostic, lesson and daily training on a physical device.
+4. Validate accessibility, keyboard handling and small-screen layout on representative Android devices.
+5. Enable Supabase Auth leaked-password protection before wider external access.
+6. Add automated behavioural tests around answer/session integrity.
+7. Instrument internal-alpha retention and completion funnels before recruiting a wider pilot group.
 
 ## Scientific boundary
 

@@ -39,28 +39,12 @@ export async function awardXpAndMaybeDailyStreak(
   xpEarned: number,
   completedCoreTraining: boolean,
 ) {
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("xp,current_streak,last_session_date")
-    .eq("id", userId)
-    .single();
+  const { error } = await supabase.rpc("award_xp_and_maybe_streak", {
+    p_user_id: userId,
+    p_xp_earned: xpEarned,
+    p_completed_core_training: completedCoreTraining,
+    p_today: localDateKey(),
+    p_yesterday: previousLocalDateKey(),
+  });
   if (error) throw error;
-
-  const updates: Record<string, unknown> = {
-    xp: Number(profile?.xp ?? 0) + xpEarned,
-  };
-
-  if (completedCoreTraining) {
-    const today = localDateKey();
-    if (profile?.last_session_date !== today) {
-      const yesterday = previousLocalDateKey();
-      updates.current_streak = profile?.last_session_date === yesterday
-        ? Number(profile?.current_streak ?? 0) + 1
-        : 1;
-      updates.last_session_date = today;
-    }
-  }
-
-  const { error: updateError } = await supabase.from("profiles").update(updates).eq("id", userId);
-  if (updateError) throw updateError;
 }

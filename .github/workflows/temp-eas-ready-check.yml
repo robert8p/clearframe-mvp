@@ -1,0 +1,29 @@
+name: Temporary EAS ready check
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "mobile/package-lock.json"
+      - name: Install mobile dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: View build
+        run: npx eas-cli@21.7.1 build:view 446e94b1-f60e-4906-977a-90a92fb2bc55 --json

@@ -3,9 +3,11 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View, t
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, gradients } from "@/lib/theme";
 
-export function Screen({ children, refreshing, onRefresh, contentStyle, ...props }: ScrollViewProps & { refreshing?: boolean; onRefresh?: () => void; contentStyle?: ViewStyle }) {
-  return <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={[{ padding: 20, paddingBottom: 120, gap: 16 }, contentStyle]} refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.cyan} /> : undefined} {...props}>{children}</ScrollView>;
-}
+type ScreenProps = ScrollViewProps & { refreshing?: boolean; onRefresh?: () => void; contentStyle?: ViewStyle };
+
+export const Screen = React.forwardRef<ScrollView, ScreenProps>(function Screen({ children, refreshing, onRefresh, contentStyle, ...props }, ref) {
+  return <ScrollView ref={ref} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={[{ padding: 20, paddingBottom: 120, gap: 16 }, contentStyle]} refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.cyan} /> : undefined} {...props}>{children}</ScrollView>;
+});
 
 export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   return <View style={[{ borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel, borderRadius: 22, borderCurve: "continuous", padding: 18, gap: 10 }, style]}>{children}</View>;

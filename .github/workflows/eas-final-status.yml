@@ -1,0 +1,29 @@
+name: Check permission-minimised Android build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/eas-final-status.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-status:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "mobile/package-lock.json"
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Read final Android build
+        working-directory: mobile
+        run: npx eas-cli@21.7.1 build:view 4ee40b09-7a91-43e7-a3dd-df2eaded166e --json

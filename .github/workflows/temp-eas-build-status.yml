@@ -22,4 +22,4 @@ jobs:
         with:
           node-version: "22"
       - name: View build
-        run: npx eas-cli@21.7.1 build:view 446e94b1-f60e-4906-977a-90a92fb2bc55 --json --non-interactive
+        run: npx eas-cli@21.7.1 build:view 446e94b1-f60e-4906-977a-90a92fb2bc55 --json

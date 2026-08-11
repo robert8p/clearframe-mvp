@@ -1,0 +1,80 @@
+name: Verify final Cogni Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apk-final-sanity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  apk-sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download final EAS APK
+        run: |
+          curl -L --fail --retry 3 --retry-delay 2 \
+            'https://expo.dev/artifacts/eas/oowUf-bjjuGy4c8l4IQjEVT6qgFdBasrZzNVGkU2xVw.apk' \
+            -o cogni.apk
+          test -s cogni.apk
+          ls -lh cogni.apk
+          sha256sum cogni.apk
+          file cogni.apk
+
+      - name: Verify APK archive integrity
+        run: unzip -t cogni.apk
+
+      - name: Inspect Android package and permissions
+        run: |
+          APKANALYZER="$(command -v apkanalyzer || true)"
+          if [ -z "$APKANALYZER" ] && [ -n "${ANDROID_HOME:-}" ] && [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" ]; then
+            APKANALYZER="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          fi
+          if [ -z "$APKANALYZER" ]; then
+            echo 'apkanalyzer unavailable.'
+            exit 1
+          fi
+
+          echo "application-id=$($APKANALYZER manifest application-id cogni.apk)"
+          echo "version-name=$($APKANALYZER manifest version-name cogni.apk)"
+          echo "version-code=$($APKANALYZER manifest version-code cogni.apk)"
+          echo "min-sdk=$($APKANALYZER manifest min-sdk cogni.apk)"
+          echo "target-sdk=$($APKANALYZER manifest target-sdk cogni.apk)"
+          echo 'permissions:'
+          $APKANALYZER manifest permissions cogni.apk | tee permissions.txt
+
+          for blocked in \
+            android.permission.SYSTEM_ALERT_WINDOW \
+            android.permission.READ_EXTERNAL_STORAGE \
+            android.permission.WRITE_EXTERNAL_STORAGE
+          do
+            if grep -Fxq "$blocked" permissions.txt; then
+              echo "Blocked permission still present: $blocked"
+              exit 1
+            fi
+          done
+          echo 'Verified blocked Android permissions are absent.'
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="$(command -v apksigner || true)"
+          if [ -z "$APKSIGNER" ] && [ -n "${ANDROID_HOME:-}" ]; then
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            echo 'apksigner unavailable.'
+            exit 1
+          fi
+          "$APKSIGNER" verify --verbose --print-certs cogni.apk
+
+      - name: Verify production endpoints are embedded
+        run: |
+          rm -rf apk-unpacked
+          unzip -q cogni.apk -d apk-unpacked
+          grep -R -a -F 'https://gocogni.vercel.app' apk-unpacked >/dev/null
+          grep -R -a -F 'https://dhklfrqhsmofqrawfdjz.supabase.co' apk-unpacked >/dev/null
+          echo 'Verified Cogni production API and Supabase endpoints are present.'

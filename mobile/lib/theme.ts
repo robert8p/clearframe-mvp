@@ -4,11 +4,11 @@ export const colors = {
   panel: "#101735",
   panel2: "#151e3f",
   panel3: "#1b2650",
-  line: "#273767",
-  lineStrong: "#3c4f8b",
+  line: "#31416f",
+  lineStrong: "#5369a5",
   text: "#f7f8ff",
   muted: "#aab4d6",
-  soft: "#7181ad",
+  soft: "#8194c4",
   cyan: "#00e5ff",
   blue: "#1686ff",
   violet: "#6b5cff",
@@ -17,6 +17,7 @@ export const colors = {
   green: "#22d3a4",
   pink: "#ec4899",
   amber: "#ffb020",
+  danger: "#ff8dc7",
   white: "#ffffff",
 } as const;
 

@@ -1,35 +1,44 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useReducedMotion } from "@/lib/accessibility";
 import { colors, gradients, glow } from "@/lib/theme";
 
 export function CogniMark({ size = 38, animated = true }: { size?: number; animated?: boolean }) {
+  const reducedMotion = useReducedMotion();
   const pulse = useRef(new Animated.Value(0)).current;
   const twinkle = useRef(new Animated.Value(0)).current;
+  const motionEnabled = animated && !reducedMotion;
 
   useEffect(() => {
-    if (!animated) return;
+    if (!motionEnabled) {
+      pulse.stopAnimation();
+      twinkle.stopAnimation();
+      pulse.setValue(0);
+      twinkle.setValue(0);
+      return;
+    }
     const pulseAnim = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 1900, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0, duration: 1900, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 2200, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 2200, useNativeDriver: true }),
     ]));
     const twinkleAnim = Animated.loop(Animated.sequence([
-      Animated.timing(twinkle, { toValue: 1, duration: 1200, useNativeDriver: true }),
-      Animated.timing(twinkle, { toValue: 0, duration: 1200, useNativeDriver: true }),
+      Animated.timing(twinkle, { toValue: 1, duration: 1500, useNativeDriver: true }),
+      Animated.timing(twinkle, { toValue: 0, duration: 1500, useNativeDriver: true }),
     ]));
     pulseAnim.start();
     twinkleAnim.start();
     return () => { pulseAnim.stop(); twinkleAnim.stop(); };
-  }, [animated, pulse, twinkle]);
+  }, [motionEnabled, pulse, twinkle]);
 
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.055] });
-  const haloOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.32, 0.72] });
-  const sparkleOpacity = twinkle.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.045] });
+  const haloOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0.58] });
+  const sparkleOpacity = twinkle.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.82] });
   const h = size * 0.78;
   const node = Math.max(3, size * 0.075);
 
   return (
-    <Animated.View style={{ width: size + 12, height: size, alignItems: "center", justifyContent: "center", transform: [{ scale }] }}>
+    <Animated.View accessible={false} importantForAccessibility="no-hide-descendants" style={{ width: size + 12, height: size, alignItems: "center", justifyContent: "center", transform: [{ scale }] }}>
       <Animated.View style={{ position: "absolute", width: size, height: size, borderRadius: size / 2, backgroundColor: "rgba(107,92,255,0.13)", opacity: haloOpacity, boxShadow: glow.violet }} />
       <LinearGradient
         colors={[...gradients.orb]}
@@ -50,7 +59,7 @@ export function CogniMark({ size = 38, animated = true }: { size?: number; anima
         </View>
       </LinearGradient>
       <View style={{ position: "absolute", left: size * 0.14, bottom: size * 0.07, width: size * 0.16, height: size * 0.16, transform: [{ rotate: "45deg" }], backgroundColor: colors.violet, borderBottomRightRadius: 3 }} />
-      <Animated.Text style={{ position: "absolute", right: 0, top: 0, color: colors.cyan, fontSize: Math.max(8, size * 0.23), opacity: sparkleOpacity }}>✦</Animated.Text>
+      <Animated.Text accessible={false} style={{ position: "absolute", right: 0, top: 0, color: colors.cyan, fontSize: Math.max(8, size * 0.23), opacity: sparkleOpacity }}>✦</Animated.Text>
     </Animated.View>
   );
 }
@@ -58,9 +67,9 @@ export function CogniMark({ size = 38, animated = true }: { size?: number; anima
 export function CogniLogo({ compact = false, centered = false, animated = true }: { compact?: boolean; centered?: boolean; animated?: boolean }) {
   const fontSize = compact ? 22 : 39;
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: centered ? "center" : "flex-start", gap: compact ? 8 : 12 }}>
+    <View accessibilityLabel="Cogni" accessible style={{ flexDirection: "row", alignItems: "center", justifyContent: centered ? "center" : "flex-start", gap: compact ? 8 : 12 }}>
       <CogniMark size={compact ? 30 : 52} animated={animated} />
-      <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+      <View accessible={false} importantForAccessibility="no-hide-descendants" style={{ flexDirection: "row", alignItems: "baseline" }}>
         <Text style={{ color: colors.text, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>Cog</Text>
         <Text style={{ color: colors.purple, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>ni</Text>
       </View>

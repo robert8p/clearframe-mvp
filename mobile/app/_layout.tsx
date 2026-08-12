@@ -2,11 +2,13 @@ import React from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { useReducedMotion } from "@/lib/accessibility";
 import { SplashScreenController } from "@/components/splash-screen-controller";
 import { colors } from "@/lib/theme";
 
 function RootNavigator() {
   const { session } = useAuth();
+  const reducedMotion = useReducedMotion();
   const signedIn = Boolean(session);
 
   return (
@@ -17,6 +19,7 @@ function RootNavigator() {
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.bg },
         headerTitleStyle: { fontWeight: "700" },
+        animation: reducedMotion ? "none" : "default",
       }}
     >
       <Stack.Protected guard={!signedIn}>

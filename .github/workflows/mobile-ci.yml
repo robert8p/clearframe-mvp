@@ -27,5 +27,7 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Expo dependency check
         run: npx expo install --check
+      - name: UI quality audit
+        run: npm run ui-audit
       - name: TypeScript
         run: npm run typecheck

@@ -24,5 +24,25 @@ jobs:
           cache-dependency-path: "mobile/package-lock.json"
       - name: Install mobile dependencies
         run: npm ci --include=dev --no-audit --no-fund
-      - name: View build
-        run: npx eas-cli@21.7.1 build:view 571bd13d-a59c-49e2-9a1f-26195da02336 --json
+      - name: Wait for build
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_ID="571bd13d-a59c-49e2-9a1f-26195da02336"
+          for attempt in $(seq 1 15); do
+            echo "EAS status check $attempt/15"
+            npx eas-cli@21.7.1 build:view "$BUILD_ID" --json > /tmp/eas-build.json
+            cat /tmp/eas-build.json
+            STATUS=$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync("/tmp/eas-build.json","utf8")); process.stdout.write(j.status)')
+            if [ "$STATUS" = "FINISHED" ]; then
+              echo "BUILD_FINISHED"
+              exit 0
+            fi
+            if [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELED" ]; then
+              echo "Build ended with status $STATUS"
+              exit 1
+            fi
+            sleep 60
+          done
+          echo "Build did not finish within the polling window"
+          exit 1

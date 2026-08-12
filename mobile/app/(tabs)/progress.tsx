@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { apiFetch } from "@/lib/api";
 import { colors } from "@/lib/theme";
 import type { MobileProfileResponse } from "@/lib/types";
-import { Body, Card, Eyebrow, ErrorState, LoadingState, Screen, SkillBar, Title } from "@/components/ui";
+import { Body, Card, Eyebrow, ErrorState, LoadingState, MetricCard, ProgressRing, Screen, SkillBar, Title } from "@/components/ui";
 function relation(value: MobileProfileResponse["skillScores"][number]["skills"]) { return Array.isArray(value) ? value[0] : value; }
 
 export default function ProgressScreen() {
@@ -12,6 +13,12 @@ export default function ProgressScreen() {
   const load = useCallback(async () => { setLoading(true); setError(""); try { setData(await apiFetch<MobileProfileResponse>("/api/mobile/profile")); } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load progress."); } finally { setLoading(false); } }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   if (loading) return <LoadingState />; if (error || !data) return <ErrorState message={error || "Could not load progress."} onRetry={() => void load()} />;
-  const average = data.summary.averageScore == null ? null : Math.round(data.summary.averageScore * 100); const measured = data.skillScores.filter((row) => row.attempts > 0); const strongest = [...measured].sort((a,b) => Number(b.score)-Number(a.score))[0];
-  return <Screen><Eyebrow>Your progress</Eyebrow><Title>See what’s changing</Title><Body muted>Cogni updates your skill profile from the answers you give. Scores can move both ways as the evidence improves.</Body><View style={{ flexDirection: "row", gap: 10 }}><Card style={{ flex: 1 }}><Eyebrow>Answers</Eyebrow><Text style={{ color: colors.text, fontSize: 30, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{data.summary.answers}</Text></Card><Card style={{ flex: 1 }}><Eyebrow>Recent score</Eyebrow><Text style={{ color: colors.text, fontSize: 30, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{average == null ? "—" : `${average}%`}</Text></Card></View>{strongest ? <Card><Eyebrow>Emerging strength</Eyebrow><Title size={24}>{relation(strongest.skills)?.name ?? "Skill"}</Title><Body muted>This is currently one of your stronger measured areas. The evidence level matters as much as the score.</Body><SkillBar label={relation(strongest.skills)?.name ?? "Skill"} score={Number(strongest.score)} reliability={Number(strongest.reliability)} /></Card> : null}<Card><Eyebrow>Skill profile</Eyebrow>{measured.length ? [...measured].sort((a,b) => Number(a.score)-Number(b.score)).map((row) => <SkillBar key={row.skill_id} label={relation(row.skills)?.name ?? "Skill"} score={Number(row.score)} reliability={Number(row.reliability)} />) : <Body muted>Complete your starting check to begin tracking skill movement.</Body>}</Card></Screen>;
+  const average = data.summary.averageScore == null ? 0 : Math.round(data.summary.averageScore * 100); const measured = data.skillScores.filter((row) => row.attempts > 0); const strongest = [...measured].sort((a,b) => Number(b.score)-Number(a.score))[0];
+  return <Screen>
+    <View style={{ gap: 5 }}><Eyebrow>Your progress</Eyebrow><Title>See what’s changing</Title><Body muted>Cogni updates your profile from the evidence you create. Scores can move both ways as confidence improves.</Body></View>
+    <LinearGradient colors={["rgba(30,43,99,.97)", "rgba(12,18,45,.98)"]} style={{ borderRadius: 26, borderWidth: 1, borderColor: colors.line, padding: 18, flexDirection: "row", alignItems: "center", gap: 16 }}><ProgressRing value={average} label="overall" /><View style={{ flex: 1, gap: 6 }}><Eyebrow>Overall profile</Eyebrow><Text style={{ color: colors.text, fontSize: 23, lineHeight: 29, fontWeight: "900" }}>{average ? "You’re building momentum" : "Evidence is just beginning"}</Text><Text style={{ color: colors.muted, fontSize: 13.5, lineHeight: 20 }}>{measured.length} measured skills · {data.summary.answers} answers</Text></View></LinearGradient>
+    <View style={{ flexDirection: "row", gap: 10 }}><MetricCard label="XP" value={data.profile.xp ?? 0} hint="total earned" /><MetricCard label="Streak" value={`${data.profile.current_streak ?? 0}d`} hint="current run" /></View>
+    {strongest ? <Card style={{ borderColor: "rgba(0,229,255,.32)" }}><Eyebrow>Emerging strength</Eyebrow><Title size={24}>{relation(strongest.skills)?.name ?? "Skill"}</Title><Body muted>This is currently one of your stronger measured areas. Reliability matters as much as the headline score.</Body><SkillBar label={relation(strongest.skills)?.name ?? "Skill"} score={Number(strongest.score)} reliability={Number(strongest.reliability)} /></Card> : null}
+    <Card><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Eyebrow>Skill profile</Eyebrow><Text style={{ color: colors.soft, fontSize: 12, fontWeight: "800" }}>{measured.length} active</Text></View>{measured.length ? [...measured].sort((a,b) => Number(a.score)-Number(b.score)).map((row) => <SkillBar key={row.skill_id} label={relation(row.skills)?.name ?? "Skill"} score={Number(row.score)} reliability={Number(row.reliability)} />) : <Body muted>Complete your starting check to begin tracking skill movement.</Body>}</Card>
+  </Screen>;
 }

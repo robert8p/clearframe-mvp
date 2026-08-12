@@ -6,7 +6,11 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#070b19",
     "scheme": "cogni",
+    "splash": {
+      "backgroundColor": "#070b19"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.gocogni.cogni"
@@ -14,7 +18,7 @@
     "android": {
       "package": "app.gocogni.cogni",
       "adaptiveIcon": {
-        "backgroundColor": "#070d1b"
+        "backgroundColor": "#070b19"
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "resize",

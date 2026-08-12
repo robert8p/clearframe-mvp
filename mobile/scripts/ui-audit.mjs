@@ -53,6 +53,7 @@ const ui = read("components/ui.tsx");
 const brand = read("components/brand.tsx");
 const orb = read("components/orb.tsx");
 const rootLayout = read("app/_layout.tsx");
+const interactionCues = read("components/interaction-cues.tsx");
 pass(ui.includes("useReducedMotion"), "Shared UI motion must respect Reduce Motion.");
 pass(brand.includes("useReducedMotion"), "Cogni brand motion must respect Reduce Motion.");
 pass(orb.includes("useReducedMotion"), "Cogni orb motion must respect Reduce Motion.");
@@ -60,6 +61,8 @@ pass(rootLayout.includes("animation: reducedMotion ? \"none\" : \"default\""), "
 pass(ui.includes("automaticallyAdjustKeyboardInsets"), "Shared scroll screens must automatically adjust keyboard insets.");
 pass(ui.includes("minHeight: 56"), "Primary buttons must preserve at least a 56dp height.");
 pass(ui.includes("minHeight: 48") && ui.includes("export function ActionLink"), "Inline action links must preserve a 48dp touch target.");
+pass(interactionCues.includes("export function CompactAction") && interactionCues.includes('accessibilityRole="button"') && interactionCues.includes("minHeight: 48"), "Compact button-like controls must be real accessible buttons with at least a 48dp target.");
+pass(interactionCues.includes("export function StatusLabel") && !interactionCues.match(/function StatusLabel[\s\S]*?borderWidth:/), "Non-interactive status labels must remain visually flat and borderless.");
 
 const formField = read("components/form-field.tsx");
 pass(formField.includes("accessibilityLabel"), "Reusable form fields must expose accessibility labels.");
@@ -73,7 +76,13 @@ for (const file of sourceFiles) {
   let match;
   while ((match = smallTarget.exec(source))) failures.push(`${relative} contains a ${match[1]}dp explicit touch-height candidate; interactive controls should be at least 48dp.`);
   if (/<Text\b[^>]*\bonPress=/.test(source)) failures.push(`${relative} uses Text.onPress; use Pressable/ActionLink so the hit target is explicit.`);
+  if (/<Pill(?:\s|>)/.test(source)) failures.push(`${relative} uses a non-interactive Pill. Use CompactAction for button-like chips or StatusLabel for informational metadata.`);
 }
+
+const welcome = read("app/index.tsx");
+pass(!welcome.includes("borderRadius: 21"), "Welcome feature descriptions must not be styled as button-like rounded tiles.");
+const profile = read("app/(tabs)/profile.tsx");
+pass(!profile.includes("flexBasis: 96, minHeight: 88, borderRadius: 18"), "Profile milestones must remain clearly informational rather than button-like tiles.");
 
 const theme = parseThemeColours(read("lib/theme.ts"));
 for (const foreground of ["text", "muted", "soft"]) {
@@ -95,6 +104,7 @@ console.log("Cogni UI audit passed.");
 console.log("✓ Android safe-area + keyboard invariants");
 console.log("✓ Reduce Motion support");
 console.log("✓ >=48dp explicit touch-target guard");
+console.log("✓ Honest interactive vs informational affordances");
 console.log("✓ No direct Text.onPress links");
 console.log("✓ Form-field accessibility + focus treatment");
 console.log(`✓ Text contrast >=4.5:1; control-boundary contrast ${controlContrast.toFixed(2)}:1`);

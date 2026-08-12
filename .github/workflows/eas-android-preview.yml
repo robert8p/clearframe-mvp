@@ -2,6 +2,8 @@ name: EAS Android preview
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -35,6 +37,9 @@ jobs:
 
       - name: Check Expo dependencies
         run: npx expo install --check
+
+      - name: UI quality audit
+        run: npm run ui-audit
 
       - name: TypeScript check
         run: npm run typecheck

@@ -9,7 +9,12 @@ import { Body, Card, Eyebrow, ErrorState, LoadingState, PrimaryButton, ProgressB
 import { CogniOrb } from "@/components/orb";
 
 function Hero({ eyebrow, title, body, cta, onPress, progress }: { eyebrow: string; title: string; body: string; cta: string; onPress: () => void; progress?: number }) {
-  return <LinearGradient colors={["rgba(34,45,106,.98)", "rgba(13,18,49,.99)"]} style={{ borderRadius: 28, borderWidth: 1, borderColor: colors.line, padding: 18, overflow: "hidden" }}><View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{ flex: 1, gap: 7 }}><Eyebrow>{eyebrow}</Eyebrow><Title size={28}>{title}</Title><Body muted style={{ fontSize: 14.5, lineHeight: 21 }}>{body}</Body></View><View style={{ marginRight: -26 }}><CogniOrb size={104} /></View></View>{typeof progress === "number" ? <View style={{ marginTop: 8, gap: 6 }}><View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: colors.muted, fontSize: 12.5 }}>Session progress</Text><Text style={{ color: colors.cyan, fontWeight: "900", fontSize: 12.5 }}>{Math.round(progress)}%</Text></View><ProgressBar value={progress} /></View> : null}<View style={{ marginTop: 12 }}><PrimaryButton label={cta} onPress={onPress} /></View></LinearGradient>;
+  return <LinearGradient colors={["rgba(34,45,106,.98)", "rgba(13,18,49,.99)"]} style={{ borderRadius: 28, borderWidth: 1, borderColor: colors.line, padding: 18, overflow: "hidden", gap: 10 }}>
+    <View style={{ gap: 7 }}><Eyebrow>{eyebrow}</Eyebrow><Title size={28}>{title}</Title></View>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}><View style={{ flex: 1 }}><Body muted style={{ fontSize: 15, lineHeight: 22 }}>{body}</Body></View><View accessible={false} style={{ marginRight: -14, marginVertical: -18 }}><CogniOrb size={78} /></View></View>
+    {typeof progress === "number" ? <View style={{ marginTop: 2, gap: 6 }}><View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: colors.muted, fontSize: 12.5 }}>Session progress</Text><Text style={{ color: colors.cyan, fontWeight: "900", fontSize: 12.5 }}>{Math.round(progress)}%</Text></View><ProgressBar value={progress} /></View> : null}
+    <View style={{ marginTop: 6 }}><PrimaryButton label={cta} onPress={onPress} /></View>
+  </LinearGradient>;
 }
 
 export default function TrainHomeScreen() {

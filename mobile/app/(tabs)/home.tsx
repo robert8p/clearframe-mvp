@@ -22,6 +22,8 @@ export default function HomeScreen() {
   const audience = profile.profile.audience_segment;
   const lowest = [...profile.skillScores].sort((a,b) => Number(a.score) - Number(b.score)).slice(0,3);
   const average = profile.summary.averageScore == null ? 0 : Math.round(profile.summary.averageScore * 100);
+  const streak = profile.profile.current_streak ?? 0;
+  const streakLabel = `${streak} ${streak === 1 ? "day" : "days"} streak`;
   const stateCopy: Record<string, { eyebrow: string; title: string; body: string; cta: string }> = {
     diagnostic: { eyebrow: "Your starting check", title: "Map your strongest starting point", body: "A short starting check helps Cogni choose the skills worth focusing on first.", cta: "Continue starting check" },
     lesson: { eyebrow: "Today’s focus", title: "A fresh thinking move is ready", body: "Start with one short idea, then put it to work in today’s decisions.", cta: "Start today’s insight" },
@@ -35,7 +37,7 @@ export default function HomeScreen() {
   return <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
     <View style={{ gap: 10 }}>
       <View style={{ gap: 5 }}><Title size={29}>Hello, {firstName} 👋</Title><Text style={{ color: colors.muted, fontSize: 15, lineHeight: 22 }}>{audiencePromise[audience] ?? "Build clearer judgement for the decisions you face."}</Text></View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}><Pill accent>🔥 {profile.profile.current_streak ?? 0} day streak</Pill><Pill>{audienceNames[audience] ?? audience}</Pill></View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}><Pill accent>🔥 {streakLabel}</Pill><Pill>{audienceNames[audience] ?? audience}</Pill></View>
     </View>
 
     <Card style={{ padding: 0, overflow: "hidden", borderColor: "rgba(83,105,165,.76)" }}>

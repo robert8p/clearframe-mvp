@@ -1,6 +1,11 @@
 name: EAS Android preview
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/eas-android-preview.yml"
   workflow_dispatch:
 
 permissions:

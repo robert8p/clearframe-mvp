@@ -54,6 +54,7 @@ const brand = read("components/brand.tsx");
 const orb = read("components/orb.tsx");
 const rootLayout = read("app/_layout.tsx");
 const interactionCues = read("components/interaction-cues.tsx");
+const statusLabelSource = interactionCues.split("export function CompactAction")[0];
 pass(ui.includes("useReducedMotion"), "Shared UI motion must respect Reduce Motion.");
 pass(brand.includes("useReducedMotion"), "Cogni brand motion must respect Reduce Motion.");
 pass(orb.includes("useReducedMotion"), "Cogni orb motion must respect Reduce Motion.");
@@ -62,7 +63,7 @@ pass(ui.includes("automaticallyAdjustKeyboardInsets"), "Shared scroll screens mu
 pass(ui.includes("minHeight: 56"), "Primary buttons must preserve at least a 56dp height.");
 pass(ui.includes("minHeight: 48") && ui.includes("export function ActionLink"), "Inline action links must preserve a 48dp touch target.");
 pass(interactionCues.includes("export function CompactAction") && interactionCues.includes('accessibilityRole="button"') && interactionCues.includes("minHeight: 48"), "Compact button-like controls must be real accessible buttons with at least a 48dp target.");
-pass(interactionCues.includes("export function StatusLabel") && !interactionCues.match(/function StatusLabel[\s\S]*?borderWidth:/), "Non-interactive status labels must remain visually flat and borderless.");
+pass(statusLabelSource.includes("export function StatusLabel") && !statusLabelSource.includes("borderWidth:"), "Non-interactive status labels must remain visually flat and borderless.");
 
 const formField = read("components/form-field.tsx");
 pass(formField.includes("accessibilityLabel"), "Reusable form fields must expose accessibility labels.");

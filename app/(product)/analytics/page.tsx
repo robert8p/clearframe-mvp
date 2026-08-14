@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { audienceMeta } from "@/lib/audience";
+import { AUDIENCE_SEGMENTS, audienceMeta } from "@/lib/audience";
 
 type EventRow = { user_id: string | null; event_name: string; properties: unknown; created_at: string };
 type ProfileRow = { id: string; audience_segment: string | null; created_at: string };
@@ -114,10 +114,9 @@ export default async function AnalyticsPage() {
   const positiveFeedback = reactionCounts.good + reactionCounts.great;
   const positiveFeedbackRate = pct(positiveFeedback, feedback30.length);
 
-  const profileAudience = new Map(profiles.map((profile) => [profile.id, profile.audience_segment]));
   const completed30Users = new Set(sessions30.filter((session) => session.status === "completed").map((session) => session.user_id));
   const active30Users = new Set(events30.map((event) => event.user_id).filter((value): value is string => Boolean(value)));
-  const audienceSlugs = ["university_student", "graduate_early_career", "junior_professional", "management", "executive"];
+  const audienceSlugs = AUDIENCE_SEGMENTS.map((item) => item.slug);
   const audienceRows = audienceSlugs.map((slug) => {
     const users = profiles.filter((profile) => profile.audience_segment === slug).map((profile) => profile.id);
     return {

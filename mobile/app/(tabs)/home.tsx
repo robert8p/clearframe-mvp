@@ -4,13 +4,11 @@ import { Pressable, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { CompactAction } from "@/components/interaction-cues";
 import { apiFetch } from "@/lib/api";
+import { mobileAudienceMeta } from "@/lib/audience";
 import { colors } from "@/lib/theme";
 import type { MobileProfileResponse, TodayResponse } from "@/lib/types";
 import { ActionLink, Body, Card, Eyebrow, ErrorState, LoadingState, MetricCard, PrimaryButton, ProgressRing, Screen, SkillBar, Title } from "@/components/ui";
 import { CogniOrb } from "@/components/orb";
-
-const audienceNames: Record<string, string> = { university_student: "University", graduate_early_career: "Graduate / early career", junior_professional: "Junior professional", management: "Management", executive: "Executive" };
-const audiencePromise: Record<string, string> = { university_student: "Build the thinking skills that improve study, AI use and graduate readiness.", graduate_early_career: "Build the judgement that makes people trust your work.", junior_professional: "Turn analysis into stronger recommendations and decisions.", management: "Make clearer decisions about people, priorities, resources and risk.", executive: "Sharpen strategic judgement under uncertainty." };
 function skillRelation(value: MobileProfileResponse["skillScores"][number]["skills"]) { return Array.isArray(value) ? value[0] : value; }
 
 export default function HomeScreen() {
@@ -20,7 +18,7 @@ export default function HomeScreen() {
   if (loading) return <LoadingState label="Preparing Cogni…" />; if (error && !profile) return <ErrorState message={error} onRetry={() => void load()} />; if (!profile?.profile.audience_segment || today?.state === "onboarding") return <Redirect href="/onboarding" />;
 
   const firstName = profile.profile.full_name?.trim().split(/\s+/)[0] || "there";
-  const audience = profile.profile.audience_segment;
+  const audience = profile.profile.audience_segment; const audienceMeta=mobileAudienceMeta(audience);
   const lowest = [...profile.skillScores].sort((a,b) => Number(a.score) - Number(b.score)).slice(0,3);
   const average = profile.summary.averageScore == null ? 0 : Math.round(profile.summary.averageScore * 100);
   const streak = profile.profile.current_streak ?? 0;
@@ -38,10 +36,10 @@ export default function HomeScreen() {
 
   return <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
     <View style={{ gap: 10 }}>
-      <View style={{ gap: 5 }}><Title size={29}>Hello, {firstName} 👋</Title><Text style={{ color: colors.muted, fontSize: 15, lineHeight: 22 }}>{audiencePromise[audience] ?? "Build clearer judgement for the decisions you face."}</Text></View>
+      <View style={{ gap: 5 }}><Title size={29}>Hello, {firstName} 👋</Title><Text style={{ color: colors.muted, fontSize: 15, lineHeight: 22 }}>{audienceMeta?.promise ?? "Build clearer judgement for the decisions you face."}</Text></View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <CompactAction label={`🔥 ${streakLabel}`} accent hint="Open your progress and streak details" onPress={openProgress} />
-        <CompactAction label={audienceNames[audience] ?? audience} hint="Open your profile and learning context" onPress={() => router.push("/(tabs)/profile")} />
+        <CompactAction label={audienceMeta?.shortLabel ?? audience} hint="Open your profile and learning context" onPress={() => router.push("/(tabs)/profile")} />
       </View>
     </View>
 

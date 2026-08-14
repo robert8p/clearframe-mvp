@@ -69,6 +69,17 @@ const formField = read("components/form-field.tsx");
 pass(formField.includes("accessibilityLabel"), "Reusable form fields must expose accessibility labels.");
 pass(formField.includes("borderColor: colors.cyan"), "Reusable form fields must expose a visible focus state.");
 
+const audienceModel = read("lib/audience.ts");
+const onboarding = read("app/onboarding.tsx");
+const home = read("app/(tabs)/home.tsx");
+const profile = read("app/(tabs)/profile.tsx");
+pass(audienceModel.includes('slug: "casual"') && audienceModel.includes('label: "Casual / personal growth"'), "Mobile audience model must include the casual / personal-growth context.");
+pass(audienceModel.includes('shortLabel: "Everyday learner"'), "Casual mobile context must use the clearer short label 'Everyday learner'.");
+pass(onboarding.includes("MOBILE_AUDIENCES") && onboarding.includes('audience === "casual"') && onboarding.includes('"Interest area"'), "Mobile onboarding must offer and personalise the casual context.");
+pass(onboarding.includes("This is about context—not ability"), "Mobile onboarding must not frame casual as a lower ability tier.");
+pass(home.includes("mobileAudienceMeta"), "Mobile Home must derive casual copy from the shared mobile audience model.");
+pass(profile.includes("mobileAudienceMeta") && profile.includes('data.profile.audience_segment==="casual"'), "Mobile Profile must support casual labels and fields.");
+
 const sourceFiles = walk(root).filter((file) => /\.(tsx|ts)$/.test(file) && !file.includes(`${path.sep}node_modules${path.sep}`) && !file.includes(`${path.sep}.expo${path.sep}`));
 for (const file of sourceFiles) {
   const source = fs.readFileSync(file, "utf8");
@@ -82,7 +93,6 @@ for (const file of sourceFiles) {
 
 const welcome = read("app/index.tsx");
 pass(!welcome.includes("borderRadius: 21"), "Welcome feature descriptions must not be styled as button-like rounded tiles.");
-const profile = read("app/(tabs)/profile.tsx");
 pass(!profile.includes("flexBasis: 96, minHeight: 88, borderRadius: 18"), "Profile milestones must remain clearly informational rather than button-like tiles.");
 
 const theme = parseThemeColours(read("lib/theme.ts"));
@@ -106,6 +116,7 @@ console.log("✓ Android safe-area + keyboard invariants");
 console.log("✓ Reduce Motion support");
 console.log("✓ >=48dp explicit touch-target guard");
 console.log("✓ Honest interactive vs informational affordances");
+console.log("✓ Casual / personal-growth mobile parity");
 console.log("✓ No direct Text.onPress links");
 console.log("✓ Form-field accessibility + focus treatment");
 console.log(`✓ Text contrast >=4.5:1; control-boundary contrast ${controlContrast.toFixed(2)}:1`);

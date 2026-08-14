@@ -6,6 +6,8 @@ const read=(relative)=>fs.readFileSync(path.join(root,relative),"utf8");
 const failures=[];
 const pass=(condition,message)=>{if(!condition)failures.push(message)};
 
+function walk(dir){return fs.readdirSync(dir,{withFileTypes:true}).flatMap((entry)=>{const full=path.join(dir,entry.name);if(entry.isDirectory()){if(["node_modules",".next",".expo",".git"].includes(entry.name))return[];return walk(full)}return[full]})}
+
 const audience=read("lib/audience.ts");
 const context=read("lib/context-profile.ts");
 const selector=read("components/AudienceSelector.tsx");
@@ -43,6 +45,14 @@ pass(migrations.includes("8 practical everyday contexts × all 15 Cogni judgemen
 pass(migrations.includes("Casual audience expected 126 published challenges")&&migrations.includes("Casual audience expected 16 published lessons"),"Migration set must enforce content parity with existing audiences.");
 pass(migrations.includes("single_n<>55")&&migrations.includes("multi_n<>18")&&migrations.includes("ranking_n<>19")&&migrations.includes("classification_n<>17")&&migrations.includes("triage_n<>17"),"Migration set must validate full interaction-format parity.");
 pass(migrations.includes("drop table if exists private._cogni_v020_casual_generated")&&migrations.includes("drop function if exists private._cogni_casual_render"),"Casual migration must clean private build-only objects.");
+
+const legacySlugs=["university_student","graduate_early_career","junior_professional","management","executive"];
+for(const file of walk(root).filter((file)=>/\.(ts|tsx)$/.test(file))){
+  const source=fs.readFileSync(file,"utf8");
+  if(legacySlugs.every((slug)=>source.includes(slug))&&!source.includes("casual")){
+    failures.push(`${path.relative(root,file)} appears to enumerate every legacy audience without casual.`);
+  }
+}
 
 if(failures.length){console.error("Cogni audience audit failed:\n");for(const failure of failures)console.error(`- ${failure}`);process.exit(1)}
 console.log("Cogni audience audit passed.");

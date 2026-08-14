@@ -28,6 +28,21 @@ export const INDUSTRY_OPTIONS: ContextOption[] = [
   { value: "prefer_not", label: "Prefer not to say" },
 ];
 
+const CASUAL_INTERESTS: ContextOption[] = [
+  { value: "", label: "Not specified" },
+  { value: "everyday_decisions", label: "Everyday decisions" },
+  { value: "news_media", label: "News, media & online information" },
+  { value: "technology_ai", label: "Technology & AI" },
+  { value: "money_purchases", label: "Money, purchases & reviews" },
+  { value: "health_wellbeing", label: "Health & wellbeing information" },
+  { value: "relationships_communication", label: "Relationships & communication" },
+  { value: "travel_planning", label: "Travel & planning" },
+  { value: "community_civic", label: "Community & civic issues" },
+  { value: "personal_growth", label: "Personal growth & habits" },
+  { value: "other", label: "Other" },
+  { value: "prefer_not", label: "Prefer not to say" },
+];
+
 const PROFESSIONAL_FUNCTIONS: ContextOption[] = [
   { value: "", label: "Not specified" },
   { value: "finance_commercial", label: "Finance / commercial" },
@@ -90,6 +105,9 @@ export const ORGANISATION_SCALE_OPTIONS: ContextOption[] = [
 ];
 
 const GOALS: Record<AudienceSegment, ContextOption[]> = {
+  casual: [
+    ["", "Not specified"], ["make_better_everyday_decisions", "Make better everyday decisions"], ["understand_news_online", "Understand news and online information"], ["use_ai_wisely", "Use AI more wisely"], ["spot_misleading_claims", "Spot misleading claims"], ["ask_better_questions", "Ask better questions"], ["think_more_clearly", "Think more clearly"], ["build_lifelong_learning_habit", "Build a learning habit"], ["other", "Other"], ["prefer_not", "Prefer not to say"],
+  ].map(([value,label]) => ({ value, label })),
   university_student: [
     ["", "Not specified"], ["academic_performance", "Improve academic performance"], ["graduate_readiness", "Prepare for graduate employment"], ["make_better_decisions", "Make better everyday decisions"], ["work_effectively_with_ai", "Use AI effectively for study"], ["critical_thinking_general", "Improve critical thinking generally"], ["other", "Other"], ["prefer_not", "Prefer not to say"],
   ].map(([value,label]) => ({ value, label })),
@@ -108,10 +126,12 @@ const GOALS: Record<AudienceSegment, ContextOption[]> = {
 };
 
 export function functionOptionsForAudience(audience: AudienceSegment) {
+  if (audience === "casual") return CASUAL_INTERESTS;
   return audience === "university_student" ? STUDY_AREAS : PROFESSIONAL_FUNCTIONS;
 }
 export function goalOptionsForAudience(audience: AudienceSegment) { return GOALS[audience]; }
 export function contextFieldLabel(audience: AudienceSegment) {
+  if (audience === "casual") return "Interest area";
   if (audience === "university_student") return "Study area";
   if (audience === "executive") return "Executive remit / function";
   return "Function / discipline";

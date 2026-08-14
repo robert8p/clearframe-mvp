@@ -1,4 +1,5 @@
 export const AUDIENCE_SEGMENTS = [
+  { slug:"casual", label:"Casual / personal growth", shortLabel:"Everyday learner", icon:"🌱", description:"Build sharper judgement for everyday choices, online information and AI", complexityAnchor:50, homePromise:"Build sharper judgement for everyday choices, online information and AI.", questionCount:5, sessionLabel:"Everyday practice", outcome:"Everyday judgement strengthened" },
   { slug:"university_student", label:"University student", shortLabel:"University", icon:"🎓", description:"Build stronger thinking for study, AI use and everyday decisions", complexityAnchor:42, homePromise:"Build the thinking skills that improve study, AI use and graduate readiness.", questionCount:5, sessionLabel:"Daily practice", outcome:"Sharper thinking built" },
   { slug:"graduate_early_career", label:"Graduate / early career", shortLabel:"Graduate / early career", icon:"🚀", description:"Build confidence with early-career decisions and evidence", complexityAnchor:48, homePromise:"Build the judgement that makes people trust your work.", questionCount:5, sessionLabel:"Workplace practice", outcome:"Professional judgement strengthened" },
   { slug:"junior_professional", label:"Junior professional", shortLabel:"Junior professional", icon:"💼", description:"Make stronger recommendations and challenge weak evidence", complexityAnchor:54, homePromise:"Turn analysis into stronger recommendations and decisions.", questionCount:5, sessionLabel:"Applied judgement", outcome:"Professional judgement strengthened" },
@@ -16,6 +17,7 @@ export function audienceSessionLabel(audience: AudienceSegment) { return audienc
 export function audienceOutcome(audience: AudienceSegment) { return audienceMeta(audience)?.outcome ?? "Judgement strengthened"; }
 export function audienceTransferStatement(audience: AudienceSegment, skillName?: string) {
   const skill = skillName ? ` ${skillName.toLowerCase()}` : " this judgement skill";
+  if (audience === "casual") return `This helps you use${skill} in everyday choices, online information, AI use and personal growth.`;
   if (audience === "university_student") return `This helps you use${skill} in assignments, AI-assisted study, interviews and everyday decisions.`;
   if (audience === "graduate_early_career") return `This is the kind of${skill} that helps people trust your work before you have years of experience.`;
   if (audience === "junior_professional") return `This helps you use${skill} to make recommendations senior stakeholders can trust.`;

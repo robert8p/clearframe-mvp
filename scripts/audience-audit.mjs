@@ -26,6 +26,7 @@ const migrations=[
   "supabase/migrations/023_casual_diagnostics_and_capstone.sql",
   "supabase/migrations/024_casual_lessons_part_one.sql",
   "supabase/migrations/025_casual_lessons_part_two_and_validation.sql",
+  "supabase/migrations/026_casual_answer_position_balance.sql",
 ].map(read).join("\n");
 
 pass(audience.includes('slug:"casual"')&&audience.includes('complexityAnchor:50')&&audience.includes('questionCount:5'),"Web audience model must define casual at adaptive anchor 50 with five daily questions.");
@@ -44,6 +45,7 @@ pass(research.includes("not an ability tier")&&research.includes("Self-Directed 
 pass(migrations.includes("8 practical everyday contexts × all 15 Cogni judgement skills"),"Migration set must build the full 120-question casual scenario bank.");
 pass(migrations.includes("Casual audience expected 126 published challenges")&&migrations.includes("Casual audience expected 16 published lessons"),"Migration set must enforce content parity with existing audiences.");
 pass(migrations.includes("single_n<>55")&&migrations.includes("multi_n<>18")&&migrations.includes("ranking_n<>19")&&migrations.includes("classification_n<>17")&&migrations.includes("triage_n<>17"),"Migration set must validate full interaction-format parity.");
+pass(migrations.includes("Casual answer-position distribution is not balanced")&&migrations.includes("correct_answer=m.correct_answer")&&migrations.includes("error_patterns=m.error_patterns"),"Casual content must balance answer positions and remap grading metadata.");
 pass(migrations.includes("drop table if exists private._cogni_v020_casual_generated")&&migrations.includes("drop function if exists private._cogni_casual_render"),"Casual migration must clean private build-only objects.");
 
 const legacySlugs=["university_student","graduate_early_career","junior_professional","management","executive"];
@@ -59,4 +61,4 @@ console.log("Cogni audience audit passed.");
 console.log("✓ Research-backed casual definition");
 console.log("✓ Web and mobile learning-context parity");
 console.log("✓ Interest/goal personalisation");
-console.log("✓ 126 challenges, 16 lessons and five-format validation encoded");
+console.log("✓ 126 challenges, 16 lessons, five formats and balanced answer positions encoded");

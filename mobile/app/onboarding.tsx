@@ -99,6 +99,13 @@ export default function OnboardingScreen() {
       </View>
     </Card> : null}
 
+    {selectedAudience ? <Card style={{ borderColor: "rgba(0,229,255,.28)" }}>
+      <Eyebrow>What happens next</Eyebrow>
+      <Title size={23}>A short starting check, not a pass/fail test</Title>
+      <Body muted>Plan for about 4–6 minutes. Cogni uses those answers to choose a useful starting focus. Early scores deliberately carry limited evidence until you have answered more.</Body>
+      <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Your learning context changes which situations feel relevant; it does not raise or lower your assumed ability.</Body>
+    </Card> : null}
+
     {error ? <Text accessibilityLiveRegion="assertive" selectable style={{ color: colors.danger, lineHeight: 22 }}>{error}</Text> : null}
     <PrimaryButton label={busy ? "Saving…" : "Continue to Cogni"} disabled={!selectedAudience || busy} onPress={() => void save()} />
   </Screen>;

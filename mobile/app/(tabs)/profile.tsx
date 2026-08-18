@@ -125,6 +125,12 @@ export default function ProfileScreen() {
       <PrimaryButton label={busy ? "Saving…" : "Save profile"} disabled={busy} onPress={() => void save()} />
     </Card> : null}
 
+    <Card style={{ borderColor: "rgba(0,229,255,.24)" }}>
+      <Eyebrow>Privacy & trust</Eyebrow><Title size={23}>Built to support learning, not label you</Title>
+      <Body muted>Sensitive grading and score updates happen on Cogni&apos;s server; answer keys are not stored in the app. Your sign-in session is stored securely on this device, and profile access is scoped to your account.</Body>
+      <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Development Scores are learning indicators with separate evidence strength. They are not population percentiles or formal psychometric grades. You can delete your account and learning history at any time.</Body>
+    </Card>
+
     <Card>
       <Eyebrow>Account</Eyebrow><Body muted>Your session is stored securely on this device. You can also reset your password or permanently remove your account.</Body>
       <PrimaryButton label="Reset password" secondary onPress={() => router.push("/forgot-password")} />

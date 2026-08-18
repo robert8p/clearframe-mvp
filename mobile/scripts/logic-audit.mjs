@@ -51,6 +51,19 @@ else {
   requireText(migration, "evidence_points", "Repeated questions must not count as full independent evidence.");
 }
 
+const metricsPath = path.join(repoRoot, "scripts/internal_alpha_metrics.sql");
+if (!fs.existsSync(metricsPath)) failures.push("Missing read-only internal-alpha product metrics query pack.");
+else {
+  const metrics = fs.readFileSync(metricsPath, "utf8");
+  requireText(metrics, "signup_to_activation_pct", "Alpha metrics must retain sign-up to activation measurement.");
+  requireText(metrics, "d1_retention_pct", "Alpha metrics must retain D1 learning retention.");
+  requireText(metrics, "d3_retention_pct", "Alpha metrics must retain D3 learning retention.");
+  requireText(metrics, "d7_retention_pct", "Alpha metrics must retain D7 learning retention.");
+  requireText(metrics, "median_active_answer_span_minutes", "Session effort must use active answer span rather than wall-clock session age.");
+  requireText(metrics, "training_sessions", "Activation and completion must remain grounded in authoritative training-session records.");
+  requireText(metrics, "user_responses", "Retention must remain grounded in server-validated scored responses.");
+}
+
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
@@ -77,4 +90,5 @@ console.log("✓ Canonical context personalisation");
 console.log("✓ Exact multi-select requirements");
 console.log("✓ Native recovery + account deletion");
 console.log("✓ Transactional scoring + reduced repeat evidence");
+console.log("✓ Authoritative alpha activation/retention metrics");
 console.log("✓ No Vercel dependency in mobile source");

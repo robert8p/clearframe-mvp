@@ -18,6 +18,7 @@ const chunkKey = (key: string, index: number) => `${key}.__${index}`;
 let secureStoreHealthy: boolean | null = null;
 let secureStoreWarningLogged = false;
 
+function secureStoreDisabled() { return secureStoreHealthy === false; }
 function legacyGet(key: string) {
   try { return globalThis.localStorage?.getItem(key) ?? null; }
   catch { return null; }
@@ -38,7 +39,7 @@ function disableSecureStore(error: unknown) {
   }
 }
 async function canUseSecureStore() {
-  if (secureStoreHealthy === false) return false;
+  if (secureStoreDisabled()) return false;
   if (secureStoreHealthy === true) return true;
   try {
     secureStoreHealthy = await SecureStore.isAvailableAsync();
@@ -69,7 +70,7 @@ async function secureDelete(key: string) {
 async function removeSecureChunks(key: string) {
   if (!(await canUseSecureStore())) return;
   const rawCount = await secureGet(chunkCountKey(key));
-  if (secureStoreHealthy === false) return;
+  if (secureStoreDisabled()) return;
   const count = Number(rawCount ?? 0);
   if (Number.isInteger(count) && count > 0 && count <= 64) {
     for (let index = 0; index < count; index += 1) await secureDelete(chunkKey(key, index));
@@ -83,17 +84,17 @@ const secureStorage: SupportedStorage = {
     if (await canUseSecureStore()) {
       const rawCount = await secureGet(chunkCountKey(key));
       const count = Number(rawCount ?? 0);
-      if (secureStoreHealthy !== false && Number.isInteger(count) && count > 0 && count <= 64) {
+      if (!secureStoreDisabled() && Number.isInteger(count) && count > 0 && count <= 64) {
         const chunks: string[] = [];
         for (let index = 0; index < count; index += 1) {
           const value = await secureGet(chunkKey(key, index));
-          if (secureStoreHealthy === false || value === null) { chunks.length = 0; break; }
+          if (secureStoreDisabled() || value === null) { chunks.length = 0; break; }
           chunks.push(value);
         }
         if (chunks.length === count) return chunks.join("");
       }
 
-      if (secureStoreHealthy !== false) {
+      if (!secureStoreDisabled()) {
         const direct = await secureGet(key);
         if (direct) return direct;
       }
@@ -113,7 +114,7 @@ const secureStorage: SupportedStorage = {
     if (!(await canUseSecureStore())) return;
     try {
       await removeSecureChunks(key);
-      if (secureStoreHealthy === false) return;
+      if (secureStoreDisabled()) return;
       const chunks = Array.from({ length: Math.ceil(value.length / CHUNK_SIZE) }, (_, index) => value.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE));
       for (let index = 0; index < chunks.length; index += 1) {
         await SecureStore.setItemAsync(chunkKey(key, index), chunks[index]);

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Redirect, Tabs } from "expo-router";
-import { Animated, Text, View } from "react-native";
+import { Animated, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CogniLogo } from "@/components/brand";

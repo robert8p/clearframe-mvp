@@ -7,6 +7,12 @@ export const MOBILE_AUDIENCES = [
   { slug: "executive", icon: "♟", label: "Executive", shortLabel: "Executive", text: "Sharpen strategic judgement under uncertainty", promise: "Sharpen strategic judgement under uncertainty." },
 ] as const;
 
+export type MobileAudience = (typeof MOBILE_AUDIENCES)[number]["slug"];
+
+export function isMobileAudience(value: unknown): value is MobileAudience {
+  return MOBILE_AUDIENCES.some((item) => item.slug === value);
+}
+
 export function mobileAudienceMeta(value: unknown) {
   return MOBILE_AUDIENCES.find((item) => item.slug === value) ?? null;
 }

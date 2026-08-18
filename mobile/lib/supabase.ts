@@ -3,12 +3,14 @@ import "expo-sqlite/localStorage/install";
 import { createClient, type SupportedStorage } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 
-export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
-export const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
-
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error("Cogni is missing its Supabase public environment configuration.");
+function requiredPublicEnvironment(name: "EXPO_PUBLIC_SUPABASE_URL" | "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY") {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`Cogni is missing ${name}.`);
+  return value;
 }
+
+export const SUPABASE_URL: string = requiredPublicEnvironment("EXPO_PUBLIC_SUPABASE_URL");
+export const SUPABASE_PUBLISHABLE_KEY: string = requiredPublicEnvironment("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
 
 const CHUNK_SIZE = 1800;
 const chunkCountKey = (key: string) => `${key}.__parts`;

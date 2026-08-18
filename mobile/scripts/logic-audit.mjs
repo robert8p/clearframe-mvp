@@ -16,9 +16,27 @@ forbidText(api, "EXPO_PUBLIC_API_URL", "Legacy EXPO_PUBLIC_API_URL must not retu
 forbidText(api, "vercel.app", "Mobile networking must not depend on Vercel.");
 
 const supabase = read("lib/supabase.ts");
-requireText(supabase, "expo-secure-store", "Auth sessions must use secure device storage.");
-requireText(supabase, "One-release migration path", "Secure auth storage must migrate existing SQLite sessions.");
+requireText(supabase, "expo-secure-store", "Auth sessions must use secure device storage when it is available.");
+requireText(supabase, "SecureStore.isAvailableAsync", "Secure auth storage must verify native SecureStore availability before use.");
+requireText(supabase, "disableSecureStore", "Device-specific SecureStore failures must degrade safely rather than crash startup.");
+requireText(supabase, "Compatibility and recovery path", "Secure auth storage must retain the SQLite/localStorage compatibility and recovery path.");
+requireText(supabase, "legacySet(key, value)", "Auth persistence must preserve a recoverable compatibility copy until the secure write succeeds.");
 forbidText(supabase, '?? "https://', "Supabase configuration must never silently fall back to production.");
+
+const appConfig = JSON.parse(read("app.json"));
+if (appConfig.expo?.android?.allowBackup !== false) failures.push("Android app-data backup must remain disabled so undecryptable SecureStore state cannot be restored after reinstall/device transfer.");
+const plugins = JSON.stringify(appConfig.expo?.plugins ?? []);
+if (!plugins.includes("expo-secure-store") || !plugins.includes("configureAndroidBackup")) failures.push("Expo SecureStore must be configured explicitly in app.json for Android backup exclusions.");
+
+const rootLayout = read("app/_layout.tsx");
+requireText(rootLayout, "StartupErrorBoundary", "The app root must retain a visible startup/render error boundary.");
+const startupBoundaryPath = path.join(root, "components/startup-error-boundary.tsx");
+if (!fs.existsSync(startupBoundaryPath)) failures.push("Missing native startup error boundary component.");
+else {
+  const startupBoundary = fs.readFileSync(startupBoundaryPath, "utf8");
+  requireText(startupBoundary, "componentDidCatch", "Startup error boundary must record render failures for diagnosis.");
+  requireText(startupBoundary, "minHeight: 56", "Startup recovery action must retain an accessible touch target.");
+}
 
 const onboarding = read("app/onboarding.tsx");
 requireText(onboarding, "OptionPicker", "Onboarding must use canonical context choices.");
@@ -85,7 +103,8 @@ if (failures.length) {
 
 console.log("Cogni logic/security audit passed.");
 console.log("✓ Supabase Edge backend only");
-console.log("✓ Secure auth session persistence");
+console.log("✓ Crash-safe secure auth persistence + Android backup controls");
+console.log("✓ Visible root startup error recovery");
 console.log("✓ Canonical context personalisation");
 console.log("✓ Exact multi-select requirements");
 console.log("✓ Native recovery + account deletion");

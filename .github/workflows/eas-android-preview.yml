@@ -36,8 +36,14 @@ jobs:
       - name: Check Expo dependencies
         run: npx expo install --check
 
+      - name: ESLint
+        run: npm run lint
+
       - name: UI quality audit
         run: npm run ui-audit
+
+      - name: Logic and security audit
+        run: npm run logic-audit
 
       - name: TypeScript check
         run: npm run typecheck

@@ -22,6 +22,10 @@ function RootNavigator() {
         animation: reducedMotion ? "none" : "default",
       }}
     >
+      <Stack.Screen name="forgot-password" options={{ title: "Reset password" }} />
+      <Stack.Screen name="auth/confirm" options={{ title: "Confirm account" }} />
+      <Stack.Screen name="auth/recovery" options={{ title: "Choose new password" }} />
+
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="login" options={{ title: "Sign in", presentation: "modal" }} />
         <Stack.Screen name="signup" options={{ title: "Create account", presentation: "modal" }} />

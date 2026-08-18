@@ -1,6 +1,6 @@
 import React from "react";
 import { Redirect, router } from "expo-router";
-import { Body, Card, ErrorState, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
+import { Body, Card, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 
 export default function ConfirmEmailScreen() {

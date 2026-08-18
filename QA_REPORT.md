@@ -1,38 +1,55 @@
 # Cogni internal-alpha QA report
 
-Last refreshed: 11 August 2026
+Last refreshed: 18 August 2026
 
 ## Release position
 
-Cogni is at internal-alpha stage across the production web app and native Android preview app.
+Cogni is an **internal-alpha Expo / React Native product**. The active client lives in `mobile/` and ships through Expo / EAS. The former Next.js / Vercel client is legacy compatibility source only and must not be treated as the active product architecture.
 
-- Production web/API: `https://gocogni.vercel.app`
+Current source position:
+
+- Main branch: `59845d18861b03a15dc391d30c4a65eba2cd278e`
 - Supabase project: `dhklfrqhsmofqrawfdjz`
-- Expo/EAS project: `24fc0fea-5e66-4365-a82c-ac668aded7d0`
-- Final Android internal-preview build: `4ee40b09-7a91-43e7-a3dd-df2eaded166e`
-- Final APK SHA-256: `3ebed1aaa91777e2d72cc76ea76659cf98d8b0243176bde1cdcd3eabe7b05f65`
-- Mobile dependency / Expo compatibility / TypeScript CI: passing
-- Production Vercel deployments after the integrity hardening: READY
-- Production error/fatal runtime-log check: clean
+- Expo / EAS project: `24fc0fea-5e66-4365-a82c-ac668aded7d0`
+- Mobile source version: `0.3.0`
 - Android package: `app.gocogni.cogni`
-- Android version: `0.1.0` / version code `1`
-- Android min SDK: 24
-- Android target SDK: 36
+- Active API: authenticated Supabase Edge Function `mobile-api`
+- Persistence: Supabase Postgres
+- Authentication: Supabase Auth with native secure session storage
+- Sensitive grading and score writes: server-side only
+- Mobile CI: passing on the latest stakeholder-readiness and alpha-metrics changes
 
-## Production content integrity
+The most recently validated installable Android preview is the **0.3.0 / version-code 2** APK validated on 14 August 2026. Its archive, package identity, v2 signature and permission minimisation passed automated binary inspection. **It is not the current release candidate**, because main has materially changed since that APK was built. A new EAS Android preview from current `main` is required before device-level sign-off.
 
-The live database was checked directly after all audience-depth migrations were applied.
+The `EAS Android preview` workflow remains deliberately manual-only so ordinary commits do not consume EAS build capacity. It re-runs dependency, UI, logic/security, TypeScript, Edge Function and context-engine checks before starting an internal APK build.
 
-Current live content:
+## Active architecture
 
-- 5 active audience segments
-- 780 challenges
-- 95 daily lessons
-- 126 audience-tagged challenges per active audience
-- 16 audience-tagged lessons per active audience
-- 7 shared core diagnostic questions plus 5 audience-applied diagnostic questions per audience
+- **Client:** Expo / React Native + Expo Router
+- **Build / distribution:** Expo / EAS
+- **Authentication:** Supabase Auth
+- **Mobile API:** authenticated `mobile-api` Supabase Edge Function
+- **Database:** Supabase Postgres
+- **Answer keys:** server-side; not shipped to the mobile client
+- **Privileged writes:** server-side only
+- **Session credentials:** native secure storage
+- **Quality gates:** Expo dependency check, ESLint, UI audit, logic/security audit, TypeScript, Edge Function typecheck and behavioural tests
 
-The production integrity audit currently returns zero issues for:
+Vercel is not a dependency of the current mobile runtime.
+
+## Production content snapshot
+
+The live database was checked directly on 18 August 2026.
+
+Published content:
+
+- **6 learner contexts:** casual / personal growth, university student, graduate / early career, junior professional, management and executive
+- **863 published challenges**
+- **42 published diagnostic challenges**
+- **111 published daily lessons**
+- Each learner context currently resolves to **233 published challenges** and **31 published lessons** when shared `all` content is included
+
+The production content-integrity audit currently returns **zero issues** for:
 
 - published challenge without answer key
 - published challenge without skill mapping
@@ -42,164 +59,112 @@ The production integrity audit currently returns zero issues for:
 - duplicate published prompt
 - published challenge without audience coverage
 - invalid complexity value
-- streak date without a matching completed core training session
-- suspicious diagnostic sessions with more than 12 unique answers or fragmented session keys
-- profile XP not reconciling to persisted response XP plus one-time lesson XP
 
-The repeatable read-only version is stored in `scripts/internal_alpha_integrity.sql`.
+Additional live integrity checks currently return:
 
-## Audience-depth checks
+- **0 streak inconsistencies**
+- **0 suspicious diagnostic-session structures**
+- **0 XP reconciliation issues**
 
-Audience difficulty and complexity increase progressively from university to executive content. All five audiences have coverage across single choice, multi-select, ranking, classification and triage formats.
+The repeatable read-only integrity pack is `scripts/internal_alpha_integrity.sql`.
 
-The native and web flows share the same audience-aware engine, lesson assignment, persisted training sessions, scoring and skill history.
+## Learning and personalisation position
 
-## Integrity and security defects found and fixed
+Cogni currently supports:
 
-### Diagnostic session binding
+- context-aware daily lessons and practice
+- time-aware scenario selection using the learner's local context
+- safe everyday transfer scenarios outside work / study periods
+- explicit protection against promoting casual learners into management / executive-only content
+- persisted daily sessions and interruption / resume support
+- five interaction formats: single choice, multi-select, ranking, classification and triage
+- partial-credit scoring where appropriate
+- confidence capture
+- 0–100 Development Scores with separate evidence reliability
+- reduced independent evidence weight for repeated questions
+- focused skill practice
+- per-situation relevance feedback
+- XP and streak motivation
 
-Previous behaviour accepted any published diagnostic challenge when the client supplied `mode=diagnostic` and a UUID session key. A modified client could therefore submit diagnostic questions outside the currently issued starting check and repeatedly influence scores/XP.
+Audience context changes scenario relevance, stakes and decision complexity; it is not treated as an estimate of innate ability.
 
-Fixed in both web and mobile answer APIs:
+## Stakeholder-readiness improvements merged 18 August 2026
 
-- diagnostic challenge must belong to the learner's current issued starting-check definition
-- a partially completed starting check must continue under its existing session key
-- already-completed diagnostics cannot be resubmitted
-- already-answered starting-check challenges cannot be submitted again
-- training and practice challenge submissions are bound to a user-owned persisted session and assignment
+The current mobile source now makes several previously implicit product qualities explicit to users:
 
-Shared protection is implemented in `lib/answer-guards.ts`.
+- onboarding explains that the starting check is not pass / fail, gives an expected effort range and explains that early evidence is provisional
+- Train explains expected effort and why a situation was selected
+- Progress teaches users to interpret Development Score together with evidence strength rather than as a fixed grade or percentile
+- Progress turns measurement into a next-best-practice action
+- Profile explains the privacy, server-side grading and scientific boundaries in learner-facing language
+- product documentation now reflects the active Expo + Supabase architecture and privacy / psychometric guardrails
+
+These changes passed the full Expo mobile CI before merge.
+
+## Measurement position
+
+Authoritative internal-alpha activation and retention measurement is now defined in:
+
+- `METRICS.md`
+- `scripts/internal_alpha_metrics.sql`
+
+The measurement model deliberately uses server-side learning facts rather than relying on client page-view telemetry.
+
+Core definitions:
+
+- **Activation:** first completed core daily training session
+- **D1 / D3 / D7 retention:** server-observed learning activity exactly 1 / 3 / 7 days after activation
+- **Session effort:** first-to-last scored-answer span for completed sessions, rather than misleading wall-clock session age when a learner interrupts and resumes
+
+Current live user counts are still too small to treat activation or retention percentages as product evidence. The metrics pack explicitly requires the eligible cohort count beside every rate and treats cohorts below 20 as directional only.
+
+## Integrity and security hardening retained
+
+### Session and answer binding
+
+Diagnostic, daily-training and focused-practice answers are bound to the learner's issued or owned session. Already-completed or already-answered diagnostic items cannot simply be resubmitted to influence scores or XP.
+
+### Atomic scoring and evidence
+
+Scored answers use a transactional database path with per-user serialization so concurrent devices cannot silently overwrite skill / XP updates. Repeated questions contribute reduced independent evidence.
 
 ### Daily streak semantics
 
-Previous behaviour advanced `current_streak` and `last_session_date` after every scored answer, including diagnostic/practice answers and incomplete daily sessions.
+XP may be earned per scored response, but the daily streak advances only when the assigned core daily training session is complete and at most once per learner-local day. Practice and diagnostic responses do not extend the streak.
 
-Fixed so that:
+### Atomic lesson completion
 
-- XP remains awarded per scored response
-- daily streak changes only when the assigned core training session reaches completed status
-- practice and diagnostic responses do not extend the daily streak
-- the streak is changed at most once per local day
+Daily lesson completion and its one-time XP award occur transactionally; duplicate completion does not duplicate the XP award.
 
-One historical stale streak created by the previous behaviour was identified in production and corrected. Post-correction integrity checks return zero streak inconsistencies.
+### Native auth boundary
 
-### Atomic XP and streak updates
-
-The previous server implementation used read-then-write profile updates. Concurrent requests could theoretically overwrite one another's XP increments.
-
-Production now uses `public.award_xp_and_maybe_streak(...)`:
-
-- one atomic database update for XP plus optional streak transition
-- `SECURITY INVOKER`
-- fixed empty `search_path`
-- negative XP rejected
-- execution revoked from `PUBLIC`, `anon` and `authenticated`
-- execution granted only to `service_role`
-
-The function was smoke-tested under `service_role` inside a rollback transaction without changing production values.
-
-### Atomic daily lesson completion
-
-Lesson completion previously inserted the completion row and updated XP as two separate database actions. A failure between them could persist completion without the +5 XP award.
-
-Production now uses `public.complete_daily_lesson_with_xp(...)`:
-
-- completion row and XP increment execute in one database transaction
-- duplicate completion for the same user/day returns 0 XP
-- client roles cannot execute the RPC directly; `service_role` only
-- test transaction proved first completion = +5 XP, duplicate = +0 XP, one total XP increment
-- test transaction was rolled back and verified not to persist any synthetic completion or XP
-
-### Answer payload hardening
-
-Both web and mobile answer APIs now reject malformed client payloads before scoring:
-
-- single-choice / triage indexes must be within option bounds
-- multi-select indexes are de-duplicated and must be valid
-- ranking responses must be a valid permutation containing every option exactly once
-- classification responses must classify every expected statement
-
-### Native authentication routing
-
-Native authenticated routes are now protected at the router layer rather than relying on downstream API failures:
-
-- signed-out users are constrained to public auth/entry screens
-- signed-in users are routed to onboarding/app screens
-- splash remains visible until initial auth state is resolved
-- native signup explicitly redirects email confirmation to the live Cogni login URL
-
-The consolidated native CI passed after these changes.
+Authenticated routes are protected at the router layer. Signed-out users are kept to entry / auth flows; signed-in users are routed to onboarding or product screens. Password recovery routes are native and account deletion is server-side.
 
 ### Android permission minimisation
 
-Binary inspection of an earlier Android APK surfaced `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, none of which are required by Cogni's current feature set.
+The Android config explicitly blocks unnecessary overlay and legacy external-storage permissions. The previously validated 0.3.0 APK confirmed the resulting package retained only required permissions, including Internet and vibration access.
 
-The Android config now blocks all three. Final binary inspection of build `4ee40b09-7a91-43e7-a3dd-df2eaded166e` proved they are absent from the built manifest.
+## Supabase security position
 
-The final manifest requests only:
+The current Supabase Security Advisor shows only informational `RLS enabled / no policy` notices for tables intentionally kept inaccessible to normal client roles, including answer-key and other server-oriented tables. These should continue to be reviewed if their access model changes.
 
-- `app.gocogni.cogni.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
-- `android.permission.INTERNET`
-- `android.permission.VIBRATE`
+The 11 August QA report recorded **leaked-password protection as disabled**. Current connected tooling can query the database and security advisor but cannot read or patch the hosted Auth-service configuration, so this control has **not been re-verified or changed in this refresh**. Treat it as an unresolved release gate until the Supabase Auth configuration is explicitly verified as enabled.
 
-## Final Android APK binary verification
+Supabase's current password-security guidance supports leaked-password protection on Pro plans and above.
 
-GitHub Actions downloaded and inspected the actual final EAS APK. Verification passed for:
+## Current release gates
 
-- valid APK/ZIP archive
-- SHA-256 `3ebed1aaa91777e2d72cc76ea76659cf98d8b0243176bde1cdcd3eabe7b05f65`
-- valid Android v2 signature
-- one RSA 2048-bit signer
-- package `app.gocogni.cogni`
-- version name `0.1.0`
-- version code `1`
-- min SDK 24
-- target SDK 36
-- production Cogni API endpoint embedded
-- production Cogni Supabase endpoint embedded
-- unnecessary overlay/storage permissions absent
+Before wider external access:
 
-This artifact supersedes the earlier internal-preview APK for alpha testing.
-
-## CI/release workflow position
-
-The repository retains only two intended mobile workflows:
-
-- `Expo mobile CI`
-- `EAS Android preview`
-
-Both maintained workflows use current Node-24 GitHub Action runtimes. Android preview builds remain manual-only so normal commits do not consume EAS build capacity.
-
-## Supabase security-advisor position
-
-Post-DDL security advisors showed no new function/privilege warnings from the new RPCs.
-
-The remaining material Auth hardening item is **leaked-password protection disabled**. This should be enabled in Supabase Auth settings before wider external access.
-
-Several RLS-enabled/no-policy notices remain informational for intentionally server-only tables such as answer keys; they should continue to be reviewed if any such table is later exposed directly to clients.
-
-## Existing learning/content QA retained
-
-- mandatory daily micro-lesson before core daily training
-- audience-aware diagnostic and adaptive content
-- five interaction formats
-- partial-credit scoring for multi-select, ranking and classification
-- deterministic server-side grading
-- separated answer keys
-- persisted daily training sessions
-- idempotent lesson completion with +5 XP once per local day
-- audience-aware difficulty targeting and contextual selection
-- challenge XP of 7–12 based on score fraction
-
-## Known next QA priorities
-
-1. Device-level walkthrough of the final Android APK for each of the five audiences.
-2. Test interruption/resume behaviour during diagnostic, lesson and daily training on a physical device.
-3. Validate accessibility, keyboard handling and small-screen layout on representative Android devices.
-4. Enable Supabase Auth leaked-password protection before wider external access.
-5. Add automated behavioural tests around answer/session integrity.
-6. Instrument internal-alpha retention and completion funnels before recruiting a wider pilot group.
+1. **Build a fresh Android preview from current `main`.** The 14 August APK predates the latest contextual-engine, stakeholder-readiness and measurement changes.
+2. **Run a physical-device walkthrough across all six learner contexts.** Cover onboarding, starting check, lesson, daily training, answer feedback, Skills, Progress and Profile.
+3. **Exercise interruption / resume paths** during the starting check, lesson and daily session.
+4. **Validate representative Android screen sizes, keyboard handling, accessibility semantics and reduced-motion behaviour** on the fresh APK.
+5. **Verify and enable Supabase Auth leaked-password protection** before broad external recruitment.
+6. **Recruit a wider pilot only after the above gates**, then interpret activation / retention with the sample-size guardrails in `METRICS.md`.
 
 ## Scientific boundary
 
-Cogni's current 0–100 Development Score is an adaptive heuristic with separate evidence reliability. It is not a population percentile, IRT/BKT estimate or validated latent-trait measure. Transfer, calibration, interaction-format effects and adaptive sequencing efficacy still require empirical validation before stronger assessment claims are made.
+Cogni's current 0–100 Development Score is an adaptive learning indicator with separate evidence reliability. It is **not** a population percentile, validated latent-trait estimate, employment assessment or permanent grade.
+
+Transfer, calibration, interaction-format effects and adaptive-sequencing efficacy still require empirical validation. Product language should continue to distinguish observed in-app performance from proven real-world capability improvement.

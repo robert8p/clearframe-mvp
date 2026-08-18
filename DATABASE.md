@@ -1,39 +1,90 @@
-# Cogni database — v0.7.0
+# Cogni database — current architecture
 
-Core relations: `auth.users -> profiles`; `challenges -> challenge_answer_keys`; `challenges <-> skills` through `challenge_skill_mapping`; users -> `user_responses`; users <-> skills through `user_skill_scores`; users -> `user_error_patterns` and `analytics_events`; users -> `user_lesson_completions`; persisted daily `training_sessions` -> `training_session_challenges` and optionally one `daily_lesson`.
+Supabase Postgres is the system of record for Cogni authentication-linked profiles, learning content, adaptive sessions, scored responses, skill evidence and analytics.
 
-The answer-key table has RLS enabled and intentionally has no authenticated-user select policy. Grading uses the server-side service role.
+## Core relations
 
-## Migration 005 additions
+- `auth.users -> profiles`
+- `challenges -> challenge_answer_keys`
+- `challenges <-> skills` through `challenge_skill_mapping`
+- users -> `user_responses`
+- users <-> skills through `user_skill_scores`
+- users -> `user_error_patterns`, `analytics_events`, `user_lesson_completions`
+- `training_sessions -> training_session_challenges` and optionally one `daily_lesson`
+- `practice_sessions -> practice_session_challenges`
 
-`challenges`
-- `interaction_type`: `single_choice | multi_select | ranking | classification | triage`
-- `interaction_config jsonb`: format-specific metadata such as classification categories
+`challenge_answer_keys` has RLS enabled and intentionally has no authenticated-user read policy. Grading is performed by trusted server code.
 
-`challenge_answer_keys`
-- `correct_index` becomes nullable for non-single-choice formats
-- `correct_answer jsonb` stores arrays/maps/generalised deterministic answers
+## Current live content volume
 
-`user_responses`
-- `response_payload jsonb` stores generalised learner responses
-- `score_fraction numeric(5,4)` stores graded alignment from 0 to 1
-- existing rows are backfilled to 1 for correct and 0 for incorrect
+Verified against the live Cogni Supabase project on 18 August 2026:
 
-`daily_lessons`
-- lesson content, target skill, emoji, estimated duration, publication state and ordering
+- **906 challenges**
+- **111 published daily lessons**
+- **15 skills**
+- **6 audience segments**
 
-`user_lesson_completions`
-- one completion per user per local date
-- lesson XP is awarded idempotently server-side
+Content is substantially larger than the original v0.7 seed described by older documentation.
 
-`training_sessions`
-- `lesson_id` links the lesson selected for that daily session
+## Interaction model
 
-## Current seeded volume after migration 005
+`challenges.interaction_type` supports:
 
-- 150 scored challenges total
-- 120 single-choice
-- 30 alternative-format challenges
-- 15 published daily lessons
+- `single_choice`
+- `multi_select`
+- `ranking`
+- `classification`
+- `triage`
 
-The migration also updates the original 100 single-choice answer keys/options so correct positions are exactly 25/25/25/25 across A–D.
+`interaction_config jsonb` stores format-specific metadata such as classification categories and required multi-select counts. `challenge_answer_keys.correct_answer jsonb` stores generalized deterministic answers.
+
+`user_responses.response_payload` stores the learner response and `score_fraction` stores alignment from 0 to 1.
+
+## Contextual learning
+
+Profile context uses canonical machine values that match content tags:
+
+- `audience_segment`
+- `function_area`
+- `industry`
+- `primary_goal`
+- `study_stage`
+- `role_focus`
+- `responsibility_scope`
+- `organisation_scale`
+- `time_zone`
+
+`training_sessions.context_mode` records whether the session was selected in `work`, `mixed` or `personal` mode. An unanswered in-progress session can be reselected when the user's context mode changes before they begin.
+
+## Skill evidence
+
+`user_skill_scores` stores:
+
+- `score` — the current 0–100 Development Score heuristic
+- `reliability` — confidence in the evidence base
+- `attempts` — raw answered observations
+- `evidence_points` — weighted evidence used for reliability
+
+A novel challenge contributes 1.0 evidence point; a repeated challenge contributes 0.35. This prevents familiar/repeated questions from increasing confidence as quickly as fresh evidence while still allowing reinforcement to count.
+
+## Trusted scoring transaction
+
+`record_scored_answer(...)` is callable only by the Supabase service role. It performs the scored-answer write in one database transaction:
+
+1. validates the session/challenge relationship;
+2. serializes concurrent writes for the user with a transaction advisory lock;
+3. writes the response;
+4. updates skill scores and weighted reliability;
+5. records per-skill before/after evidence;
+6. updates error patterns;
+7. completes training/practice sessions when appropriate;
+8. awards XP and daily streak movement;
+9. writes the analytics event.
+
+This avoids cross-device lost updates from the previous read-modify-write API sequence.
+
+## Security boundary
+
+Authenticated users retain RLS-backed read access to their own profile but no longer have direct INSERT/UPDATE/DELETE privileges on `profiles`. This prevents client-side editing of `is_admin`, XP, streaks or other privileged values. Profile mutations are made only by trusted server-side code.
+
+The private schema also contains `mobile_api_rate_limits`, which is accessible only through a service-role-only rate-limit function used by the Supabase mobile Edge API.

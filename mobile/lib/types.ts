@@ -34,6 +34,7 @@ export type DailyLesson = {
   emoji: string;
   estimated_minutes: number;
   scenario_context?: string | null;
+  scenario_category?: string | null;
   content: { story: string; twist: string; principle: string; try_it: string; reveal: string; ai_age: string };
 };
 export type TrainingSession = { id: string; sessionDate?: string; status?: string; challenges: Challenge[]; answeredChallengeIds: string[] };
@@ -46,6 +47,7 @@ export type TodayResponse = {
   session?: TrainingSession;
   lesson?: DailyLesson;
   modeLabel?: string;
+  situationLabel?: string;
   message?: string;
 };
 export type SkillScore = {

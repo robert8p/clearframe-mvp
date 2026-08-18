@@ -8,7 +8,7 @@ Cogni is an **internal-alpha Expo / React Native product**. The active client li
 
 Current source position:
 
-- Main branch: `59845d18861b03a15dc391d30c4a65eba2cd278e`
+- Application source baseline before this QA-only refresh: `59845d18861b03a15dc391d30c4a65eba2cd278e`
 - Supabase project: `dhklfrqhsmofqrawfdjz`
 - Expo / EAS project: `24fc0fea-5e66-4365-a82c-ac668aded7d0`
 - Mobile source version: `0.3.0`

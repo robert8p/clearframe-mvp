@@ -8,8 +8,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "lint": "expo lint",
     "ui-audit": "node scripts/ui-audit.mjs",
+    "logic-audit": "node scripts/logic-audit.mjs",
     "typecheck": "tsc --noEmit",
+    "validate": "npm run lint && npm run ui-audit && npm run logic-audit && npm run typecheck",
     "doctor": "npx expo-doctor"
   },
   "dependencies": {

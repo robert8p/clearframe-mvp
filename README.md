@@ -2,11 +2,13 @@
 
 Cogni is an adaptive judgement-training app for the AI age. It develops critical thinking, evidence evaluation, AI-output verification, source-quality judgement, decision-making under uncertainty and related human reasoning skills through short daily lessons and mixed-format practice.
 
-## Current version
+## Active product
 
-**v0.8.2** — audience-aware learning with improved mobile readability and typography.
+**Expo / React Native is now the only active client build.**
 
-Production: https://gocogni.vercel.app
+All new product, UX and release work should be made in `mobile/` and shipped through Expo / EAS. The former Next.js web client is retained only as legacy source while any remaining server-side dependencies are migrated away from Vercel.
+
+Vercel Git deployments are disabled in `vercel.json`; do not re-enable them for product development.
 
 ## Learning experience
 
@@ -18,12 +20,13 @@ Cogni combines:
 - XP, streaks and engaging feedback
 - personalised skill insights
 - targeted skill practice
-- admin-managed audience-aware content
+- audience-aware content
 
 ## Audience contexts
 
-The current learner contexts are:
+The learner contexts are:
 
+- Casual / personal growth
 - University student
 - Graduate / early career
 - Junior professional
@@ -32,15 +35,27 @@ The current learner contexts are:
 
 Audience context changes scenario relevance and decision complexity, not the learner's underlying measured ability.
 
-## Deployment
+## Active architecture
 
-The application is a Next.js app deployed to Vercel with Supabase providing authentication and persistence.
+- **Client:** Expo / React Native in `mobile/`
+- **Mobile builds:** Expo / EAS
+- **Authentication and persistence:** Supabase
+- **Legacy server runtime:** the existing Vercel deployment remains temporarily available only because the current Expo client still calls its `/api/mobile/*` endpoints. It is frozen: no new Vercel builds should be produced.
 
-Required environment variables:
+The remaining decommission step is to move those mobile API endpoints to the Expo/Supabase architecture and then remove the Vercel project/runtime completely. Do not delete the existing Vercel runtime before that migration or the installed Expo app will lose Home, Train, answers, profile and practice API access.
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `NEXT_PUBLIC_APP_URL=https://gocogni.vercel.app`
+## Mobile development
 
-`OPENAI_API_KEY` and `OPENAI_MODEL` are optional for AI coaching features.
+Work from `mobile/`.
+
+Useful commands:
+
+```bash
+npm ci
+npx expo install --check
+npm run ui-audit
+npm run typecheck
+npx expo start
+```
+
+For an installable Android preview, use the repository's **EAS Android preview** GitHub workflow or EAS CLI with the `preview` profile in `mobile/eas.json`.

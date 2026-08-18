@@ -1,31 +1,88 @@
-# Product Plan A–J — Cogni v0.7.0
+# Product Plan A–J — Cogni v0.8.0
 
 ## A. Product architecture
-Cogni is a daily professional judgement gym. A diagnostic estimates starting capability; a short adaptive lesson teaches one thinking move; a learner model then selects five mixed-format practice challenges; every response teaches an explicit principle; evidence accumulates into a transparent Judgement Profile. B2B is an aggregation layer on top of the same learning evidence, with minimum-cohort and consent controls rather than manager access to detailed individual answers.
+Cogni is a mobile-first adaptive judgement-training app for the AI age. A starting check estimates a learner's current evidence base; short daily lessons teach one thinking move; adaptive mixed-format practice then applies that move in situations matched to the learner's context. Responses update a transparent Development Score per skill together with a separate evidence/reliability signal. The active product is the Expo / React Native app in `mobile/`; the former Next.js client is legacy compatibility code only.
 
-## B. MVP scope
-Implemented core: auth, diagnostic, 15-skill profile, 150 scored challenges, 15 daily lessons, adaptive five-item persisted session, five interaction formats, explanations, confidence, error patterns, partial-credit scoring, exact skill deltas, XP/streak, mobile web, admin single-choice creation, basic analytics and RLS. Should-next: lesson/content CMS for all formats, content quality review queue, richer spaced retrieval, weekly review, cohort pilots and retention instrumentation. Later: Stripe, leagues/team challenges, normative percentiles only after validation, full IRT/BKT, SSO/SCIM, native mobile and enterprise exports.
+## B. Current product scope
+Implemented core: Supabase Auth; secure native session storage; audience-aware onboarding; casual, student and professional contexts through executive level; starting check; daily micro-lessons; persisted adaptive sessions; five interaction formats; partial-credit grading; confidence capture; 0–100 Development Scores with separate evidence reliability; reduced evidence weight for repeated questions; XP and streaks; focused skill practice; per-situation relevance feedback; account deletion; accessibility and mobile quality guardrails; server-side scoring with answer keys hidden from the client.
 
-## C. Data model
-Users -> responses -> challenges; challenges <-> skills; users <-> skill scores; users -> error patterns; users -> daily lesson completions; training sessions -> assigned lesson and persisted challenges; organisations <-> members; events capture product behaviour. Answer keys are separated from challenge presentation. Generalised JSON answer payloads support non-MCQ interactions while score_fraction preserves graded alignment from 0 to 1.
+Should-next: internal-alpha retention/completion instrumentation; physical-device walkthroughs across representative audiences and screen sizes; interruption/resume testing; weekly review and spaced-retrieval improvements; content-quality review workflow; cohort pilot evidence; stronger transfer measurement; leaked-password protection before wider external access.
 
-## D. Scoring model
-0–100 Development Score per skill plus separate evidence reliability. Logistic expected-success update uses observed performance from 0–1, allowing partial credit for multi-select/ranking/classification while retaining binary exact-correctness. Higher K is used for diagnostic, lower K for training, with no speed-as-intelligence assumption. Confidence and error patterns are stored for calibration and later models. Replaceable by IRT/BKT after sufficient validation data.
+Later, only after evidence supports it: enterprise cohort views with privacy thresholds and consent controls; SSO/SCIM; validated benchmark or normative claims; more advanced psychometric models; monetisation and team features.
+
+## C. Learner promise
+The product should answer four questions quickly and repeatedly:
+
+1. **Why should I care?** The situation should feel relevant to a real decision the learner may face.
+2. **Why this now?** Cogni should make adaptive selection understandable rather than mysterious.
+3. **How much effort is this?** Daily practice should feel bounded and easy to start.
+4. **What changed and what should I do next?** Progress should lead directly to useful practice rather than passive score-watching.
+
+Context personalises situations and stakes; it must never be presented as a proxy for innate ability.
+
+## D. Evidence and scoring model
+Each skill has a 0–100 Development Score plus separate evidence reliability. Scores are adaptive learning indicators, not population percentiles, validated latent-trait estimates or permanent grades. Early scores should visibly carry limited evidence. Repeated questions contribute less independent evidence. Partial-credit formats preserve graded alignment from 0 to 1; confidence is stored separately for calibration work. Replace or extend the heuristic only when validation data justify a stronger model such as IRT/BKT.
 
 ## E. First seven days
-Day 0: landing -> sign-up -> diagnostic -> Judgement Profile -> first daily lesson -> mixed session. Days 1–2: lesson and practice focus on weakest measured skills, with AI-verification coverage. Day 3: spaced repeat. Day 4: first weekly pattern insight. Day 5: increase one difficulty band if evidence supports it. Day 6: transfer scenarios and unfamiliar interaction formats. Day 7: weekly review of practice frequency, score movement, calibration and next focus—without percentile claims.
+Day 0: sign-up -> choose learning context -> starting check -> first skill profile -> short lesson -> adaptive practice. The learner should understand that the starting check is not pass/fail and takes only a few minutes.
 
-## F. Screen map
-Landing; sign-up; login; onboarding; diagnostic; diagnostic results; dashboard; **daily lesson**; training; embedded answer feedback; session complete; skills/explore; progress; achievements; settings/profile; admin content; internal analytics.
+Days 1–2: lesson and practice focus on the weakest measured areas while maintaining broad AI-verification and evidence-evaluation coverage. Explain why the situations were chosen.
 
-## G. Stack
-Next.js 16 App Router, React 19, TypeScript, Tailwind 4, Supabase Postgres/Auth/RLS, Vercel, optional OpenAI server-side coach and GitHub. One deployable web application remains intentional for the MVP.
+Day 3: spaced retrieval and a previously seen principle in a different context.
 
-## H. Build sequence
-1 security/data foundation; 2 auth; 3 challenge engine; 4 diagnostic/scoring; 5 adaptive persisted sessions; 6 motivation/feedback; **7 mixed-format practice + daily micro-lessons**; 8 content management/analytics; 9 B2B privacy model; 10 validation study and psychometric instrumentation.
+Day 4: first pattern insight showing score together with evidence strength.
 
-## I. Ten biggest risks
-1 false scientific credibility; 2 weak content quality; 3 novelty wears off; 4 scores fail to transfer to work; 5 partial-credit rules do not predict real judgement; 6 enterprise privacy concerns; 7 AI-assisted content generation introduces answer/distractor bias; 8 adaptive model overfits sparse evidence; 9 B2C willingness-to-pay is weak; 10 B2B buyer/user incentives diverge. Each should be converted into a measurable validation question.
+Day 5: increase difficulty only if evidence supports it; otherwise preserve useful challenge without artificial escalation.
 
-## J. Grant/R&D considerations
-Potential genuine uncertainty exists in reasoning-error inference, adaptive sequencing efficacy, mixed-format measurement, confidence-calibration interventions, free-text rubric reliability and transfer measurement. Document hypotheses, baselines, failed approaches, evaluation data and technical breakthroughs contemporaneously. Seek professional advice before making a UK R&D tax or grant claim.
+Day 6: transfer scenarios outside the learner's most familiar setting.
+
+Day 7: weekly review of practice, score movement, evidence growth, calibration and the next best skill to practise—without percentile or diagnostic claims.
+
+## F. Active screen map
+Entry / welcome; sign-up; login; password recovery; onboarding; starting check; Train hub; daily lesson; adaptive question session; embedded answer feedback; focused skill practice; Skills; Progress; Profile / settings.
+
+The learner-facing hierarchy is intentionally simple: **Home -> Train -> understand feedback -> Progress -> act on the next skill**.
+
+## G. Active technology stack
+- **Client:** Expo / React Native with Expo Router in `mobile/`
+- **Build/release:** Expo / EAS; Android preview workflow is manual to avoid unnecessary build consumption
+- **Authentication:** Supabase Auth
+- **API:** authenticated Supabase Edge Function `mobile-api`
+- **Persistence:** Supabase Postgres
+- **Sensitive grading:** server-side only; answer keys are not shipped to the client
+- **Session storage:** native secure storage with migration from the earlier local session store
+- **Quality gates:** ESLint, Expo dependency check, UI audit, logic/security audit, TypeScript, Edge Function typecheck and behavioural tests
+
+Vercel is not part of the active mobile runtime. The old Next.js/Vercel client remains only as temporary legacy compatibility source and must not be treated as the product architecture.
+
+## H. Stakeholder guardrails
+**Learner:** low friction, clear time commitment, immediate feedback, relevant situations, no shame-based scoring, accessible controls and obvious next action.
+
+**Learning / L&D:** every interaction must map to an explicit skill and principle; adaptation must remain interpretable; transfer and retention claims require evidence.
+
+**Manager / enterprise buyer:** future reporting should prefer aggregated capability trends and cohort-level evidence. Detailed individual answers must not become a default management-surveillance surface.
+
+**Security / privacy:** least privilege, server-side privileged writes, secure session handling, minimal device permissions, user-owned data access and complete account deletion are release requirements rather than optional polish.
+
+**Commercial / growth:** optimise activation, completion, return rate and perceived usefulness before adding pricing complexity or social mechanics. Differentiation should come from relevant adaptive practice plus evidence transparency—not inflated scientific claims.
+
+**Executive / investor:** defensibility depends on content quality, behavioural data, learning efficacy, trust and an improving selection engine. Feature count is not the moat.
+
+**Research / psychometrics:** distinguish observed performance, confidence and evidence strength; document uncertainty; test transfer and calibration before stronger assessment language.
+
+## I. Primary risks and validation questions
+1. **False scientific credibility** — do users correctly understand what Development Scores do and do not mean?
+2. **Weak transfer** — does improvement on Cogni predict better reasoning in materially different situations?
+3. **Content quality variance** — can every item survive expert review for ambiguity, distractor quality and answer-key validity?
+4. **Novelty decay** — do learners return after the first week when visual novelty matters less?
+5. **Sparse-evidence overfitting** — does adaptation remain stable when only a small number of observations exist?
+6. **Buyer/user incentive conflict** — can enterprise value be demonstrated without turning learner evidence into surveillance?
+7. **AI-assisted content bias** — do generated or assisted items introduce systematic answer patterns or audience stereotypes?
+8. **Misleading progress motivation** — does score movement encourage useful practice rather than gaming or discouragement?
+9. **Privacy/security failure** — can the app maintain least privilege, minimal permissions and deletion guarantees as enterprise features are added?
+10. **Willingness to pay** — is repeated practical value strong enough to support B2C or B2B pricing after retention is proven?
+
+## J. Release and R&D discipline
+Before wider external access, complete representative physical-device QA, interruption/resume checks, small-screen/accessibility verification, leaked-password protection, retention/completion instrumentation and a documented pilot protocol.
+
+For genuine R&D work, record hypotheses, baselines, failed approaches, evaluation data and technical uncertainty contemporaneously. Candidate research areas include adaptive sequencing efficacy, confidence-calibration interventions, mixed-format measurement, reasoning-error inference, transfer measurement and future free-text rubric reliability. Stronger scientific or commercial claims must follow evidence, not precede it.

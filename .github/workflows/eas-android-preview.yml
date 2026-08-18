@@ -23,6 +23,10 @@ jobs:
           cache: "npm"
           cache-dependency-path: "mobile/package-lock.json"
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Require Expo token
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
@@ -47,6 +51,14 @@ jobs:
 
       - name: TypeScript check
         run: npm run typecheck
+
+      - name: Supabase Edge typecheck
+        working-directory: .
+        run: deno check supabase/functions/mobile-api/index.ts
+
+      - name: Context engine behavioral tests
+        working-directory: .
+        run: deno test supabase/functions/mobile-api/engine_test.ts
 
       - name: Verify Expo project link
         run: |

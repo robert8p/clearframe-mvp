@@ -10,6 +10,13 @@ export type ContextProfile = {
   organisationScale: string | null;
 };
 
+export type ContextMoment = {
+  localHour: number;
+  localMinute: number;
+  localWeekday: number;
+};
+
+export type ContextMode = "work" | "mixed" | "personal";
 export type ContextOption = { value: string; label: string };
 
 export const INDUSTRY_OPTIONS: ContextOption[] = [
@@ -142,18 +149,81 @@ export function contextProfileFromRow(row: Record<string, unknown> | null | unde
     functionArea: str(row?.function_area), industry: str(row?.industry), primaryGoal: str(row?.primary_goal), studyStage: str(row?.study_stage), roleFocus: str(row?.role_focus), responsibilityScope: str(row?.responsibility_scope), organisationScale: str(row?.organisation_scale),
   };
 }
+
+export function contextMode(moment?: ContextMoment | null): ContextMode {
+  if (!moment) return "mixed";
+  const weekday = Number(moment.localWeekday);
+  const hour = Number(moment.localHour);
+  const minute = Number(moment.localMinute);
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) return "mixed";
+  if (weekday === 0 || weekday === 6) return "personal";
+  const minutes = hour * 60 + minute;
+  if (minutes >= 9 * 60 && minutes < 17 * 60 + 30) return "work";
+  if (minutes >= 7 * 60 && minutes < 9 * 60) return "mixed";
+  return "personal";
+}
+
+export function situationLabelForMoment(moment?: ContextMoment | null) {
+  if (!moment) return "Situation";
+  if (moment.localWeekday === 0 || moment.localWeekday === 6) return "Weekend situation";
+  const mode = contextMode(moment);
+  if (mode === "work") return "At work";
+  if (moment.localHour >= 17) return "Tonight’s situation";
+  if (moment.localHour < 9) return "Start-of-day situation";
+  return "Everyday situation";
+}
+
+function audienceValues(content: { audience_segments?: unknown }) {
+  return Array.isArray(content.audience_segments) ? content.audience_segments.map(String) : [];
+}
+
+export function contentEligibleForMoment(content: { audience_segments?: unknown }, audience: AudienceSegment, moment?: ContextMoment | null) {
+  const audiences = audienceValues(content);
+  if (!audiences.length || audiences.includes("all") || audiences.includes(audience)) return true;
+  // Life-native content can deliberately transfer into professional/student profiles outside work/study contexts.
+  // The reverse is intentionally not allowed: casual learners should never receive executive/management-only scenarios.
+  return Boolean(moment && audience !== "casual" && audiences.includes("casual"));
+}
+
 function matches(tags: unknown, value: string | null) {
   if (!value || value === "prefer_not" || !Array.isArray(tags) || !tags.length) return false;
   return tags.map(String).includes(value);
 }
-export function contentContextScore(content: { audience_segments?: unknown; function_tags?: unknown; industry_tags?: unknown; goal_tags?: unknown }, audience: AudienceSegment, profile: ContextProfile) {
-  const audiences = Array.isArray(content.audience_segments) ? content.audience_segments.map(String) : [];
-  let score = audiences.includes(audience) ? 20 : audiences.includes("all") || !audiences.length ? 2 : -100;
-  if (matches(content.function_tags, profile.functionArea)) score += 8;
-  if (matches(content.industry_tags, profile.industry)) score += 5;
+
+export function contentContextScore(
+  content: { audience_segments?: unknown; function_tags?: unknown; industry_tags?: unknown; goal_tags?: unknown },
+  audience: AudienceSegment,
+  profile: ContextProfile,
+  moment?: ContextMoment | null,
+) {
+  const audiences = audienceValues(content);
+  const exact = audiences.includes(audience);
+  const universal = audiences.includes("all") || !audiences.length;
+  const casualTransfer = Boolean(moment && audience !== "casual" && audiences.includes("casual"));
+  if (!exact && !universal && !casualTransfer) return -100;
+
+  if (!moment) {
+    let score = exact ? 20 : universal ? 2 : -100;
+    if (matches(content.function_tags, profile.functionArea)) score += 8;
+    if (matches(content.industry_tags, profile.industry)) score += 5;
+    if (matches(content.goal_tags, profile.primaryGoal)) score += 7;
+    return score;
+  }
+
+  const mode = contextMode(moment);
+  let score: number;
+  if (audience === "casual" && exact) score = 24;
+  else if (exact) score = mode === "work" ? 20 : mode === "mixed" ? 14 : 8;
+  else if (casualTransfer) score = mode === "personal" ? 24 : mode === "mixed" ? 12 : 2;
+  else score = 10;
+
+  const profileWeight = mode === "work" ? 1 : mode === "mixed" ? 0.6 : 0.25;
+  if (matches(content.function_tags, profile.functionArea)) score += Math.round(8 * profileWeight);
+  if (matches(content.industry_tags, profile.industry)) score += Math.round(5 * profileWeight);
   if (matches(content.goal_tags, profile.primaryGoal)) score += 7;
   return score;
 }
+
 export function contextSummary(audience: AudienceSegment, profile: ContextProfile) {
   const functionLabel = functionOptionsForAudience(audience).find((item) => item.value === profile.functionArea)?.label;
   const goalLabel = goalOptionsForAudience(audience).find((item) => item.value === profile.primaryGoal)?.label;

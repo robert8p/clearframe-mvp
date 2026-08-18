@@ -88,11 +88,13 @@ export async function getOrAssignDailyLesson(supabase: SupabaseClient, userId: s
   const audience = profile.audience_segment;
   const context = contextProfileFromRow(profile);
 
-  // Preserve legacy/web behaviour when no client-local context is available.
+  // Older mobile/web clients do not send local context. Keep their stable assignment only when it still
+  // belongs to the user's audience; stale cross-audience assignments are repaired immediately.
   if (session.lesson_id && !moment) {
     const { data, error } = await supabase.from("daily_lessons").select(FIELDS).eq("id", session.lesson_id).eq("is_published", true).single();
     if (error) throw error;
-    return data as DailyLesson;
+    const existing = data as DailyLesson;
+    if (audienceMatches(existing.audience_segments, audience)) return existing;
   }
 
   const [{ data: assignments, error: assignmentError }, { data: scoreRows }, { data: recent }, { data: feedbackRows }] = await Promise.all([

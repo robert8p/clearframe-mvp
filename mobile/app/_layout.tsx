@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { useReducedMotion } from "@/lib/accessibility";
 import { SplashScreenController } from "@/components/splash-screen-controller";
+import { StartupErrorBoundary } from "@/components/startup-error-boundary";
 import { colors } from "@/lib/theme";
 
 function RootNavigator() {
@@ -42,10 +43,12 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <SplashScreenController />
-      <StatusBar style="light" />
-      <RootNavigator />
-    </AuthProvider>
+    <StartupErrorBoundary>
+      <AuthProvider>
+        <SplashScreenController />
+        <StatusBar style="light" />
+        <RootNavigator />
+      </AuthProvider>
+    </StartupErrorBoundary>
   );
 }

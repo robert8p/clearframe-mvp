@@ -19,7 +19,13 @@ function Hero({ eyebrow, title, body, cta, onPress, progress }: { eyebrow: strin
 
 export default function TrainHomeScreen() {
   const [today, setToday] = useState<TodayResponse | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [refreshing, setRefreshing] = useState(false);
-  const load = useCallback(async (refresh = false) => { refresh ? setRefreshing(true) : setLoading(true); setError(""); try { setToday(await apiFetch<TodayResponse>(todayApiPath())); } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load training."); } finally { setLoading(false); setRefreshing(false); } }, []);
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true); else setLoading(true);
+    setError("");
+    try { setToday(await apiFetch<TodayResponse>(todayApiPath())); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load training."); }
+    finally { setLoading(false); setRefreshing(false); }
+  }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   if (loading) return <LoadingState label="Choosing today’s training…" />; if (error && !today) return <ErrorState message={error} onRetry={() => void load()} />; if (today?.state === "onboarding") return <Redirect href="/onboarding" />;
   const questionCount = today?.state === "diagnostic" ? today.challenges?.length ?? 12 : today?.session?.challenges?.length ?? 0;

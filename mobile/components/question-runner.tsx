@@ -54,6 +54,8 @@ export function QuestionRunner({ mode, sessionId, challenges, answeredChallengeI
   const challenge = challenges[index];
   const type = challenge?.interaction_type ?? "single_choice";
   const categories = ((challenge?.interaction_config?.categories ?? []) as Category[]).filter((item) => item?.id && item?.label);
+  const requiredSelectionsRaw = Number(challenge?.interaction_config?.requiredSelections ?? challenge?.interaction_config?.required_selections ?? 0);
+  const requiredSelections = Number.isInteger(requiredSelectionsRaw) && requiredSelectionsRaw > 0 ? requiredSelectionsRaw : null;
   const correctList = correctArray(result?.correctAnswer);
   const correctGroups = correctMap(result?.correctAnswer);
   const progress = challenges.length ? answered.size / challenges.length * 100 : 0;
@@ -68,7 +70,8 @@ export function QuestionRunner({ mode, sessionId, challenges, answeredChallengeI
 
   if (!challenge) return <Screen><Card><Title size={24}>No questions available</Title><Body muted>Return to Train and try again.</Body><PrimaryButton label="Done" onPress={() => void onComplete()} /></Card></Screen>;
 
-  const ready = type === "multi_select" ? multi.length > 0 : type === "ranking" ? ranking.length === challenge.options.length : type === "classification" ? challenge.options.length > 0 && challenge.options.every((_item, optionIndex) => Boolean(classification[String(optionIndex)])) : selected !== null;
+  const multiReady = requiredSelections ? multi.length === requiredSelections : multi.length > 0;
+  const ready = type === "multi_select" ? multiReady : type === "ranking" ? ranking.length === challenge.options.length : type === "classification" ? challenge.options.length > 0 && challenge.options.every((_item, optionIndex) => Boolean(classification[String(optionIndex)])) : selected !== null;
 
   async function submit() {
     if (!ready || busy) return;
@@ -89,7 +92,17 @@ export function QuestionRunner({ mode, sessionId, challenges, answeredChallengeI
   }
 
   function renderAnswers() {
-    if (type === "multi_select") return <View style={{ gap: 10 }}>{challenge.options.map((option, optionIndex) => { const active = multi.includes(optionIndex), right = Boolean(result) && correctList.includes(optionIndex), wrong = Boolean(result) && active && !right; return <Choice key={optionIndex} label={option} selected={active} correct={right} wrong={wrong} disabled={Boolean(result)} prefix={active ? "✓" : ""} onPress={() => setMulti((current) => current.includes(optionIndex) ? current.filter((value) => value !== optionIndex) : [...current, optionIndex])} />; })}</View>;
+    if (type === "multi_select") return <View style={{ gap: 10 }}>
+      {requiredSelections && !result ? <Text accessibilityLiveRegion="polite" style={{ color: multi.length === requiredSelections ? colors.green : colors.muted, fontSize: 13.5, lineHeight: 20, fontWeight: "800" }}>Choose exactly {requiredSelections} · {multi.length}/{requiredSelections} selected</Text> : null}
+      {challenge.options.map((option, optionIndex) => {
+        const active = multi.includes(optionIndex), right = Boolean(result) && correctList.includes(optionIndex), wrong = Boolean(result) && active && !right;
+        return <Choice key={optionIndex} label={option} selected={active} correct={right} wrong={wrong} disabled={Boolean(result)} prefix={active ? "✓" : ""} onPress={() => setMulti((current) => {
+          if (current.includes(optionIndex)) return current.filter((value) => value !== optionIndex);
+          if (requiredSelections && current.length >= requiredSelections) return current;
+          return [...current, optionIndex];
+        })} />;
+      })}
+    </View>;
     if (type === "ranking") {
       const remaining = challenge.options.map((option, optionIndex) => ({ option, optionIndex })).filter((item) => !ranking.includes(item.optionIndex));
       return <View style={{ gap: 10 }}>{ranking.map((optionIndex, rankIndex) => <Choice key={`rank-${optionIndex}`} label={challenge.options[optionIndex]} prefix={String(rankIndex + 1)} disabled={Boolean(result)} onPress={() => setRanking((current) => current.filter((value) => value !== optionIndex))} />)}{!result ? remaining.map(({ option, optionIndex }) => <Choice key={optionIndex} label={option} prefix="+" onPress={() => setRanking((current) => [...current, optionIndex])} />) : null}{result ? <Card><Eyebrow>Best order</Eyebrow>{correctList.map((optionIndex, rankIndex) => <Body key={`${optionIndex}-${rankIndex}`}>{rankIndex + 1}. {challenge.options[optionIndex]}</Body>)}</Card> : null}</View>;

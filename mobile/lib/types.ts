@@ -22,7 +22,7 @@ export type AnswerResult = {
   thinkingPrinciple: string;
   application: string;
   errorPattern?: string | null;
-  skillUpdates: { slug: string; name?: string; score: number; reliability: number; delta?: number }[];
+  skillUpdates: { slug: string; name?: string; score: number; reliability: number; delta?: number; evidenceWeight?: number }[];
   xpEarned: number;
   sessionCompleted?: boolean;
 };
@@ -55,6 +55,7 @@ export type SkillScore = {
   score: number;
   reliability: number;
   attempts: number;
+  evidence_points?: number;
   last_seen_at?: string | null;
   skills?: { name?: string; slug?: string; description?: string } | { name?: string; slug?: string; description?: string }[] | null;
 };
@@ -71,6 +72,7 @@ export type MobileProfileResponse = {
     role_focus?: string | null;
     responsibility_scope?: string | null;
     organisation_scale?: string | null;
+    time_zone?: string | null;
     xp?: number;
     current_streak?: number;
     last_session_date?: string | null;

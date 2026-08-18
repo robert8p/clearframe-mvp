@@ -35,6 +35,7 @@ function parseThemeColours(source) {
 
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    if (["node_modules", ".expo", "dist"].includes(entry.name)) return [];
     const full = path.join(dir, entry.name);
     return entry.isDirectory() ? walk(full) : [full];
   });
@@ -54,6 +55,7 @@ const brand = read("components/brand.tsx");
 const orb = read("components/orb.tsx");
 const rootLayout = read("app/_layout.tsx");
 const interactionCues = read("components/interaction-cues.tsx");
+const optionPicker = read("components/option-picker.tsx");
 const statusLabelSource = interactionCues.split("export function CompactAction")[0];
 pass(ui.includes("useReducedMotion"), "Shared UI motion must respect Reduce Motion.");
 pass(brand.includes("useReducedMotion"), "Cogni brand motion must respect Reduce Motion.");
@@ -63,6 +65,7 @@ pass(ui.includes("automaticallyAdjustKeyboardInsets"), "Shared scroll screens mu
 pass(ui.includes("minHeight: 56"), "Primary buttons must preserve at least a 56dp height.");
 pass(ui.includes("minHeight: 48") && ui.includes("export function ActionLink"), "Inline action links must preserve a 48dp touch target.");
 pass(interactionCues.includes("export function CompactAction") && interactionCues.includes('accessibilityRole="button"') && interactionCues.includes("minHeight: 48"), "Compact button-like controls must be real accessible buttons with at least a 48dp target.");
+pass(optionPicker.includes('accessibilityRole="radiogroup"') && optionPicker.includes('accessibilityRole="radio"') && optionPicker.includes("minHeight: 48"), "Canonical option pickers must be accessible radio controls with at least a 48dp target.");
 pass(statusLabelSource.includes("export function StatusLabel") && !statusLabelSource.includes("borderWidth:"), "Non-interactive status labels must remain visually flat and borderless.");
 
 const formField = read("components/form-field.tsx");
@@ -75,12 +78,12 @@ const home = read("app/(tabs)/home.tsx");
 const profile = read("app/(tabs)/profile.tsx");
 pass(audienceModel.includes('slug: "casual"') && audienceModel.includes('label: "Casual / personal growth"'), "Mobile audience model must include the casual / personal-growth context.");
 pass(audienceModel.includes('shortLabel: "Everyday learner"'), "Casual mobile context must use the clearer short label 'Everyday learner'.");
-pass(onboarding.includes("MOBILE_AUDIENCES") && onboarding.includes('audience === "casual"') && onboarding.includes('"Interest area"'), "Mobile onboarding must offer and personalise the casual context.");
+pass(onboarding.includes("MOBILE_AUDIENCES") && onboarding.includes('selectedAudience === "casual"') && onboarding.includes("functionOptionsForAudience") && onboarding.includes("OptionPicker"), "Mobile onboarding must offer canonical casual/personal context choices.");
 pass(onboarding.includes("This is about context—not ability"), "Mobile onboarding must not frame casual as a lower ability tier.");
 pass(home.includes("mobileAudienceMeta"), "Mobile Home must derive casual copy from the shared mobile audience model.");
-pass(profile.includes("mobileAudienceMeta") && profile.includes('data.profile.audience_segment==="casual"'), "Mobile Profile must support casual labels and fields.");
+pass(profile.includes("mobileAudienceMeta") && profile.includes('audience === "casual"') && profile.includes("OptionPicker"), "Mobile Profile must support canonical casual labels and fields.");
 
-const sourceFiles = walk(root).filter((file) => /\.(tsx|ts)$/.test(file) && !file.includes(`${path.sep}node_modules${path.sep}`) && !file.includes(`${path.sep}.expo${path.sep}`));
+const sourceFiles = walk(root).filter((file) => /\.(tsx|ts)$/.test(file));
 for (const file of sourceFiles) {
   const source = fs.readFileSync(file, "utf8");
   const relative = path.relative(root, file);
@@ -115,6 +118,7 @@ console.log("Cogni UI audit passed.");
 console.log("✓ Android safe-area + keyboard invariants");
 console.log("✓ Reduce Motion support");
 console.log("✓ >=48dp explicit touch-target guard");
+console.log("✓ Canonical context controls are accessible");
 console.log("✓ Honest interactive vs informational affordances");
 console.log("✓ Casual / personal-growth mobile parity");
 console.log("✓ No direct Text.onPress links");

@@ -1,12 +1,15 @@
-# Cogni deployment — Expo / EAS only
+# Cogni deployment — Expo / EAS + Supabase
 
-Cogni's active client is the Expo / React Native app in `mobile/`. Vercel is no longer an active build target.
+Cogni's active client is the Expo / React Native app in `mobile/`. Vercel is not an active build or backend target for current source.
 
-## Golden rule
+## Active deployment path
 
-Do not create or re-enable Vercel deployments for product development. `vercel.json` disables Vercel Git deployments.
+- Expo / EAS builds the iOS/Android app.
+- Supabase Auth provides identity.
+- Supabase Edge Function `mobile-api` is the trusted mobile backend.
+- Supabase Postgres stores profiles, content, sessions, answers, scores and analytics.
 
-The existing Vercel runtime is temporarily frozen because the current Expo app still uses its `/api/mobile/*` endpoints. Remove that runtime only after those endpoints have been moved to the Expo/Supabase architecture and the mobile client has been updated.
+`vercel.json` disables Vercel Git deployments. Do not re-enable them.
 
 ## Before every mobile build
 
@@ -15,57 +18,55 @@ From `mobile/` run:
 ```bash
 npm ci
 npx expo install --check
+npm run lint
 npm run ui-audit
+npm run logic-audit
 npm run typecheck
 ```
 
-All four checks must pass.
+All checks must pass.
 
 ## Development
 
-Start with Expo Go where possible:
+Create `mobile/.env` from `.env.example` and set the intended Supabase project's public URL and publishable key. There is intentionally no production fallback.
 
 ```bash
 npx expo start
 ```
 
-Use a development/preview build only when required by native configuration or when testing the installable app itself.
-
 ## Installable Android preview
 
-The repository contains `.github/workflows/eas-android-preview.yml`.
-
-It validates the mobile project and starts an EAS `preview` build using `mobile/eas.json`.
-
-Equivalent local command from `mobile/`:
+Use `.github/workflows/eas-android-preview.yml` or run from `mobile/`:
 
 ```bash
-npx eas-cli build --platform android --profile preview
+npx eas-cli@21.7.1 build --platform android --profile preview
 ```
 
-The preview profile creates an installable APK.
+The preview profile creates an installable APK after the full validation suite passes.
 
 ## Production mobile release
 
-Use the `production` profile in `mobile/eas.json`:
+Use the production profile in `mobile/eas.json`:
 
 ```bash
-npx eas-cli build --platform android --profile production
-npx eas-cli build --platform ios --profile production
+npx eas-cli@21.7.1 build --platform android --profile production
+npx eas-cli@21.7.1 build --platform ios --profile production
 ```
 
-Use EAS Submit when the store release is ready.
+Use EAS Submit when store credentials and listings are ready.
 
-## Supabase
+## Supabase deployment
 
-Supabase remains the source of truth for authentication, profiles, learning content, scores, sessions and analytics. Database migrations in `supabase/migrations/` remain authoritative and should be applied in numerical/timestamp order as required.
+Database changes live in `supabase/migrations/` and should be applied in migration order. Trusted mobile backend code lives in `supabase/functions/mobile-api/` and is deployed as the authenticated `mobile-api` Edge Function.
+
+Before public release, Supabase Auth must allow the native deep-link scheme (`cogni://**`) for email confirmation/password recovery and leaked-password protection should be enabled.
 
 ## Vercel decommission status
 
 - New Vercel Git deployments: **disabled**
-- Vercel web client: **legacy / no further development**
 - Active product client: **Expo only**
-- Existing Vercel mobile API runtime: **temporarily frozen compatibility layer**
-- Final removal condition: mobile `/api/mobile/*` endpoints have moved off Vercel and the Expo client points to the replacement backend
+- Active mobile backend: **Supabase Edge Function**
+- New Expo source dependency on Vercel: **none**
+- Frozen historic Vercel runtime: may remain reachable only for older already-installed app builds until users install the Supabase-backed Expo build
 
-This prevents a destructive cutover: deleting Vercel before replacing the API would break the current mobile app.
+Once the replacement Expo build is installed on test devices, the old Vercel project/runtime can be deleted without affecting the new app. The Vercel connector used by this project does not expose project deletion, so that final destructive removal is a deliberate Vercel-dashboard action rather than an application-code step.

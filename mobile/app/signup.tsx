@@ -1,13 +1,12 @@
 import React, { useRef, useState } from "react";
 import { router } from "expo-router";
+import * as Linking from "expo-linking";
 import { Text, TextInput, View } from "react-native";
 import { CogniLogo } from "@/components/brand";
 import { FormField } from "@/components/form-field";
 import { Body, Card, PrimaryButton, Screen, Title } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
-
-const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL ?? process.env.EXPO_PUBLIC_API_URL ?? "https://gocogni.vercel.app").replace(/\/$/, "");
 
 export default function SignupScreen() {
   const emailRef = useRef<TextInput>(null);
@@ -23,9 +22,17 @@ export default function SignupScreen() {
     if (busy || !email || password.length < 8) return;
     setBusy(true); setError(""); setMessage("");
     try {
-      const { data, error: authError } = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim() || undefined }, emailRedirectTo: `${WEB_URL}/login` } });
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: { full_name: name.trim() || undefined },
+          emailRedirectTo: Linking.createURL("auth/confirm"),
+        },
+      });
       if (authError) { setError(authError.message); return; }
-      if (data.session) router.replace("/onboarding"); else setMessage("Account created. Confirm the email from Cogni, then return to this app and sign in.");
+      if (data.session) router.replace("/onboarding");
+      else setMessage("Account created. Confirm the email from Cogni; the confirmation link will reopen this app.");
     } catch { setError("Connection interrupted. Check your connection and try again."); }
     finally { setBusy(false); }
   }

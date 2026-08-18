@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.8",
-    "expo": "~54.0.34",
+    "expo": "~54.0.37",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",

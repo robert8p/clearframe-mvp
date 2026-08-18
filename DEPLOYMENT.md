@@ -1,82 +1,71 @@
-# Cogni v0.7.0 deployment — literal steps
+# Cogni deployment — Expo / EAS only
 
-Production URL: `https://gocogni.vercel.app`
+Cogni's active client is the Expo / React Native app in `mobile/`. Vercel is no longer an active build target.
 
-## If you are upgrading the existing Cogni app
+## Golden rule
 
-Do these steps in this exact order.
+Do not create or re-enable Vercel deployments for product development. `vercel.json` disables Vercel Git deployments.
 
-1. Open **Supabase** and select the database used by `gocogni.vercel.app`.
-2. In the left menu click **SQL Editor**.
-3. Click **New query**.
-4. Open `supabase/migrations/005_learning_formats_and_lessons.sql` from this repository.
-5. Copy the **entire file** into the Supabase SQL editor.
-6. Click **Run**.
-7. Wait for the query to finish successfully. Do not deploy the new application code before this succeeds.
-8. Optional verification query:
+The existing Vercel runtime is temporarily frozen because the current Expo app still uses its `/api/mobile/*` endpoints. Remove that runtime only after those endpoints have been moved to the Expo/Supabase architecture and the mobile client has been updated.
 
-```sql
-select count(*) as challenges from public.challenges;
-select count(*) as lessons from public.daily_lessons where is_published = true;
+## Before every mobile build
+
+From `mobile/` run:
+
+```bash
+npm ci
+npx expo install --check
+npm run ui-audit
+npm run typecheck
 ```
 
-Expected after migration 005:
-- `challenges` = **150**
-- published `lessons` = **15**
+All four checks must pass.
 
-9. Replace the GitHub repository contents with the v0.7.0 project contents.
-10. Commit and push to `main`.
-11. Vercel should redeploy automatically.
-12. When the deployment is Ready, open `https://gocogni.vercel.app`.
-13. Sign in with your existing test account.
-14. From Home, the daily flow should now be **Daily lesson -> five mixed-format questions -> personalised completion insight**.
+## Development
 
-You do **not** need to rerun migrations 001–004 on the existing database if they have already been applied.
+Start with Expo Go where possible:
 
-## Fresh Supabase setup only
+```bash
+npx expo start
+```
 
-For a brand-new database, run these files in numerical order:
+Use a development/preview build only when required by native configuration or when testing the installable app itself.
 
-1. `001_initial.sql`
-2. `002_seed.sql`
-3. `003_training_sessions.sql`
-4. `004_learning_evidence.sql`
-5. `005_learning_formats_and_lessons.sql`
+## Installable Android preview
 
-Migration 005 adds the mixed interaction formats, partial-credit response fields, lesson tables, 15 lessons, 30 alternative-format challenges, 20 new story-led MCQs and rebalances the original 100 MCQ answer positions.
+The repository contains `.github/workflows/eas-android-preview.yml`.
 
-## Vercel environment variables
+It validates the mobile project and starts an EAS `preview` build using `mobile/eas.json`.
 
-In Vercel -> Project -> Settings -> Environment Variables, confirm:
+Equivalent local command from `mobile/`:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `NEXT_PUBLIC_APP_URL=https://gocogni.vercel.app`
-- `OPENAI_API_KEY` is optional
-- `OPENAI_MODEL` is optional
+```bash
+npx eas-cli build --platform android --profile preview
+```
 
-Then redeploy if any environment variable changed.
+The preview profile creates an installable APK.
 
-## Supabase authentication URL settings
+## Production mobile release
 
-Supabase -> Authentication -> URL Configuration:
+Use the `production` profile in `mobile/eas.json`:
 
-- **Site URL:** `https://gocogni.vercel.app`
-- **Redirect URL:** `https://gocogni.vercel.app/**`
+```bash
+npx eas-cli build --platform android --profile production
+npx eas-cli build --platform ios --profile production
+```
 
-For closed-pilot testing without custom SMTP, email confirmation can be disabled temporarily. Re-enable confirmation and configure a proper transactional email provider before a public launch.
+Use EAS Submit when the store release is ready.
 
-## What to expect in v0.7.0
+## Supabase
 
-The learner is sent to a roughly three-minute lesson before the daily test. The lesson includes a memorable story, twist, principle, short ungraded generate-before-reveal prompt and AI-age application. Completion awards 5 XP once per day.
+Supabase remains the source of truth for authentication, profiles, learning content, scores, sessions and analytics. Database migrations in `supabase/migrations/` remain authoritative and should be applied in numerical/timestamp order as required.
 
-The five-question session can then contain single-choice, multi-select, ranking, classification and triage tasks. The recommender preferentially includes alternative formats while retaining adaptive skill targeting, AI-verification coverage and challenge-type diversity.
+## Vercel decommission status
 
-## Troubleshooting
+- New Vercel Git deployments: **disabled**
+- Vercel web client: **legacy / no further development**
+- Active product client: **Expo only**
+- Existing Vercel mobile API runtime: **temporarily frozen compatibility layer**
+- Final removal condition: mobile `/api/mobile/*` endpoints have moved off Vercel and the Expo client points to the replacement backend
 
-- **`column interaction_type does not exist` / `relation daily_lessons does not exist`:** migration 005 was not successfully run against the database Vercel is using.
-- **No lesson appears:** verify `select count(*) from public.daily_lessons where is_published=true;` returns 15.
-- **Only old question formats appear today:** a persisted training session may already have been created before the upgrade. Existing sessions intentionally keep their assigned questions. A newly generated session will use the v0.7.0 mixed-format recommender.
-- **`Email rate limit exceeded`:** this is Supabase Auth's email service, not the question engine. For testing, use an existing account or temporarily disable Confirm Email; for production, configure custom SMTP.
-- **Admin redirects:** set your own `profiles.is_admin=true`.
+This prevents a destructive cutover: deleting Vercel before replacing the API would break the current mobile app.

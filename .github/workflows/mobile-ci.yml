@@ -10,6 +10,9 @@ on:
     paths:
       - "mobile/**"
 
+permissions:
+  contents: write
+
 jobs:
   mobile-typecheck:
     runs-on: ubuntu-latest
@@ -18,6 +21,8 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: feature/contextual-situation-engine
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
@@ -25,6 +30,18 @@ jobs:
           cache-dependency-path: "mobile/package-lock.json"
       - name: Strict install
         run: npm ci --include=dev --no-audit --no-fund
+      - name: Refresh Expo patch lockfile
+        run: npm install 'expo@~54.0.37' --save --include=dev --no-audit --no-fund
+      - name: Commit generated Expo lockfile
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/package.json mobile/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Align Expo dependency with SDK 54"
+            git push origin HEAD:feature/contextual-situation-engine
+          fi
       - name: Expo dependency check
         run: npx expo install --check
       - name: UI quality audit

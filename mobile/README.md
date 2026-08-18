@@ -1,68 +1,77 @@
 # Cogni Mobile — Expo / React Native
 
-This directory is the native iOS/Android consumer app for Cogni.
+This directory is the active Cogni product client for iOS and Android.
 
-The existing Next.js app remains the web, admin and analytics surface. Both clients use the same Supabase users, profiles, skill scores, responses, XP, streaks, content and adaptive learning engine.
+## Architecture
 
-## What works natively
+- Expo Router / React Native client
+- Supabase Auth for identity
+- SecureStore-backed persisted sessions
+- Supabase Edge Function `mobile-api` for trusted mobile operations
+- Supabase Postgres for profiles, learning content, sessions, responses, scoring and analytics
+- EAS for installable and store-ready builds
 
-- Supabase sign up / sign in with persisted sessions
-- mandatory learning-context selection plus optional function/industry/goal context
+The mobile app does **not** use Vercel. There is no API-URL fallback and no embedded service-role credential or answer key.
+
+## Native product coverage
+
+- sign up, sign in, email confirmation and password recovery
+- permanent in-app account deletion
+- canonical learning-context personalisation
+- device-timezone-aware daily boundaries and situations
 - audience-aware hybrid starting check
-- daily audience-aware lesson
-- daily adaptive mixed-format training
-- single choice, multi-select, ranking, classification and triage interactions
-- server-side grading and answer-key protection
-- skill-score/reliability updates, XP and streaks
-- Home, Skills, Train, Progress and Profile native tabs
-- extra three-question skill practice after the daily session
-- animated Cogni orb and native mobile layout
+- time-aware daily lesson and adaptive mixed-format training
+- time-aware three-question skill practice
+- single choice, exact-count multi-select, ranking, classification and triage
+- server-side answer-key protection and grading
+- transactional skill updates, XP and streaks
+- reduced reliability evidence for repeated questions
+- Home, Skills, Train, Progress and Profile tabs
+- situation relevance feedback
+- reduced-motion and accessibility support
 
-## Current build status
+## Local development
 
-The Expo/EAS project is linked and the first installable Android internal-preview build has completed successfully.
-
-Routine mobile changes are validated by the `Expo mobile CI` GitHub Actions workflow. Installable Android previews are intentionally created only when requested through the `EAS Android preview` workflow, so ordinary source commits do not start unnecessary EAS builds.
-
-## Run in Expo Go
-
-From the repository:
-
-```bash
-cd mobile
-npm ci
-npx expo start
-```
-
-Scan the QR code with Expo Go. The app defaults to the live Cogni backend. You can override public values by copying `.env.example` to `.env`.
-
-## Build an installable Android preview
-
-In GitHub, open **Actions**, choose **EAS Android preview**, then choose **Run workflow** on `main`.
-
-The workflow first runs a strict dependency install, Expo dependency compatibility check, TypeScript check and Expo-project-link check. It then requests an internal Android preview build from EAS.
-
-Local equivalent:
+Copy `.env.example` to `.env` and supply the intended Supabase project's **public** URL and publishable key. Local development intentionally has no production fallback.
 
 ```bash
 cd mobile
 npm ci
 npx expo install --check
-npm run typecheck
+npm run validate
+npx expo start
+```
+
+`npm run validate` runs ESLint, the UI/accessibility regression audit, the logic/security regression audit and TypeScript.
+
+## Android preview
+
+In GitHub Actions choose **EAS Android preview** and run it on `main`. The workflow validates dependencies, lint, UI invariants, architecture/security invariants and TypeScript before requesting an EAS internal APK build.
+
+Equivalent local command:
+
+```bash
 npx eas-cli@21.7.1 build --platform android --profile preview
 ```
 
 ## Production builds
 
-Store-ready builds are not automated yet. When store release work begins, use the production build profile and configure the Android/iOS store credentials and submission path deliberately.
+The production profile is defined in `eas.json`:
 
-App identifiers are currently:
+```bash
+npx eas-cli@21.7.1 build --platform android --profile production
+npx eas-cli@21.7.1 build --platform ios --profile production
+```
+
+App identifiers:
 
 - iOS: `app.gocogni.cogni`
 - Android: `app.gocogni.cogni`
 
-These should be treated as permanent once store records/builds are created.
+Treat those identifiers as permanent once store records are created.
 
-## Security
+## Security notes
 
-Only the Supabase publishable key exists in the native client. The Supabase service-role key and answer keys remain server-side. Native answer submission, daily-session creation and lesson completion use authenticated bearer-token API routes on the existing Next.js backend.
+Only public Supabase client values are available to the native bundle. Sessions are stored in the platform secure store, with a one-release migration path from the previous SQLite/localStorage adapter. Authenticated clients cannot directly update privileged profile values. Grading, account deletion, profile mutations, session creation, scoring, XP/streak writes and rate limiting are handled by trusted Supabase server code.
+
+Before distributing a public production release, confirm Supabase Auth's redirect allow-list contains the Cogni native scheme (`cogni://**`) and enable leaked-password protection in the Supabase Auth settings.

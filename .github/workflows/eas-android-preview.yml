@@ -2,10 +2,6 @@ name: EAS Android preview
 
 on:
   workflow_dispatch:
-  push:
-    branches: [feature/full-codebase-hardening]
-    paths:
-      - ".github/workflows/eas-android-preview.yml"
 
 permissions:
   contents: read

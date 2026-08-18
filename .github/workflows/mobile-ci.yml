@@ -45,7 +45,7 @@ jobs:
         run: npm run typecheck
       - name: Supabase Edge typecheck
         working-directory: .
-        run: deno check supabase/functions/mobile-api/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/mobile-api/index.ts
       - name: Context engine behavioral tests
         working-directory: .
-        run: deno test supabase/functions/mobile-api/engine_test.ts
+        run: deno test --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts

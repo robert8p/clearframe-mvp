@@ -9,6 +9,10 @@ export class ApiError extends Error {
   }
 }
 
+export function todayApiPath(date = new Date()) {
+  return `/api/mobile/today?localHour=${date.getHours()}&localMinute=${date.getMinutes()}&localWeekday=${date.getDay()}`;
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new ApiError("Please sign in again.", 401);

@@ -28,6 +28,9 @@ jobs:
           node-version: "22"
           cache: "npm"
           cache-dependency-path: "mobile/package-lock.json"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Strict install
         run: npm ci --include=dev --no-audit --no-fund
       - name: Expo dependency check
@@ -40,3 +43,9 @@ jobs:
         run: npm run logic-audit
       - name: TypeScript
         run: npm run typecheck
+      - name: Supabase Edge typecheck
+        working-directory: .
+        run: deno check supabase/functions/mobile-api/index.ts
+      - name: Context engine behavioral tests
+        working-directory: .
+        run: deno test supabase/functions/mobile-api/engine_test.ts

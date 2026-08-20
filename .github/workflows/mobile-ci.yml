@@ -8,12 +8,14 @@ on:
       - "supabase/functions/mobile-api/**"
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
+      - ".github/workflows/eas-android-preview.yml"
   pull_request:
     paths:
       - "mobile/**"
       - "supabase/functions/mobile-api/**"
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
+      - ".github/workflows/eas-android-preview.yml"
 
 jobs:
   mobile-validation:

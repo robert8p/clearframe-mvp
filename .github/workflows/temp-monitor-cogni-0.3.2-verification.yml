@@ -1,63 +1,58 @@
-name: Monitor Cogni 0.3.2 verification
+name: Observe Cogni 0.3.2 verification
 
 on:
-  push:
-    branches: [main]
+  pull_request:
     paths:
       - ".github/workflows/temp-monitor-cogni-0.3.2-verification.yml"
 
 permissions:
   actions: read
-  contents: write
+  contents: read
 
 jobs:
-  monitor:
+  observe:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 70
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_SHA: 5b21dbcc2d70f641ce08f51c32cd8f4e3fcd30fd
       TARGET_WORKFLOW: Cogni 0.3.2 clean rebuild and runtime verification
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: main
-          token: ${{ github.token }}
-
-      - name: Wait for the full rebuild verification run
+      - name: Observe the exact rebuild verification run
         shell: bash
         run: |
           set -euo pipefail
           RUN_ID=""
-          for attempt in $(seq 1 130); do
+          for attempt in $(seq 1 160); do
             curl -fsSL \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=30" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=50" \
               > /tmp/runs.json
 
             node <<'NODE' > /tmp/selected-run.json
             const fs = require('fs');
             const data = JSON.parse(fs.readFileSync('/tmp/runs.json', 'utf8'));
-            const name = process.env.TARGET_WORKFLOW;
             const run = (data.workflow_runs ?? [])
-              .filter((item) => item?.name === name && item?.event === 'push')
+              .filter((item) => item?.name === process.env.TARGET_WORKFLOW && item?.event === 'push')
               .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')))[0] ?? null;
             process.stdout.write(JSON.stringify(run));
             NODE
 
             FOUND=$(node -e "const j=require('/tmp/selected-run.json');process.stdout.write(j?'yes':'no')")
             if [ "$FOUND" = "no" ]; then
-              echo "Verification run not visible yet ($attempt/130)."
-              sleep 25
+              echo "Target verification run not visible yet ($attempt/160)."
+              sleep 20
               continue
             fi
 
             RUN_ID=$(node -e "const j=require('/tmp/selected-run.json');process.stdout.write(String(j.id))")
             STATUS=$(node -e "const j=require('/tmp/selected-run.json');process.stdout.write(j.status??'')")
             CONCLUSION=$(node -e "const j=require('/tmp/selected-run.json');process.stdout.write(j.conclusion??'')")
-            echo "Verification run $RUN_ID: status=$STATUS conclusion=${CONCLUSION:-pending}"
+            echo "TARGET_RUN_ID=$RUN_ID"
+            echo "TARGET_STATUS=$STATUS"
+            echo "TARGET_CONCLUSION=${CONCLUSION:-pending}"
 
             curl -fsSL \
               -H "Authorization: Bearer $GH_TOKEN" \
@@ -66,49 +61,28 @@ jobs:
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
               > /tmp/jobs.json
 
+            node <<'NODE'
+            const fs = require('fs');
+            const jobs = JSON.parse(fs.readFileSync('/tmp/jobs.json', 'utf8')).jobs ?? [];
+            for (const job of jobs) {
+              console.log(`TARGET_JOB id=${job.id} name=${JSON.stringify(job.name)} status=${job.status} conclusion=${job.conclusion ?? 'pending'}`);
+              for (const step of job.steps ?? []) {
+                console.log(`  STEP ${step.number}: ${step.name} => ${step.status}/${step.conclusion ?? 'pending'}`);
+              }
+            }
+            NODE
+
             if [ "$STATUS" = "completed" ]; then
-              break
+              if [ "$CONCLUSION" != "success" ]; then
+                echo "Target verification failed."
+                exit 1
+              fi
+              echo "Target verification passed."
+              exit 0
             fi
-            sleep 25
+
+            sleep 20
           done
 
-          if [ -z "$RUN_ID" ]; then
-            cat > REBUILD_0.3.2_RUN_STATUS.md <<EOF
-            # Cogni 0.3.2 rebuild verification run
-
-            - status: NOT_FOUND
-            - source_commit: $TARGET_SHA
-            EOF
-          else
-            node <<'NODE' > REBUILD_0.3.2_RUN_STATUS.md
-            const fs = require('fs');
-            const run = JSON.parse(fs.readFileSync('/tmp/selected-run.json', 'utf8'));
-            const jobs = JSON.parse(fs.readFileSync('/tmp/jobs.json', 'utf8')).jobs ?? [];
-            const lines = [
-              '# Cogni 0.3.2 rebuild verification run',
-              '',
-              `- run_id: ${run.id}`,
-              `- status: ${run.status}`,
-              `- conclusion: ${run.conclusion ?? ''}`,
-              `- source_commit: ${run.head_sha}`,
-              `- created_at: ${run.created_at}`,
-              `- updated_at: ${run.updated_at}`,
-              '',
-              '## Jobs',
-              ''
-            ];
-            for (const job of jobs) {
-              lines.push(`- ${job.name}: ${job.status}${job.conclusion ? ` / ${job.conclusion}` : ''} (job_id ${job.id})`);
-            }
-            lines.push('');
-            fs.writeFileSync('/dev/stdout', lines.join('\n'));
-            NODE
-          fi
-
-      - name: Publish verification-run status
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add REBUILD_0.3.2_RUN_STATUS.md
-          git commit -m 'Record Cogni 0.3.2 verification run status'
-          git push origin HEAD:main
+          echo "Target verification did not complete within the observation window."
+          exit 1

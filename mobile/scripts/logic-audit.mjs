@@ -16,12 +16,16 @@ forbidText(api, "EXPO_PUBLIC_API_URL", "Legacy EXPO_PUBLIC_API_URL must not retu
 forbidText(api, "vercel.app", "Mobile networking must not depend on Vercel.");
 
 const supabase = read("lib/supabase.ts");
+requireText(supabase, "process.env.EXPO_PUBLIC_SUPABASE_URL", "Expo public variables must use static dot notation so Metro can inline them.");
+requireText(supabase, "process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "The Supabase publishable key must use static Expo environment access.");
+forbidText(supabase, "process.env[", "Dynamic process.env access is not supported by Expo and can create an immediate production startup crash.");
+forbidText(supabase, "expo-sqlite/localStorage/install", "The startup path must not initialise the retired SQLite/localStorage auth adapter.");
+requireText(supabase, "RUNTIME_CONFIGURATION_ERROR", "A malformed build must show a safe configuration screen rather than throw during module initialisation.");
 requireText(supabase, "expo-secure-store", "Auth sessions must use secure device storage when it is available.");
 requireText(supabase, "SecureStore.isAvailableAsync", "Secure auth storage must verify native SecureStore availability before use.");
 requireText(supabase, "disableSecureStore", "Device-specific SecureStore failures must degrade safely rather than crash startup.");
-requireText(supabase, "Compatibility and recovery path", "Secure auth storage must retain the SQLite/localStorage compatibility and recovery path.");
-requireText(supabase, "legacySet(key, value)", "Auth persistence must preserve a recoverable compatibility copy until the secure write succeeds.");
-forbidText(supabase, '?? "https://', "Supabase configuration must never silently fall back to production.");
+requireText(supabase, "memoryStorage", "A native storage failure must retain a non-crashing in-memory session fallback.");
+forbidText(supabase, '?? "https://', "Supabase configuration must never silently fall back to the production project.");
 
 const appConfig = JSON.parse(read("app.json"));
 if (appConfig.expo?.android?.allowBackup !== false) failures.push("Android app-data backup must remain disabled so undecryptable SecureStore state cannot be restored after reinstall/device transfer.");
@@ -30,6 +34,8 @@ if (!plugins.includes("expo-secure-store") || !plugins.includes("configureAndroi
 
 const rootLayout = read("app/_layout.tsx");
 requireText(rootLayout, "StartupErrorBoundary", "The app root must retain a visible startup/render error boundary.");
+requireText(rootLayout, "RUNTIME_CONFIGURATION_ERROR", "The app root must intercept malformed runtime configuration without crashing.");
+requireText(rootLayout, "StartupConfigurationScreen", "Malformed builds must render an explicit configuration failure screen.");
 const startupBoundaryPath = path.join(root, "components/startup-error-boundary.tsx");
 if (!fs.existsSync(startupBoundaryPath)) failures.push("Missing native startup error boundary component.");
 else {
@@ -37,6 +43,8 @@ else {
   requireText(startupBoundary, "componentDidCatch", "Startup error boundary must record render failures for diagnosis.");
   requireText(startupBoundary, "minHeight: 56", "Startup recovery action must retain an accessible touch target.");
 }
+const startupConfigurationPath = path.join(root, "components/startup-configuration-screen.tsx");
+if (!fs.existsSync(startupConfigurationPath)) failures.push("Missing non-crashing build configuration screen.");
 
 const onboarding = read("app/onboarding.tsx");
 requireText(onboarding, "OptionPicker", "Onboarding must use canonical context choices.");
@@ -103,8 +111,9 @@ if (failures.length) {
 
 console.log("Cogni logic/security audit passed.");
 console.log("✓ Supabase Edge backend only");
-console.log("✓ Crash-safe secure auth persistence + Android backup controls");
-console.log("✓ Visible root startup error recovery");
+console.log("✓ Expo public configuration is statically inlined");
+console.log("✓ Crash-safe secure auth persistence without SQLite startup coupling");
+console.log("✓ Visible root startup and configuration recovery");
 console.log("✓ Canonical context personalisation");
 console.log("✓ Exact multi-select requirements");
 console.log("✓ Native recovery + account deletion");

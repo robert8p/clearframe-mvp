@@ -1,0 +1,287 @@
+name: Cogni 0.3.2 clean rebuild and runtime verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/temp-cogni-0.3.2-rebuild-test.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    outputs:
+      build_id: ${{ steps.metadata.outputs.build_id }}
+      artifact_url: ${{ steps.metadata.outputs.artifact_url }}
+      sha256: ${{ steps.metadata.outputs.sha256 }}
+      version_code: ${{ steps.metadata.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "mobile/package-lock.json"
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Require Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Clean dependency installation
+        run: |
+          rm -rf node_modules .expo
+          npm ci --include=dev --no-audit --no-fund
+
+      - name: Validate source before native rebuild
+        run: |
+          npx expo install --check
+          npm run lint
+          npm run ui-audit
+          npm run logic-audit
+          npm run typecheck
+
+      - name: Validate backend code
+        working-directory: .
+        run: |
+          deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
+          deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
+
+      - name: Prove production configuration is compiled before EAS
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+        run: |
+          rm -rf /tmp/cogni-export /tmp/cogni-export-strings.txt
+          CI=1 npx expo export --platform android --output-dir /tmp/cogni-export --clear
+          find /tmp/cogni-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-export-strings.txt
+          grep -Fq "https://dhklfrqhsmofqrawfdjz.supabase.co" /tmp/cogni-export-strings.txt
+          grep -Fq "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b" /tmp/cogni-export-strings.txt
+
+      - name: Verify rebuild identity
+        run: |
+          node - <<'NODE'
+          const config = require('./app.json').expo;
+          if (config.version !== '0.3.2') throw new Error(`Expected Cogni 0.3.2, found ${config.version}`);
+          if (config.android?.package !== 'app.gocogni.cogni') throw new Error(`Unexpected Android package ${config.android?.package}`);
+          if (config.extra?.eas?.projectId !== '24fc0fea-5e66-4365-a82c-ac668aded7d0') throw new Error('Unexpected EAS project link');
+          console.log(`Rebuilding ${config.name} ${config.version} (${config.android.package})`);
+          NODE
+
+      - name: Full clean EAS Android rebuild
+        run: npx eas-cli@21.7.1 build --platform android --profile preview --non-interactive
+
+      - name: Locate the exact finished EAS build
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eas-cli@21.7.1 build:list \
+            --platform android \
+            --build-profile preview \
+            --app-version 0.3.2 \
+            --git-commit-hash "$GITHUB_SHA" \
+            --status finished \
+            --limit 10 \
+            --json \
+            --non-interactive > /tmp/eas-builds.json
+
+          node <<'NODE' > /tmp/selected-build.json
+          const fs = require('fs');
+          const builds = JSON.parse(fs.readFileSync('/tmp/eas-builds.json', 'utf8'));
+          const selected = (Array.isArray(builds) ? builds : [])
+            .filter((build) => build?.platform === 'ANDROID' && build?.appVersion === '0.3.2' && build?.buildProfile === 'preview')
+            .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0];
+          if (!selected) process.exit(2);
+          process.stdout.write(JSON.stringify(selected));
+          NODE
+
+          BUILD_ID=$(node -e "const j=require('/tmp/selected-build.json'); process.stdout.write(j.id)")
+          npx eas-cli@21.7.1 build:view "$BUILD_ID" --json > /tmp/eas-build.json
+          STATUS=$(node -e "const j=require('/tmp/eas-build.json'); process.stdout.write(j.status)")
+          ARTIFACT_URL=$(node -e "const j=require('/tmp/eas-build.json'); process.stdout.write(j.artifacts?.buildUrl ?? j.artifactUrl ?? '')")
+          APP_VERSION=$(node -e "const j=require('/tmp/eas-build.json'); process.stdout.write(j.appVersion ?? '')")
+          GIT_COMMIT=$(node -e "const j=require('/tmp/eas-build.json'); process.stdout.write(j.gitCommitHash ?? '')")
+
+          test "$STATUS" = "FINISHED"
+          test "$APP_VERSION" = "0.3.2"
+          test "$GIT_COMMIT" = "$GITHUB_SHA"
+          test -n "$ARTIFACT_URL"
+
+          curl -fL --retry 5 --retry-delay 3 -o /tmp/cogni-0.3.2.apk "$ARTIFACT_URL"
+          unzip -t /tmp/cogni-0.3.2.apk >/dev/null
+          unzip -Z1 /tmp/cogni-0.3.2.apk > /tmp/apk-files.txt
+
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          BADGING=$($AAPT dump badging /tmp/cogni-0.3.2.apk)
+          PERMISSIONS=$($AAPT dump permissions /tmp/cogni-0.3.2.apk)
+          SIGNATURE=$($APKSIGNER verify --verbose --print-certs /tmp/cogni-0.3.2.apk)
+          NORMALIZED_SIGNATURE=$(printf '%s' "$SIGNATURE" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+
+          printf '%s\n' "$BADGING" > /tmp/apk-badging.txt
+          printf '%s\n' "$PERMISSIONS" > /tmp/apk-permissions.txt
+          printf '%s\n' "$SIGNATURE" > /tmp/apk-signature.txt
+
+          grep -q "package: name='app.gocogni.cogni'" /tmp/apk-badging.txt
+          grep -q "versionName='0.3.2'" /tmp/apk-badging.txt
+          grep -q "application-label:'Cogni'" /tmp/apk-badging.txt
+          grep -q "targetSdkVersion:'36'" /tmp/apk-badging.txt
+          grep -q "android.permission.INTERNET" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.SYSTEM_ALERT_WINDOW" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.READ_EXTERNAL_STORAGE" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" /tmp/apk-permissions.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apk-signature.txt
+          grep -q "e0bfda379dfa0e11aee798e443ce3b33d006d83b7857062f8f639ca7f7572c7e" <<<"$NORMALIZED_SIGNATURE"
+          grep -q '^lib/x86_64/' /tmp/apk-files.txt
+          grep -q '^lib/arm64-v8a/' /tmp/apk-files.txt
+
+          BUNDLE_PATH=$(awk '/(^|\/)index\.android\.bundle$/{print; exit}' /tmp/apk-files.txt)
+          test -n "$BUNDLE_PATH"
+          unzip -p /tmp/cogni-0.3.2.apk "$BUNDLE_PATH" > /tmp/index.android.bundle
+          strings -a /tmp/index.android.bundle > /tmp/index.android.strings.txt
+          grep -Fq "https://dhklfrqhsmofqrawfdjz.supabase.co" /tmp/index.android.strings.txt
+          grep -Fq "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b" /tmp/index.android.strings.txt
+
+          SHA256=$(sha256sum /tmp/cogni-0.3.2.apk | awk '{print $1}')
+          VERSION_CODE=$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/apk-badging.txt | head -1)
+
+          mkdir -p /tmp/cogni-artifact
+          cp /tmp/cogni-0.3.2.apk /tmp/cogni-artifact/cogni-0.3.2.apk
+          cp /tmp/apk-badging.txt /tmp/cogni-artifact/
+          cp /tmp/apk-permissions.txt /tmp/cogni-artifact/
+          cp /tmp/apk-signature.txt /tmp/cogni-artifact/
+          cp /tmp/eas-build.json /tmp/cogni-artifact/
+
+          node - <<NODE > /tmp/cogni-artifact/metadata.json
+          console.log(JSON.stringify({
+            status: '$STATUS',
+            buildId: '$BUILD_ID',
+            artifactUrl: '$ARTIFACT_URL',
+            appVersion: '$APP_VERSION',
+            versionCode: '$VERSION_CODE',
+            gitCommit: '$GIT_COMMIT',
+            sha256: '$SHA256'
+          }, null, 2));
+          NODE
+
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "artifact_url=$ARTIFACT_URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+          echo "PASS: The exact EAS APK has the correct identity, architectures, permissions, signature and compiled Supabase configuration."
+
+      - name: Preserve the exact APK for runtime tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.3.2-exact-apk
+          path: /tmp/cogni-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+  runtime-test:
+    needs: build-and-inspect
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [35, 36]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download the exact inspected APK
+        uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.3.2-exact-apk
+          path: /tmp/cogni-artifact
+
+      - name: Enable KVM acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Clean-install and cold-launch Cogni on Android API ${{ matrix.api-level }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: APK_PATH=/tmp/cogni-artifact/cogni-0.3.2.apk API_LEVEL=${{ matrix.api-level }} bash .github/scripts/verify-cogni-apk-runtime.sh
+
+      - name: Preserve runtime evidence for Android API ${{ matrix.api-level }}
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.3.2-runtime-api-${{ matrix.api-level }}
+          path: /tmp/cogni-runtime-api-${{ matrix.api-level }}
+          if-no-files-found: warn
+          retention-days: 7
+
+  record-verification:
+    needs: [build-and-inspect, runtime-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          token: ${{ github.token }}
+
+      - name: Record fully tested Android rebuild
+        env:
+          BUILD_ID: ${{ needs.build-and-inspect.outputs.build_id }}
+          ARTIFACT_URL: ${{ needs.build-and-inspect.outputs.artifact_url }}
+          SHA256: ${{ needs.build-and-inspect.outputs.sha256 }}
+          VERSION_CODE: ${{ needs.build-and-inspect.outputs.version_code }}
+        run: |
+          cat > ANDROID_0.3.2_VERIFICATION.md <<EOF
+          # Cogni 0.3.2 Android rebuild verification
+
+          - status: PASS
+          - source_commit: $GITHUB_SHA
+          - EAS_build_id: $BUILD_ID
+          - app_version: 0.3.2
+          - version_code: $VERSION_CODE
+          - package: app.gocogni.cogni
+          - SHA-256: $SHA256
+          - artifact_url: $ARTIFACT_URL
+          - compiled_production_configuration: PASS
+          - APK_archive_identity_permissions_signature: PASS
+          - Android_API_35_clean_install_first_and_second_cold_launch: PASS
+          - Android_API_36_clean_install_first_and_second_cold_launch: PASS
+          - expected_signed_out_welcome_UI_visible: PASS
+          - process_alive_and_foreground_after_60_seconds: PASS
+          EOF
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ANDROID_0.3.2_VERIFICATION.md
+          git commit -m 'Record tested Cogni 0.3.2 Android rebuild'
+          git push origin HEAD:main

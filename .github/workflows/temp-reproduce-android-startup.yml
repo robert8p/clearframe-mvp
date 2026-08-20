@@ -1,0 +1,48 @@
+name: Reproduce Cogni Android startup crash
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/temp-reproduce-android-startup.yml"
+      - ".github/scripts/reproduce-cogni-startup.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce-on-android-16:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download reported-crashing Cogni 0.3.1 APK
+        run: |
+          curl -fL --retry 4 --retry-delay 3 \
+            -o /tmp/cogni-0.3.1.apk \
+            "https://expo.dev/artifacts/eas/aEBx00T0OgRORLMF_9563VlEEvq-45itbJOTdhIM21E.apk"
+          unzip -t /tmp/cogni-0.3.1.apk >/dev/null
+          sha256sum /tmp/cogni-0.3.1.apk
+
+      - name: Reproduce clean cold launch on Android 16
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          cores: 4
+          ram-size: 4096M
+          heap-size: 512M
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/reproduce-cogni-startup.sh
+
+      - name: Preserve Android startup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.3.1-android-16-startup-evidence
+          path: /tmp/cogni-startup-debug
+          if-no-files-found: warn
+          retention-days: 7

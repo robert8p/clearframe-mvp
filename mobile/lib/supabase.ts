@@ -3,7 +3,7 @@ import { createClient, type SupportedStorage } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 
 // Expo only inlines EXPO_PUBLIC values when they are referenced statically with
-// dot notation. Do not replace these with process.env[name] or destructuring.
+// dot notation. Do not replace these with a computed lookup or destructuring.
 const configuredUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? "";
 const configuredPublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";
 

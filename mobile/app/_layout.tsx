@@ -4,7 +4,9 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { useReducedMotion } from "@/lib/accessibility";
 import { SplashScreenController } from "@/components/splash-screen-controller";
+import { StartupConfigurationScreen } from "@/components/startup-configuration-screen";
 import { StartupErrorBoundary } from "@/components/startup-error-boundary";
+import { RUNTIME_CONFIGURATION_ERROR } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
 
 function RootNavigator() {
@@ -42,6 +44,15 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  if (RUNTIME_CONFIGURATION_ERROR) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <StartupConfigurationScreen message={RUNTIME_CONFIGURATION_ERROR} />
+      </>
+    );
+  }
+
   return (
     <StartupErrorBoundary>
       <AuthProvider>

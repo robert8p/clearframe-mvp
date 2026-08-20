@@ -1,0 +1,110 @@
+name: Temporary Cogni 0.3.1 build monitor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/temp-hotfix-build-monitor.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "mobile/package-lock.json"
+      - name: Install mobile dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Wait for Cogni 0.3.1 Android preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN is not configured."
+            exit 1
+          fi
+          for attempt in $(seq 1 75); do
+            echo "EAS build discovery $attempt/75"
+            npx eas-cli@21.7.1 build:list --platform android --profile preview --limit 20 --json --non-interactive > /tmp/eas-builds.json
+            node <<'NODE' > /tmp/selected-build.json
+          const fs = require('fs');
+          const builds = JSON.parse(fs.readFileSync('/tmp/eas-builds.json', 'utf8'));
+          const candidates = (Array.isArray(builds) ? builds : [])
+            .filter((b) => b && b.appVersion === '0.3.1' && b.platform === 'ANDROID' && b.buildProfile === 'preview')
+            .sort((a,b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+          process.stdout.write(JSON.stringify(candidates[0] ?? null));
+          NODE
+            FOUND=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('/tmp/selected-build.json','utf8'));process.stdout.write(j?'yes':'no')")
+            if [ "$FOUND" = "no" ]; then
+              sleep 20
+              continue
+            fi
+            BUILD_ID=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('/tmp/selected-build.json','utf8'));process.stdout.write(j.id)")
+            npx eas-cli@21.7.1 build:view "$BUILD_ID" --json > /tmp/eas-build.json
+            STATUS=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('/tmp/eas-build.json','utf8'));process.stdout.write(j.status)")
+            echo "Build $BUILD_ID status: $STATUS"
+            if [ "$STATUS" = "FINISHED" ]; then
+              node <<'NODE'
+          const fs = require('fs');
+          const j = JSON.parse(fs.readFileSync('/tmp/eas-build.json', 'utf8'));
+          const artifactUrl = j.artifacts?.buildUrl ?? j.artifactUrl ?? null;
+          const lines = [
+            '# Cogni 0.3.1 Android hotfix build',
+            '',
+            `- status: ${j.status}`,
+            `- build_id: ${j.id}`,
+            `- app_version: ${j.appVersion}`,
+            `- build_profile: ${j.buildProfile}`,
+            `- platform: ${j.platform}`,
+            `- created_at: ${j.createdAt}`,
+            `- finished_at: ${j.completedAt ?? j.updatedAt ?? ''}`,
+            `- git_commit: ${j.gitCommitHash ?? ''}`,
+            `- artifact_url: ${artifactUrl ?? ''}`,
+            ''
+          ];
+          fs.writeFileSync('../HOTFIX_BUILD_STATUS.md', lines.join('\n'));
+          NODE
+              exit 0
+            fi
+            if [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELED" ]; then
+              node <<'NODE'
+          const fs = require('fs');
+          const j = JSON.parse(fs.readFileSync('/tmp/eas-build.json', 'utf8'));
+          fs.writeFileSync('../HOTFIX_BUILD_STATUS.md', `# Cogni 0.3.1 Android hotfix build\n\n- status: ${j.status}\n- build_id: ${j.id}\n- app_version: ${j.appVersion}\n- build_profile: ${j.buildProfile}\n- platform: ${j.platform}\n`);
+          NODE
+              exit 1
+            fi
+            sleep 20
+          done
+          echo "No finished Cogni 0.3.1 preview build found in polling window"
+          exit 1
+      - name: Publish sanitized build status
+        if: always()
+        working-directory: .
+        shell: bash
+        run: |
+          if [ ! -f HOTFIX_BUILD_STATUS.md ]; then
+            echo '# Cogni 0.3.1 Android hotfix build' > HOTFIX_BUILD_STATUS.md
+            echo '' >> HOTFIX_BUILD_STATUS.md
+            echo '- status: MONITOR_TIMEOUT_OR_FAILURE' >> HOTFIX_BUILD_STATUS.md
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add HOTFIX_BUILD_STATUS.md
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record Cogni 0.3.1 Android build status'
+          git push origin HEAD:main

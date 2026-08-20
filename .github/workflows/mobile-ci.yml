@@ -8,12 +8,14 @@ on:
       - "supabase/functions/mobile-api/**"
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
+      - ".github/workflows/eas-android-preview.yml"
   pull_request:
     paths:
       - "mobile/**"
       - "supabase/functions/mobile-api/**"
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
+      - ".github/workflows/eas-android-preview.yml"
 
 jobs:
   mobile-validation:
@@ -43,6 +45,17 @@ jobs:
         run: npm run logic-audit
       - name: TypeScript
         run: npm run typecheck
+      - name: Production Android bundle configuration smoke
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+        run: |
+          rm -rf /tmp/cogni-export /tmp/cogni-export-strings.txt
+          CI=1 npx expo export --platform android --output-dir /tmp/cogni-export --clear
+          find /tmp/cogni-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-export-strings.txt
+          grep -Fq "https://dhklfrqhsmofqrawfdjz.supabase.co" /tmp/cogni-export-strings.txt
+          grep -Fq "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b" /tmp/cogni-export-strings.txt
+          echo "Production Supabase client configuration is embedded in the Android bundle."
       - name: Supabase Edge typecheck
         working-directory: .
         run: deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts

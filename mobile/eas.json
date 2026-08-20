@@ -10,7 +10,11 @@
     "preview": {
       "distribution": "internal",
       "autoIncrement": true,
+      "cache": {
+        "disabled": true
+      },
       "env": {
+        "EAS_BUILD_DISABLE_NPM_CACHE": "1",
         "EXPO_PUBLIC_SUPABASE_URL": "https://dhklfrqhsmofqrawfdjz.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b"
       },

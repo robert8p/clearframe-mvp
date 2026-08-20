@@ -9,6 +9,7 @@ permissions:
 jobs:
   build-preview:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: mobile
@@ -52,6 +53,18 @@ jobs:
       - name: TypeScript check
         run: npm run typecheck
 
+      - name: Production Android bundle configuration smoke
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+        run: |
+          rm -rf /tmp/cogni-export /tmp/cogni-export-strings.txt
+          CI=1 npx expo export --platform android --output-dir /tmp/cogni-export --clear
+          find /tmp/cogni-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-export-strings.txt
+          grep -Fq "https://dhklfrqhsmofqrawfdjz.supabase.co" /tmp/cogni-export-strings.txt
+          grep -Fq "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b" /tmp/cogni-export-strings.txt
+          echo "Production Supabase client configuration is embedded in the Android bundle."
+
       - name: Supabase Edge typecheck
         working-directory: .
         run: deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
@@ -60,9 +73,9 @@ jobs:
         working-directory: .
         run: deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
 
-      - name: Verify Expo project link
+      - name: Verify Expo project link and version
         run: |
-          node -e 'const c=require("./app.json"); const id=c.expo?.extra?.eas?.projectId; if(id!=="24fc0fea-5e66-4365-a82c-ac668aded7d0"){console.error(`Unexpected EAS project ID: ${id}`); process.exit(1)} console.log(`Linked EAS project: ${id}`)'
+          node -e 'const c=require("./app.json"); const id=c.expo?.extra?.eas?.projectId; const version=c.expo?.version; if(id!=="24fc0fea-5e66-4365-a82c-ac668aded7d0"){console.error(`Unexpected EAS project ID: ${id}`); process.exit(1)} if(!/^\d+\.\d+\.\d+$/.test(version??"")){console.error(`Invalid Cogni version: ${version}`); process.exit(1)} console.log(`Linked EAS project: ${id}; Cogni ${version}`)'
 
-      - name: Start installable Android preview build
-        run: npx eas-cli@21.7.1 build --platform android --profile preview --non-interactive --no-wait
+      - name: Build and await installable Android preview
+        run: npx eas-cli@21.7.1 build --platform android --profile preview --non-interactive

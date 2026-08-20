@@ -125,6 +125,7 @@ jobs:
 
           curl -fL --retry 5 --retry-delay 3 -o /tmp/cogni-0.3.2.apk "$ARTIFACT_URL"
           unzip -t /tmp/cogni-0.3.2.apk >/dev/null
+          unzip -Z1 /tmp/cogni-0.3.2.apk > /tmp/apk-files.txt
 
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
@@ -147,10 +148,10 @@ jobs:
           ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" /tmp/apk-permissions.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apk-signature.txt
           grep -q "e0bfda379dfa0e11aee798e443ce3b33d006d83b7857062f8f639ca7f7572c7e" <<<"$NORMALIZED_SIGNATURE"
-          unzip -Z1 /tmp/cogni-0.3.2.apk | grep -q '^lib/x86_64/'
-          unzip -Z1 /tmp/cogni-0.3.2.apk | grep -q '^lib/arm64-v8a/'
+          grep -q '^lib/x86_64/' /tmp/apk-files.txt
+          grep -q '^lib/arm64-v8a/' /tmp/apk-files.txt
 
-          BUNDLE_PATH=$(unzip -Z1 /tmp/cogni-0.3.2.apk | grep -E '(^|/)index\.android\.bundle$' | head -1)
+          BUNDLE_PATH=$(awk '/(^|\/)index\.android\.bundle$/{print; exit}' /tmp/apk-files.txt)
           test -n "$BUNDLE_PATH"
           unzip -p /tmp/cogni-0.3.2.apk "$BUNDLE_PATH" > /tmp/index.android.bundle
           strings -a /tmp/index.android.bundle > /tmp/index.android.strings.txt

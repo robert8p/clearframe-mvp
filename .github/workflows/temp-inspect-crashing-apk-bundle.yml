@@ -1,0 +1,48 @@
+name: Inspect crashing Cogni APK bundle
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/temp-inspect-crashing-apk-bundle.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download exact Cogni 0.3.1 APK
+        run: |
+          curl -fL --retry 4 --retry-delay 3 \
+            -o /tmp/cogni.apk \
+            "https://expo.dev/artifacts/eas/aEBx00T0OgRORLMF_9563VlEEvq-45itbJOTdhIM21E.apk"
+          unzip -t /tmp/cogni.apk >/dev/null
+
+      - name: Inspect the compiled JavaScript/Hermes bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_PATH=$(unzip -Z1 /tmp/cogni.apk | grep -E '(^|/)index\.android\.bundle$' | head -1)
+          if [ -z "$BUNDLE_PATH" ]; then
+            echo "No index.android.bundle was found."
+            unzip -Z1 /tmp/cogni.apk | grep -E 'assets|bundle|hermes' | head -100 || true
+            exit 1
+          fi
+          echo "bundle_path=$BUNDLE_PATH"
+          unzip -p /tmp/cogni.apk "$BUNDLE_PATH" > /tmp/index.android.bundle
+          strings -a /tmp/index.android.bundle > /tmp/bundle-strings.txt
+
+          echo "=== Relevant compiled strings ==="
+          grep -nE 'Cogni is missing|EXPO_PUBLIC_SUPABASE|dhklfrqhsmofqrawfdjz|functions/v1/mobile-api|process\.env' /tmp/bundle-strings.txt | head -200 || true
+
+          URL_COUNT=$(grep -c 'https://dhklfrqhsmofqrawfdjz.supabase.co' /tmp/bundle-strings.txt || true)
+          MISSING_ERROR_COUNT=$(grep -c 'Cogni is missing EXPO_PUBLIC_SUPABASE_URL' /tmp/bundle-strings.txt || true)
+          echo "compiled_supabase_url_count=$URL_COUNT"
+          echo "compiled_missing_configuration_error_count=$MISSING_ERROR_COUNT"
+
+          if [ "$URL_COUNT" -eq 0 ]; then
+            echo "FAIL: The production Supabase URL was not compiled into the app bundle."
+            exit 1
+          fi

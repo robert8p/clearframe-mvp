@@ -22,6 +22,18 @@
         "buildType": "apk"
       }
     },
+    "localVerification": {
+      "distribution": "internal",
+      "credentialsSource": "remote",
+      "autoIncrement": false,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://dhklfrqhsmofqrawfdjz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {

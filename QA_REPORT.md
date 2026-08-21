@@ -1,6 +1,6 @@
 # Cogni internal-alpha QA report
 
-Last refreshed: 20 August 2026
+Last refreshed: 21 August 2026
 
 ## Release position
 
@@ -10,52 +10,78 @@ Current position:
 
 - Supabase project: `dhklfrqhsmofqrawfdjz`
 - Expo / EAS project: `24fc0fea-5e66-4365-a82c-ac668aded7d0`
-- Mobile source version: **0.3.1**
+- Mobile source version: **0.3.2**
 - Android package: `app.gocogni.cogni`
 - Active API: authenticated Supabase Edge Function `mobile-api`
 - Persistence: Supabase Postgres
-- Authentication: Supabase Auth with crash-safe native secure session storage and compatibility recovery
+- Authentication: Supabase Auth with native secure session storage and non-crashing fallback behaviour
 - Sensitive grading and score writes: server-side only
 - Mobile CI: passing
 
-## Android 0.3.1 startup hotfix
+The current installable Android candidate is the **fully rebuilt and runtime-tested Cogni 0.3.2 / version-code 8 APK** documented in `ANDROID_0.3.2_VERIFICATION.md`.
 
-A 0.3.0 Android preview built from source commit `54f1806c8683496e047e620bef3b8fad28457d01` installed successfully but repeatedly exited/crashed on launch on the physical Samsung test device.
+## Confirmed Android startup failure and correction
 
-The strongest identified startup regression was the migration from the previously validated SQLite/localStorage Supabase auth adapter to `expo-secure-store`. The pre-hotfix adapter allowed native SecureStore read/decrypt/write failures to escape during authentication initialization. Android backup handling was also not explicit. This is the leading causal explanation, not yet a definitive device-level root cause; physical confirmation of the hotfix remains required.
+### What failed
 
-Hotfix changes in 0.3.1:
+The 0.3.0 and 0.3.1 Android previews installed but repeatedly exited on launch on the physical Samsung test device. The earlier 0.3.1 review proved only that the APK was structurally valid and correctly signed. That was insufficient because it did not execute the application.
 
-- Android app-data backup disabled for sensitive local state
-- explicit `expo-secure-store` Android backup configuration
-- SecureStore availability/read/write/delete failures made recoverable rather than startup-fatal
-- corrupt or implausible secure-storage chunk metadata guarded
-- local compatibility copy retained until secure persistence succeeds
-- root startup error boundary added so future JavaScript startup failures show a recovery screen rather than silently closing
-- automated logic/security checks added to prevent those protections regressing
+The exact 0.3.1 APK was subsequently installed into an Android 16 environment and produced the following fatal startup path:
 
-The complete Expo mobile quality suite passed before the hotfix merged: dependency compatibility, ESLint, UI/accessibility audit, logic/security audit, TypeScript, Supabase Edge typecheck and context-engine behavioural tests.
+- `Cogni is missing EXPO_PUBLIC_SUPABASE_URL`
+- `FATAL EXCEPTION: mqt_v_native`
+- React Native `JavascriptException` during module startup
 
-### Verified installable 0.3.1 APK
+Direct inspection of that APK's compiled JavaScript bundle confirmed that the production Supabase URL and publishable key were absent. The source used a computed `process.env[name]` lookup. Expo public client settings must be statically referenced for Metro to replace them during bundling, so the production binary reached startup without its required connection configuration.
 
-A fresh EAS Android preview was built from the hotfix source and finished successfully.
+This is the confirmed primary cause of the repeatable immediate crash in the distributed 0.3.1 APK.
 
-- EAS build ID: `2f87a498-a79e-4b97-ba5c-b2ecc51d8219`
-- Version name: **0.3.1**
-- Version code: **7**
+### What changed in 0.3.2
+
+- Expo public Supabase settings are referenced statically and checked in the compiled Android bundle.
+- A malformed future build renders a visible configuration-error screen instead of throwing during module initialization.
+- The retired SQLite/localStorage adapter was removed from the startup path.
+- SecureStore remains the persistence layer, with a safe in-memory fallback when native secure storage is unavailable or corrupt.
+- Android app-data backup remains disabled for sensitive local state.
+- The logic/security audit now rejects dynamic Expo environment lookup and retired SQLite startup coupling.
+- The app version was advanced to **0.3.2**.
+
+The full source-quality suite passed: dependency compatibility, ESLint, UI/accessibility audit, logic/security audit, TypeScript, production Android bundle configuration smoke test, Supabase Edge typecheck and contextual-engine behavioural tests.
+
+## Fully rebuilt and tested 0.3.2 APK
+
+The cloud EAS account had exhausted its monthly Android build allowance, so the application was rebuilt using Expo's local EAS build path with the existing remotely managed Cogni signing credentials. This still generated a complete signed release-style APK from a clean native Android workspace rather than reusing the earlier binary.
+
+Exact tested APK:
+
+- Version name: **0.3.2**
+- Version code: **8**
 - Package: `app.gocogni.cogni`
-- SHA-256: `462b8a5cf3f270263aa577c3fc546cd51be7ac5a012fc24d9d447b4e2d5eb7cf`
-- APK archive integrity: passed
-- APK Signature Scheme v2 verification: passed
+- Minimum SDK: **24**
+- Target SDK: **36**
+- APK SHA-256: `b2bdbdd70ba4440b09dab585cf2598855c9936dd10f8bf0cbb44834194e14adf`
 - Signing certificate SHA-256: `e0bfda379dfa0e11aee798e443ce3b33d006d83b7857062f8f639ca7f7572c7e`
-- Signing certificate matches the previously validated Cogni APK: passed
-- Internet permission present: passed
-- `SYSTEM_ALERT_WINDOW` absent: passed
-- legacy read/write external-storage permissions absent: passed
+- Exact tested source tree: `a87c35003293e424ba3549fdc9d14a2a8b36555e`
+- Verification run: `32430604484`
 
-The binary is therefore structurally valid and correctly signed. The remaining decisive check is to launch **this exact 0.3.1 build on the physical device**.
+Binary validation passed for archive integrity, app identity, v2 signing, established signing certificate, 16 KB page alignment, `arm64-v8a` and `x86_64` native libraries, embedded production Supabase configuration and permission minimisation.
 
-The `EAS Android preview` workflow is restored to manual-only after this verification so ordinary commits do not consume EAS build capacity.
+The exact APK was then clean-installed and exercised on both:
+
+- **Android 15 / API 35**
+- **Android 16 / API 36**
+
+On each environment it:
+
+- installed successfully;
+- completed a cold launch;
+- rendered the expected signed-out Cogni welcome experience;
+- remained alive, foreground and top-resumed after 60 seconds;
+- survived a second forced cold launch;
+- remained alive for a further 30 seconds;
+- produced no fatal Java/Kotlin, React Native or native-signal crash.
+
+This is materially stronger evidence than the prior archive/signature-only validation.
 
 ## Active architecture
 
@@ -66,8 +92,8 @@ The `EAS Android preview` workflow is restored to manual-only after this verific
 - **Database:** Supabase Postgres
 - **Answer keys:** server-side; not shipped to the mobile client
 - **Privileged writes:** server-side only
-- **Session credentials:** secure native storage with crash-safe recovery
-- **Quality gates:** Expo dependency check, ESLint, UI audit, logic/security audit, TypeScript, Edge Function typecheck and behavioural tests
+- **Session credentials:** native secure storage with crash-safe fallback behaviour
+- **Quality gates:** Expo dependency check, ESLint, UI audit, logic/security audit, TypeScript, compiled-bundle configuration smoke, Edge Function typecheck and behavioural tests
 
 Vercel is not a dependency of the current mobile runtime.
 
@@ -125,10 +151,10 @@ The earlier QA report recorded **leaked-password protection as disabled**. Conne
 
 Before wider external access:
 
-1. **Install and launch the verified 0.3.1 APK on the Samsung device.** For the cleanest diagnostic, remove the crashing 0.3.0 build first, then install 0.3.1 fresh.
+1. **Clean-install and launch the tested 0.3.2 APK on the Samsung device.** Automated Android 15/16 runtime tests passed, but the user's exact Samsung firmware and hardware remain the decisive real-device confirmation.
 2. **Run a physical-device walkthrough across all six learner contexts.** Cover onboarding, starting check, lesson, daily training, answer feedback, Skills, Progress and Profile.
 3. **Exercise interruption/resume paths** during the starting check, lesson and daily session.
-4. **Validate representative Android screen sizes, keyboard handling, accessibility semantics and reduced-motion behaviour.**
+4. **Validate representative Samsung screen/keyboard/accessibility behaviour**, including reduced motion.
 5. **Verify and enable Supabase Auth leaked-password protection** before broad external recruitment.
 6. **Recruit a wider pilot only after those gates**, then interpret activation/retention with the sample-size guardrails in `METRICS.md`.
 

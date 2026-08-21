@@ -24,11 +24,11 @@ npm run logic-audit
 npm run typecheck
 ```
 
-All checks must pass.
+All checks must pass. The maintained CI and EAS workflows also export an Android production bundle and verify that the intended Supabase URL and publishable key were actually compiled into it. This is a release gate, not merely a source-code check.
 
 ## Development
 
-Create `mobile/.env` from `.env.example` and set the intended Supabase project's public URL and publishable key. There is intentionally no production fallback.
+Create `mobile/.env` from `.env.example` and set the intended Supabase project's public URL and publishable key. There is intentionally no silent production fallback.
 
 ```bash
 npx expo start
@@ -42,7 +42,22 @@ Use `.github/workflows/eas-android-preview.yml` or run from `mobile/`:
 npx eas-cli@21.7.1 build --platform android --profile preview
 ```
 
-The preview profile creates an installable APK after the full validation suite passes.
+The preview profile creates an installable APK after the full validation suite passes. It disables EAS build caches so a replacement APK is produced from a clean native workspace.
+
+## Local signed Android verification
+
+`mobile/eas.json` retains a `localVerification` profile for controlled use when cloud EAS build capacity is unavailable. It uses the existing remotely managed signing credentials but performs the native Android build on the local/CI machine:
+
+```bash
+npx eas-cli@21.7.1 build \
+  --platform android \
+  --profile localVerification \
+  --local \
+  --non-interactive \
+  --output /tmp/cogni.apk
+```
+
+A locally built artifact is not release-ready merely because Gradle succeeded. Before distribution, inspect the exact APK for identity, signing certificate, permissions, ABIs, 16 KB page alignment and compiled runtime configuration, then clean-install and cold-launch that same file on supported Android runtime versions. The maintained regression script is `.github/scripts/verify-cogni-apk-runtime.sh`.
 
 ## Production mobile release
 

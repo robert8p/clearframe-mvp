@@ -1,0 +1,142 @@
+name: Cogni 0.3.3 exact APK runtime retest
+
+on:
+  pull_request:
+    paths:
+      - ".github/scripts/cogni-auth-*.py"
+      - ".github/scripts/cogni-profile-password-e2e.py"
+      - ".github/scripts/cogni-signup-onboarding-e2e.py"
+      - ".github/workflows/temp-cogni-0.3.3-runtime-retest.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  exact-apk-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      SOURCE_RUN_ID: "32897191564"
+      API_LEVEL: "36"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download the already inspected Cogni 0.3.3 APK
+        uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.3.3-exact-apk
+          path: /tmp/cogni-0.3.3-artifact
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Verify the retained exact artifact identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/cogni-0.3.3-artifact/Cogni-0.3.3.apk
+          node - <<'NODE'
+          const fs = require('fs');
+          const metadata = JSON.parse(fs.readFileSync('/tmp/cogni-0.3.3-artifact/metadata.json', 'utf8'));
+          if (metadata.version !== '0.3.3') throw new Error(`Unexpected version ${metadata.version}`);
+          if (Number(metadata.versionCode) < 9) throw new Error(`Unexpected version code ${metadata.versionCode}`);
+          if (!/^[0-9a-f]{64}$/.test(metadata.sha256)) throw new Error('Missing APK digest');
+          console.log(metadata);
+          NODE
+          echo "$(node -e "const j=require('/tmp/cogni-0.3.3-artifact/metadata.json');process.stdout.write(j.sha256)")  /tmp/cogni-0.3.3-artifact/Cogni-0.3.3.apk" | sha256sum -c -
+
+      - name: Derive and provision the disposable E2E account
+        shell: bash
+        run: |
+          set -euo pipefail
+          EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
+          SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni-auth-route" | sha256sum | cut -c1-28)
+          PASSWORD="Cg${SECRET}9a"
+          export EMAIL PASSWORD
+          echo "::add-mask::$EMAIL"
+          echo "::add-mask::$PASSWORD"
+          echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD,data:{full_name:"Cogni Route E2E"}}))' > /tmp/signup-body.json
+          curl -fsSL -o /tmp/signup.json \
+            -X POST "$SUPABASE_URL/auth/v1/signup" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/signup-body.json
+
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' > /tmp/signin-body.json
+          curl -fsSL -o /tmp/signin.json \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/signin-body.json
+          ACCESS_TOKEN=$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("/tmp/signin.json","utf8"));process.stdout.write(j.access_token??"")')
+          test -n "$ACCESS_TOKEN"
+          echo "Disposable E2E account is confirmed and sign-in ready."
+
+      - name: Enable KVM acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Exercise every launch, auth, onboarding, account and tab route on Android 16
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: APK_PATH=/tmp/cogni-0.3.3-artifact/Cogni-0.3.3.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" SUPABASE_URL="$SUPABASE_URL" SUPABASE_KEY="$SUPABASE_KEY" API_LEVEL=36 python3 .github/scripts/cogni-auth-route-e2e-fixed.py
+
+      - name: Preserve Android interaction evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.3.3-exact-runtime-retest-api-36
+          path: |
+            /tmp/cogni-auth-route-api-36
+            /tmp/cogni-profile-password-api-36
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Delete any remaining disposable test accounts
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          for KIND in route signup; do
+            EMAIL="cogni.e2e.${KIND}.${GITHUB_RUN_ID}@example.com"
+            SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni-auth-route" | sha256sum | cut -c1-28)
+            PASSWORD="Cg${SECRET}9a"
+            export EMAIL PASSWORD
+            node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' > /tmp/signin-cleanup.json
+            curl -sS -o /tmp/signin-cleanup-response.json \
+              -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+              -H "apikey: $SUPABASE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_KEY" \
+              -H 'Content-Type: application/json' \
+              --data-binary @/tmp/signin-cleanup.json
+            ACCESS_TOKEN=$(node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("/tmp/signin-cleanup-response.json","utf8"))}catch{}process.stdout.write(j.access_token??"")')
+            if [ -n "$ACCESS_TOKEN" ]; then
+              curl -sS -X DELETE "$SUPABASE_URL/functions/v1/mobile-api/api/mobile/account" \
+                -H "apikey: $SUPABASE_KEY" \
+                -H "Authorization: Bearer $ACCESS_TOKEN" >/dev/null
+              echo "Deleted disposable $KIND account."
+            fi
+          done

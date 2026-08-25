@@ -1,0 +1,84 @@
+name: Cogni 0.3.3 final tested-artifact gate
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - "supabase/**"
+      - ".github/scripts/**"
+      - ".github/workflows/temp-cogni-0.3.3-final-release-gate.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify-tested-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TESTED_HEAD: b7160b52335eb497c22602220fc5d5b590b791cf
+      TESTED_RUN_ID: "32906341288"
+      EXPECTED_SHA256: 840d33da0173f2b6b7a64b9786923b0de5242bf56581ac798bab347b71c07bd8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Prove product source has not changed since the exact APK was built
+        run: |
+          git diff --exit-code "$TESTED_HEAD" -- \
+            mobile \
+            supabase/functions/mobile-api \
+            supabase/migrations
+
+      - name: Download the exact tested APK
+        uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.3.3-exact-apk
+          path: /tmp/cogni-tested
+          run-id: ${{ env.TESTED_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Verify APK identity and digest
+        run: |
+          test -s /tmp/cogni-tested/Cogni-0.3.3.apk
+          test -s /tmp/cogni-tested/metadata.json
+          echo "$EXPECTED_SHA256  /tmp/cogni-tested/Cogni-0.3.3.apk" | sha256sum -c -
+          node - <<'NODE'
+          const fs = require('fs');
+          const metadata = JSON.parse(fs.readFileSync('/tmp/cogni-tested/metadata.json', 'utf8'));
+          if (metadata.version !== '0.3.3') throw new Error(`Unexpected version ${metadata.version}`);
+          if (String(metadata.versionCode) !== '36') throw new Error(`Unexpected versionCode ${metadata.versionCode}`);
+          if (metadata.sha256 !== process.env.EXPECTED_SHA256) throw new Error('Metadata digest mismatch');
+          if (metadata.sourceCommit !== '1e3ba7ebf4f7a6430cd461cb4a248aaa4db06a20') throw new Error(`Unexpected tested source ${metadata.sourceCommit}`);
+          console.log(metadata);
+          NODE
+          unzip -t /tmp/cogni-tested/Cogni-0.3.3.apk >/dev/null
+
+      - name: Verify the exact build and full Android runtime jobs passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$TESTED_RUN_ID/jobs?per_page=100" \
+            > /tmp/jobs.json
+          jq -e '.jobs | any(.name == "build-exact-apk" and .conclusion == "success")' /tmp/jobs.json >/dev/null
+          jq -e '.jobs | any(.name == "auth-route-runtime" and .conclusion == "success")' /tmp/jobs.json >/dev/null
+          echo "PASS: exact signed APK build and full Android interaction runtime both succeeded."
+
+      - name: Download and retain the full runtime evidence bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.3.3-auth-route-api-36
+          path: /tmp/cogni-runtime-evidence
+          run-id: ${{ env.TESTED_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Confirm runtime evidence is present
+        run: |
+          test "$(find /tmp/cogni-runtime-evidence -type f | wc -l)" -gt 5
+          find /tmp/cogni-runtime-evidence -type f -maxdepth 4 -print | head -50

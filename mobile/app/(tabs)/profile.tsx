@@ -132,8 +132,8 @@ export default function ProfileScreen() {
     </Card>
 
     <Card>
-      <Eyebrow>Account</Eyebrow><Body muted>Your session is stored securely on this device. You can also reset your password or permanently remove your account.</Body>
-      <PrimaryButton label="Reset password" secondary onPress={() => router.push("/forgot-password")} />
+      <Eyebrow>Account</Eyebrow><Body muted>Your session is stored securely on this device. You can also change your password or permanently remove your account.</Body>
+      <PrimaryButton label="Change password" secondary onPress={() => router.push({ pathname: "/auth/recovery", params: { source: "profile" } })} />
       <PrimaryButton label="Sign out" secondary onPress={() => void logout()} />
       <PrimaryButton label={busy ? "Working…" : "Delete account"} secondary disabled={busy} onPress={confirmDeleteAccount} />
     </Card>

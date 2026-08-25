@@ -3,7 +3,7 @@
     "name": "Cogni",
     "slug": "cogni",
     "owner": "cogniapp",
-    "version": "0.3.3",
+    "version": "0.4.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#070b19",
@@ -17,6 +17,9 @@
     },
     "android": {
       "package": "app.gocogni.cogni",
+      "permissions": [
+        "com.android.vending.BILLING"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#070b19"
       },

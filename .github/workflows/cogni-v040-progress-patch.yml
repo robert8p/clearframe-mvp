@@ -1,0 +1,43 @@
+name: Cogni v0.4.0 progress patch
+
+on:
+  push:
+    branches: [feat/cogni-0.4.0-monetisation]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Apply Cogni 0.4.0 progress route patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/cogni-0.4.0-monetisation
+      - name: Patch progress route with assertions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('supabase/functions/mobile-api/index.ts')
+          text = path.read_text()
+          import_anchor = '} from "./monetization.ts";\n'
+          if './progress-history.ts' not in text:
+              if text.count(import_anchor) != 1:
+                  raise SystemExit('Expected monetization import anchor')
+              text = text.replace(import_anchor, import_anchor + 'import { progressHistory } from "./progress-history.ts";\n', 1)
+          route_anchor = '''    } else if (path === "/api/mobile/entitlements" && method === "GET") {\n      result = await loadEntitlementState(admin, user.id);\n'''
+          if '/api/mobile/progress-history' not in text:
+              if text.count(route_anchor) != 1:
+                  raise SystemExit('Expected entitlement route anchor')
+              text = text.replace(route_anchor, '''    } else if (path === "/api/mobile/progress-history" && method === "GET") {\n      result = await progressHistory(admin, user.id);\n    } else if (path === "/api/mobile/entitlements" && method === "GET") {\n      result = await loadEntitlementState(admin, user.id);\n''', 1)
+          path.write_text(text)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/functions/mobile-api/index.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Apply Cogni 0.4.0 progress route patch'
+          git push origin HEAD:feat/cogni-0.4.0-monetisation

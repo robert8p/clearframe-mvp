@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Redirect, router } from "expo-router";
 import * as Linking from "expo-linking";
-import { Text, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { CogniLogo } from "@/components/brand";
 import { FormField } from "@/components/form-field";
 import { Body, Card, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
@@ -11,6 +11,7 @@ import { colors } from "@/lib/theme";
 
 export default function ForgotPasswordScreen() {
   const { session, loading } = useAuth();
+  const emailRef = useRef<TextInput>(null);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -23,8 +24,14 @@ export default function ForgotPasswordScreen() {
   if (session) return <Redirect href="/(tabs)/home" />;
 
   async function submit() {
+    if (busy) return;
     const normalizedEmail = email.trim();
-    if (!normalizedEmail || busy) return;
+    if (!normalizedEmail) {
+      setError("Enter your email address first.");
+      emailRef.current?.focus();
+      return;
+    }
+
     setBusy(true);
     setError("");
     try {
@@ -55,25 +62,24 @@ export default function ForgotPasswordScreen() {
         {!sent ? (
           <>
             <FormField
+              ref={emailRef}
               label="Email"
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(value) => {
+                setEmail(value);
+                if (error === "Enter your email address first.") setError("");
+              }}
               returnKeyType="done"
               onSubmitEditing={() => void submit()}
               placeholder="you@example.com"
               placeholderTextColor={colors.soft}
             />
-            {!email.trim() ? (
-              <Text style={{ color: colors.soft, fontSize: 13.5, lineHeight: 19 }}>
-                Enter your email to enable the recovery button.
-              </Text>
-            ) : null}
             <PrimaryButton
               label={busy ? "Sending…" : "Send recovery email"}
-              disabled={busy || !email.trim()}
+              disabled={busy}
               onPress={() => void submit()}
             />
           </>

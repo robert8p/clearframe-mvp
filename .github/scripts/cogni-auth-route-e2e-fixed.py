@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Cogni Android E2E suites with reliable labelled-field input targeting."""
+"""Run Cogni Android E2E suites with reliable UI automation."""
 
 from __future__ import annotations
 
@@ -29,12 +29,60 @@ def load_suite(path: Path) -> ModuleType:
 
 
 def install_reliable_automation(module: ModuleType) -> None:
+    def values(node: object) -> tuple[str, str]:
+        return (
+            str(getattr(node, "text", "")).casefold().strip(),
+            str(getattr(node, "description", "")).casefold().strip(),
+        )
+
     def matches(node: object, label: str) -> bool:
-        """Match visible labels independent of UI text casing or typography."""
+        """Match visible labels independent of casing while allowing long copy."""
         needle = label.casefold().strip()
-        text = str(getattr(node, "text", "")).casefold().strip()
-        description = str(getattr(node, "description", "")).casefold().strip()
+        text, description = values(node)
         return needle == text or needle == description or needle in text or needle in description
+
+    def tap(label: str, *, enabled: bool | None = True, scroll: bool = False) -> None:
+        """Tap an actual interactive control, never body copy containing the label."""
+        needle = label.casefold().strip()
+        deadline = time.time() + 40
+        last_nodes: list[object] = []
+        while time.time() < deadline:
+            last_nodes = module.dump_ui("tap-latest")
+            eligible = [
+                item
+                for item in last_nodes
+                if bool(getattr(item, "clickable", False))
+                and (enabled is None or bool(getattr(item, "enabled", False)) is enabled)
+            ]
+            exact = [item for item in eligible if needle in values(item) and needle != ""]
+            candidates = exact or [item for item in eligible if matches(item, label)]
+            if candidates:
+                node = candidates[0]
+                left, top, right, bottom = node.bounds
+                visible_top = max(top, 1)
+                visible_bottom = min(bottom, 2338)
+                if visible_bottom - visible_top < 20 and scroll:
+                    module.swipe_up()
+                    time.sleep(0.5)
+                    continue
+                x = (left + right) // 2
+                y = (visible_top + visible_bottom) // 2
+                print(
+                    f"TAP {label!r}: description={getattr(node, 'description', '')!r} "
+                    f"text={getattr(node, 'text', '')!r} at {x},{y}"
+                )
+                module.adb("shell", "input", "tap", str(x), str(y))
+                time.sleep(1.2)
+                return
+            if scroll:
+                module.swipe_up()
+            else:
+                time.sleep(0.7)
+
+        for item in last_nodes:
+            if getattr(item, "text", "") or getattr(item, "description", ""):
+                print(item)
+        raise AssertionError(f"Timed out waiting for clickable control {label!r}")
 
     def type_android_text(value: str) -> None:
         # Android's `input text` is unreliable for @ on recent API levels. Type
@@ -51,7 +99,7 @@ def install_reliable_automation(module: ModuleType) -> None:
     def input_text(field_label: str, value: str, *, scroll: bool = False) -> None:
         deadline = time.time() + 35
         node = None
-        last_nodes = []
+        last_nodes: list[object] = []
         while time.time() < deadline:
             last_nodes = module.dump_ui("input-latest")
             candidates = [
@@ -119,6 +167,7 @@ def install_reliable_automation(module: ModuleType) -> None:
             raise AssertionError(f"Android did not enter text into {field_label!r}")
 
     module.matches = matches
+    module.tap = tap
     module.input_text = input_text
 
 

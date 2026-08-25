@@ -218,6 +218,7 @@ async function submitAnswer(admin: SupabaseClient, user: User, body: unknown, ti
   const challengeId = requiredUuid(input.challengeId, "Challenge"), sessionId = requiredUuid(input.sessionId, "Session");
   const mode = input.mode;
   if (mode !== "diagnostic" && mode !== "training" && mode !== "practice") throw new HttpError(400, "Answer mode is invalid.");
+  if (mode === "practice") await requirePro(admin, user.id, "focused_practice");
   const responseTimeMs = requiredInt(input.responseTimeMs, 0, 3600000, "Response time");
   const confidence = input.confidence === undefined || input.confidence === null ? null : requiredInt(input.confidence, 0, 100, "Confidence");
   const selectedIndex = input.selectedIndex === undefined || input.selectedIndex === null ? undefined : requiredInt(input.selectedIndex, 0, 20, "Answer");

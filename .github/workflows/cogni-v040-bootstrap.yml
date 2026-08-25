@@ -44,6 +44,13 @@ jobs:
                   raise SystemExit('Expected exactly one practice route anchor')
               text = text.replace(route_anchor, route_block, 1)
 
+          answer_anchor = '''  if (mode !== "diagnostic" && mode !== "training" && mode !== "practice") throw new HttpError(400, "Answer mode is invalid.");\n  const responseTimeMs = requiredInt(input.responseTimeMs, 0, 3600000, "Response time");\n'''
+          answer_block = '''  if (mode !== "diagnostic" && mode !== "training" && mode !== "practice") throw new HttpError(400, "Answer mode is invalid.");\n  if (mode === "practice") await requirePro(admin, user.id, "focused_practice");\n  const responseTimeMs = requiredInt(input.responseTimeMs, 0, 3600000, "Response time");\n'''
+          if 'if (mode === "practice") await requirePro' not in text:
+              if text.count(answer_anchor) != 1:
+                  raise SystemExit('Expected exactly one practice answer anchor')
+              text = text.replace(answer_anchor, answer_block, 1)
+
           catch_anchor = '''  } catch (error) {\n    if (error instanceof HttpError) return response({ error: error.message }, error.status);\n    const message = error instanceof Error ? error.message : String(error);\n'''
           catch_block = '''  } catch (error) {\n    if (error instanceof PremiumRequiredError) return response({ error: { code: error.code, message: error.message, details: { feature: error.feature } } }, error.status);\n    if (error instanceof BillingUnavailableError) return response({ error: { code: error.code, message: error.message } }, error.status);\n    if (error instanceof HttpError) return response({ error: error.message }, error.status);\n    if (error instanceof Error && error.message === "invalid_monetization_event") return response({ error: { code: "invalid_request", message: "Invalid analytics event." } }, 400);\n    const message = error instanceof Error ? error.message : String(error);\n'''
           if 'error instanceof PremiumRequiredError' not in text:

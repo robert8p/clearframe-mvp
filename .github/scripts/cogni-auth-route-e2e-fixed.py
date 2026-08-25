@@ -41,6 +41,16 @@ def install_reliable_automation(module: ModuleType) -> None:
         text, description = values(node)
         return needle == text or needle == description or needle in text or needle in description
 
+    def is_interactive(node: object) -> bool:
+        """Handle suites whose lightweight Node model omits `clickable`."""
+        explicit = getattr(node, "clickable", None)
+        if explicit is not None:
+            return bool(explicit)
+        # React Native exposes actionable controls through accessibilityLabel / 
+        # content-desc. Some older suite Node dataclasses intentionally retained
+        # only that field, so a non-empty description is the reliable action cue.
+        return bool(str(getattr(node, "description", "")).strip())
+
     def tap(label: str, *, enabled: bool | None = True, scroll: bool = False) -> None:
         """Tap an actual interactive control, never body copy containing the label."""
         needle = label.casefold().strip()
@@ -51,7 +61,7 @@ def install_reliable_automation(module: ModuleType) -> None:
             eligible = [
                 item
                 for item in last_nodes
-                if bool(getattr(item, "clickable", False))
+                if is_interactive(item)
                 and (enabled is None or bool(getattr(item, "enabled", False)) is enabled)
             ]
             exact = [item for item in eligible if needle in values(item) and needle != ""]

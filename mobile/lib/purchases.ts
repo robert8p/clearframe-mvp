@@ -60,12 +60,14 @@ export async function identifyPurchasesUser(userId: string) {
   return true;
 }
 
-export async function clearPurchasesUser() {
-  if (!configured || !identifiedUserId) return;
-  try {
-    await Purchases.logOut();
-  } finally {
-    identifiedUserId = null;
+// Cogni only uses authenticated, custom App User IDs. RevenueCat documents that
+// calling logOut() creates an anonymous ID, so sign-out clears app state only.
+// A later authenticated account switch is performed directly with logIn(newUuid).
+export function clearLocalPurchasesUserState() {
+  identifiedUserId = null;
+  if (listener) {
+    Purchases.removeCustomerInfoUpdateListener(listener);
+    listener = null;
   }
 }
 

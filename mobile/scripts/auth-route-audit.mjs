@@ -14,6 +14,22 @@ requireText(layout, '<Stack.Protected guard={signedIn}>', "Signed-in routes must
 requireText(layout, '<Stack.Screen name="(tabs)"', "Signed-in learners must fall back to the product tabs.");
 requireText(layout, '<Stack.Screen name="auth/recovery"', "Password recovery/change must retain a globally resolvable route.");
 
+const login = read("app/login.tsx");
+requireText(login, 'setError("Enter your email address.")', "Empty sign-in must explain that email is required.");
+requireText(login, 'setError("Enter your password.")', "Empty sign-in must explain that password is required.");
+requireText(login, 'emailRef.current?.focus()', "Empty sign-in must focus the missing email field.");
+requireText(login, 'passwordRef.current?.focus()', "Sign-in must focus the missing password field.");
+requireText(login, 'disabled={busy}', "Sign in must remain pressable for validation when not busy.");
+forbidText(login, 'disabled={busy || !email || !password}', "Sign in must not silently disable itself for incomplete fields.");
+requireText(login, 'label="Back to welcome"', "Sign in must provide a deterministic return to Welcome.");
+
+const signup = read("app/signup.tsx");
+requireText(signup, 'setError("Enter your email address.")', "Empty account creation must explain that email is required.");
+requireText(signup, 'setError("Use at least 8 characters for your password.")', "Short signup passwords must produce visible validation.");
+requireText(signup, 'disabled={busy}', "Create account must remain pressable for validation when not busy.");
+forbidText(signup, 'disabled={busy || !email || password.length < 8}', "Create account must not silently disable itself for invalid fields.");
+requireText(signup, 'label="Back to sign in"', "Account creation must provide a deterministic return to sign in.");
+
 const forgot = read("app/forgot-password.tsx");
 requireText(forgot, 'setError("Enter your email address first.")', "An empty recovery submission must provide visible validation.");
 requireText(forgot, 'emailRef.current?.focus()', "An empty recovery submission must focus the missing email field.");
@@ -21,6 +37,11 @@ requireText(forgot, 'disabled={busy}', "The recovery action must remain pressabl
 forbidText(forgot, 'disabled={busy || !email.trim()}', "The recovery action must not silently disable itself for an empty email.");
 requireText(forgot, 'router.replace("/login")', "Back to sign in must replace the reset route deterministically.");
 requireText(forgot, 'label="Back to sign in"', "Password reset must expose a full sign-in return action.");
+
+const onboarding = read("app/onboarding.tsx");
+requireText(onboarding, 'setError("Choose a learning context first.")', "Onboarding continuation must explain the missing context choice.");
+requireText(onboarding, 'disabled={busy}', "Onboarding continuation must remain pressable for validation when not busy.");
+forbidText(onboarding, 'disabled={!selectedAudience || busy}', "Onboarding must not silently disable its primary continuation action.");
 
 const profile = read("app/(tabs)/profile.tsx");
 requireText(profile, 'label="Change password"', "Signed-in account settings must expose a working password-change action.");
@@ -46,6 +67,6 @@ if (failures.length) {
 
 console.log("Cogni authentication-route audit passed.");
 console.log("✓ Welcome is the deterministic launch fallback");
-console.log("✓ Password-reset controls always respond with navigation or validation");
+console.log("✓ Sign-in, signup, recovery and onboarding actions always respond");
 console.log("✓ Signed-in password change uses the authenticated route");
-console.log("✓ Recovery and profile return paths are explicit");
+console.log("✓ Recovery, profile and welcome return paths are explicit");

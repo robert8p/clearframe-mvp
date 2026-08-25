@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Linking, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { FormField } from "@/components/form-field";
@@ -17,13 +17,23 @@ import {
   RESPONSIBILITY_OPTIONS,
   STUDY_STAGE_OPTIONS,
 } from "@/lib/context-options";
+import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from "@/lib/legal";
+import { useProGate } from "@/lib/pro-gate";
 import { supabase } from "@/lib/supabase";
 import { colors, gradients } from "@/lib/theme";
 import type { MobileProfileResponse } from "@/lib/types";
-import { Body, Card, Eyebrow, ErrorState, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
+import { ActionLink, Body, Card, Eyebrow, ErrorState, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
+
+function readableDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(date);
+}
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
+  const { isPro, entitlement, billingStatus, managementUrl, restore, openPaywall } = useProGate();
   const [data, setData] = useState<MobileProfileResponse | null>(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
   const [name, setName] = useState(""); const [functionArea, setFunctionArea] = useState(""); const [industry, setIndustry] = useState(""); const [goal, setGoal] = useState("");
   const [studyStage, setStudyStage] = useState(""); const [responsibilityScope, setResponsibilityScope] = useState(""); const [organisationScale, setOrganisationScale] = useState("");
@@ -69,10 +79,21 @@ export default function ProfileScreen() {
 
   async function logout() { await signOut(); router.replace("/"); }
 
+  async function restoreFromProfile() {
+    if (busy) return;
+    setBusy(true);
+    const result = await restore("profile");
+    setBusy(false);
+    Alert.alert(result.ok ? "Purchases restored" : result.outcome === "no_subscription" ? "Nothing to restore" : "Restore incomplete", result.message);
+  }
+
   function confirmDeleteAccount() {
+    const subscriptionWarning = isPro || entitlement
+      ? " Deleting your Cogni account does not cancel an App Store or Google Play subscription. Cancel or manage that separately in your store subscription settings if you do not want it to renew."
+      : "";
     Alert.alert(
       "Delete Cogni account?",
-      "This permanently deletes your account, scores, streak, answers and learning history. This cannot be undone.",
+      `This permanently deletes your Cogni account, scores, streak, answers, learning history and Cogni-side entitlement record. This cannot be undone.${subscriptionWarning}`,
       [
         { text: "Cancel", style: "cancel" },
         { text: "Delete account", style: "destructive", onPress: () => void deleteAccount() },
@@ -92,6 +113,14 @@ export default function ProfileScreen() {
 
   const initials = (name || data.profile.email || "C").split(/\s+/).map((part) => part[0]).join("").slice(0,2).toUpperCase();
   const xp = data.profile.xp ?? 0; const streak = data.profile.current_streak ?? 0; const answers = data.summary.answers;
+  const expiry = readableDate(entitlement?.expiration_date);
+  const subscriptionSummary = isPro
+    ? entitlement?.status === "cancelled" ? `Active until ${expiry ?? "the end of the paid period"}; renewal cancelled.`
+      : entitlement?.billing_issue ? `Access is active while the store resolves a billing issue${expiry ? `, currently through ${expiry}` : ""}.`
+        : `Active${expiry ? ` through ${expiry}` : ""}${entitlement?.will_renew ? "; set to renew in the store" : ""}.`
+    : entitlement?.status === "expired" || entitlement?.status === "refunded" || entitlement?.status === "revoked"
+      ? `Free plan. Previous Cogni Pro access is ${entitlement.status}.`
+      : "Free plan. Your daily core learning remains available.";
   const milestones = [
     { icon: "⚡", label: "100 XP", unlocked: xp >= 100 },
     { icon: "✓", label: "10 answers", unlocked: answers >= 10 },
@@ -108,6 +137,16 @@ export default function ProfileScreen() {
     <Card><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}><Eyebrow>Milestones</Eyebrow><Text style={{ color: colors.soft, fontSize: 12.5 }}>Progress markers</Text></View><View style={{ gap: 0 }}>{milestones.map((item, index) => <View accessible accessibilityLabel={`${item.label}. ${item.unlocked ? "Unlocked" : "Locked"}.`} key={item.label} style={{ minHeight: 62, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: index === milestones.length - 1 ? 0 : 1, borderBottomColor: colors.line }}><Text accessible={false} style={{ width: 30, fontSize: 21, textAlign: "center", opacity: item.unlocked ? 1 : .48 }}>{item.icon}</Text><View style={{ flex: 1, gap: 2 }}><Text style={{ color: colors.text, fontSize: 15.5, lineHeight: 21, fontWeight: "800" }}>{item.label}</Text><Text style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 12.5, lineHeight: 18, fontWeight: "700" }}>{item.unlocked ? "Unlocked" : "Not yet unlocked"}</Text></View><Text accessible={false} style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 18, fontWeight: "900" }}>{item.unlocked ? "✓" : "○"}</Text></View>)}</View></Card>
 
     <Card><Eyebrow>Learning context</Eyebrow><Body muted>Changing context never resets your scores, XP, streak or history. It changes the situations Cogni uses next.</Body><PrimaryButton label="Change learning context" secondary onPress={() => router.push("/onboarding")} /></Card>
+
+    <Card style={{ borderColor: isPro ? "rgba(0,229,255,.36)" : colors.line }}>
+      <Eyebrow>Subscription</Eyebrow>
+      <Title size={24}>{isPro ? "Cogni Pro" : "Cogni Free"}</Title>
+      <Body muted>{subscriptionSummary}</Body>
+      {!isPro ? <PrimaryButton label="Explore Cogni Pro" onPress={() => openPaywall("profile", "cogni_pro")} /> : null}
+      {managementUrl ? <PrimaryButton secondary label="Manage subscription" onPress={() => void Linking.openURL(managementUrl)} /> : null}
+      <PrimaryButton secondary label={busy ? "Working…" : "Restore purchases"} disabled={busy || billingStatus === "not_configured"} onPress={() => void restoreFromProfile()} />
+      <Body muted style={{ fontSize: 13, lineHeight: 19 }}>Purchases and cancellations are handled by Apple or Google. Deleting your Cogni account does not cancel a store subscription.</Body>
+    </Card>
 
     {audience ? <Card>
       <Eyebrow>Personalisation</Eyebrow><Body muted>{isCasual ? "Keep your interests and learning goal current so Cogni can favour useful everyday situations." : "These structured choices connect directly to Cogni's scenario tags, so personalisation actually changes what you see."}</Body>
@@ -129,6 +168,7 @@ export default function ProfileScreen() {
       <Eyebrow>Privacy & trust</Eyebrow><Title size={23}>Built to support learning, not label you</Title>
       <Body muted>Sensitive grading and score updates happen on Cogni&apos;s server; answer keys are not stored in the app. Your sign-in session is stored securely on this device, and profile access is scoped to your account.</Body>
       <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Development Scores are learning indicators with separate evidence strength. They are not population percentiles or formal psychometric grades. You can delete your account and learning history at any time.</Body>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: 4 }}><ActionLink label="Privacy policy" onPress={() => void Linking.openURL(PRIVACY_URL)} /><ActionLink label="Terms" onPress={() => void Linking.openURL(TERMS_URL)} /><ActionLink label="Support" onPress={() => void Linking.openURL(SUPPORT_URL)} /></View>
     </Card>
 
     <Card>

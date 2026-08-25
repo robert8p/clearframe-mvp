@@ -16,6 +16,14 @@ import {
   situationLabelForMoment,
   type Audience,
 } from "./engine.ts";
+import {
+  BillingUnavailableError,
+  PremiumRequiredError,
+  loadEntitlementState,
+  recordMonetizationAnalytics,
+  requirePro,
+  syncFromRevenueCat,
+} from "./monetization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -321,7 +329,14 @@ Deno.serve(async (req: Request) => {
       result = await completeLesson(admin, user, envelope.body, timeZone);
     } else if (path === "/api/mobile/context-feedback" && method === "POST") {
       result = await contextFeedback(admin, user, envelope.body);
+    } else if (path === "/api/mobile/entitlements" && method === "GET") {
+      result = await loadEntitlementState(admin, user.id);
+    } else if (path === "/api/mobile/entitlements/sync" && method === "POST") {
+      result = await syncFromRevenueCat(admin, user.id);
+    } else if (path === "/api/mobile/analytics" && method === "POST") {
+      result = await recordMonetizationAnalytics(admin, user.id, envelope.body);
     } else if (path.startsWith("/api/mobile/practice/") && method === "GET") {
+      await requirePro(admin, user.id, "focused_practice");
       await persistTimeZone(admin, user.id, timeZone);
       const slug = decodeURIComponent(path.slice("/api/mobile/practice/".length));
       if (!slug || slug.length > 100) throw new HttpError(400, "Skill not found.");
@@ -340,7 +355,10 @@ Deno.serve(async (req: Request) => {
     }
     return response(result);
   } catch (error) {
+    if (error instanceof PremiumRequiredError) return response({ error: { code: error.code, message: error.message, details: { feature: error.feature } } }, error.status);
+    if (error instanceof BillingUnavailableError) return response({ error: { code: error.code, message: error.message } }, error.status);
     if (error instanceof HttpError) return response({ error: error.message }, error.status);
+    if (error instanceof Error && error.message === "invalid_monetization_event") return response({ error: { code: "invalid_request", message: "Invalid analytics event." } }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("mobile-api", message, error);
     return response({ error: "Cogni couldn't complete that request. Please try again." }, 500);

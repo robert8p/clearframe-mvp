@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import sys
 import time
 from pathlib import Path
@@ -71,8 +70,11 @@ def install_reliable_input(module: ModuleType) -> None:
         module.adb("shell", "input", "text", escaped)
         time.sleep(0.8)
 
-        # Verify the editable node actually received content. Password fields may
-        # mask text, but their UI node must no longer be empty.
+        # Android deliberately hides secure-field content from UI automation.
+        # For ordinary text fields, verify the labelled editable node changed.
+        if "password" in field_label.lower():
+            return
+
         verified = False
         verify_deadline = time.time() + 6
         while time.time() < verify_deadline:

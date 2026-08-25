@@ -49,20 +49,26 @@ def install_reliable_automation(module: ModuleType) -> None:
         return bool(str(getattr(node, "description", "")).strip())
 
     def tap(label: str, *, enabled: bool | None = True, scroll: bool = False) -> None:
-        """Tap an actual interactive control, never body copy containing the label."""
+        """Tap a labelled control without confusing it with surrounding copy.
+
+        Android system dialogs expose their buttons as enabled text-only nodes and
+        may omit both `clickable` and content-description metadata. Exact label
+        matches are therefore accepted even when those optional flags are absent;
+        partial matches still require a known interactive node.
+        """
         needle = label.casefold().strip()
         deadline = time.time() + 40
         last_nodes: list[object] = []
         while time.time() < deadline:
             last_nodes = module.dump_ui("tap-latest")
-            eligible = [
+            enabled_nodes = [
                 item
                 for item in last_nodes
-                if is_interactive(item)
-                and (enabled is None or bool(getattr(item, "enabled", False)) is enabled)
+                if enabled is None or bool(getattr(item, "enabled", False)) is enabled
             ]
-            exact = [item for item in eligible if needle in values(item) and needle != ""]
-            candidates = exact or [item for item in eligible if matches(item, label)]
+            exact = [item for item in enabled_nodes if needle in values(item) and needle != ""]
+            interactive = [item for item in enabled_nodes if is_interactive(item)]
+            candidates = exact or [item for item in interactive if matches(item, label)]
             if candidates:
                 node = candidates[0]
                 left, top, right, bottom = node.bounds

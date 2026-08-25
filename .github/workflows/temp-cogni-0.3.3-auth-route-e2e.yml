@@ -189,6 +189,7 @@ jobs:
           EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
           SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni-auth-route" | sha256sum | cut -c1-28)
           PASSWORD="Cg${SECRET}9a"
+          export EMAIL PASSWORD
           echo "::add-mask::$EMAIL"
           echo "::add-mask::$PASSWORD"
           echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
@@ -222,9 +223,6 @@ jobs:
             exit 42
           fi
           echo "Disposable E2E account is confirmed and sign-in ready."
-        env:
-          EMAIL: cogni.e2e.route.${{ github.run_id }}@example.com
-          PASSWORD: Cg${{ github.run_id }}placeholder9a
 
       - name: Enable KVM acceleration
         run: |
@@ -275,6 +273,7 @@ jobs:
           EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
           SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni-auth-route" | sha256sum | cut -c1-28)
           PASSWORD="Cg${SECRET}9a"
+          export EMAIL PASSWORD
           node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' > /tmp/signin-body.json
           curl -fsSL -o /tmp/signin.json \
             -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
@@ -289,6 +288,3 @@ jobs:
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $ACCESS_TOKEN"
           echo "Disposable E2E account deleted."
-        env:
-          EMAIL: cogni.e2e.route.${{ github.run_id }}@example.com
-          PASSWORD: placeholder

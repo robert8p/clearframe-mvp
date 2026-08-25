@@ -77,6 +77,7 @@ export default function ForgotPasswordScreen() {
               placeholder="you@example.com"
               placeholderTextColor={colors.soft}
             />
+            {/* Regression note: never restore the inert state/copy "Enter your email to enable the recovery button." */}
             <PrimaryButton
               label={busy ? "Sending…" : "Send recovery email"}
               disabled={busy}

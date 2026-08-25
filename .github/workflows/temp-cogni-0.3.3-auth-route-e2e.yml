@@ -1,0 +1,294 @@
+name: Cogni 0.3.3 authentication route E2E
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/scripts/cogni-auth-route-e2e.py"
+      - ".github/workflows/temp-cogni-0.3.3-auth-route-e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-exact-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      EAS_LOCAL_BUILD_SKIP_CLEANUP: "1"
+      EAS_LOCAL_BUILD_WORKINGDIR: /tmp/eas-local-build
+      EAS_LOCAL_BUILD_ARTIFACTS_DIR: /tmp/eas-local-artifacts
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "mobile/package-lock.json"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android build prerequisites
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Require Expo token
+        run: test -n "$EXPO_TOKEN"
+
+      - name: Clean install and full source validation
+        run: |
+          rm -rf node_modules .expo android
+          npm ci --include=dev --no-audit --no-fund
+          npx expo install --check
+          npm run lint
+          npm run ui-audit
+          npm run logic-audit
+          npm run typecheck
+
+      - name: Prove production configuration is compiled
+        run: |
+          rm -rf /tmp/cogni-export /tmp/cogni-export-strings.txt
+          npx expo export --platform android --output-dir /tmp/cogni-export --clear
+          find /tmp/cogni-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-export-strings.txt
+
+      - name: Advance the local verification build code
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const file = 'eas.json';
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+          config.build.localVerification.autoIncrement = true;
+          fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+          NODE
+
+      - name: Build a clean signed Cogni 0.3.3 APK locally
+        run: |
+          rm -rf /tmp/eas-local-build /tmp/eas-local-artifacts /tmp/cogni-0.3.3.apk
+          mkdir -p /tmp/eas-local-artifacts
+          npx eas-cli@21.7.1 build \
+            --platform android \
+            --profile localVerification \
+            --local \
+            --non-interactive \
+            --output /tmp/cogni-0.3.3.apk
+          test -s /tmp/cogni-0.3.3.apk
+
+      - name: Inspect the exact APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/cogni-0.3.3.apk
+          unzip -t "$APK" >/dev/null
+          unzip -Z1 "$APK" > /tmp/apk-files.txt
+
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)
+
+          "$AAPT" dump badging "$APK" > /tmp/apk-badging.txt
+          "$AAPT" dump permissions "$APK" > /tmp/apk-permissions.txt
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/apk-signature.txt
+          "$ZIPALIGN" -c -P 16 4 "$APK"
+
+          grep -q "package: name='app.gocogni.cogni'" /tmp/apk-badging.txt
+          grep -q "versionName='0.3.3'" /tmp/apk-badging.txt
+          grep -q "application-label:'Cogni'" /tmp/apk-badging.txt
+          grep -q "targetSdkVersion:'36'" /tmp/apk-badging.txt
+          VERSION_CODE=$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/apk-badging.txt | head -1)
+          test "$VERSION_CODE" -ge 9
+
+          grep -q "android.permission.INTERNET" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.SYSTEM_ALERT_WINDOW" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.READ_EXTERNAL_STORAGE" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" /tmp/apk-permissions.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apk-signature.txt
+
+          NORMALIZED_SIGNATURE=$(tr -d ':' < /tmp/apk-signature.txt | tr '[:upper:]' '[:lower:]')
+          grep -q "e0bfda379dfa0e11aee798e443ce3b33d006d83b7857062f8f639ca7f7572c7e" <<<"$NORMALIZED_SIGNATURE"
+          grep -q '^lib/x86_64/' /tmp/apk-files.txt
+          grep -q '^lib/arm64-v8a/' /tmp/apk-files.txt
+
+          BUNDLE_PATH=$(awk '/(^|\/)index\.android\.bundle$/{print; exit}' /tmp/apk-files.txt)
+          test -n "$BUNDLE_PATH"
+          unzip -p "$APK" "$BUNDLE_PATH" > /tmp/index.android.bundle
+          strings -a /tmp/index.android.bundle > /tmp/index.android.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/index.android.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/index.android.strings.txt
+
+          SHA256=$(sha256sum "$APK" | awk '{print $1}')
+          mkdir -p /tmp/cogni-0.3.3-artifact
+          cp "$APK" /tmp/cogni-0.3.3-artifact/Cogni-0.3.3.apk
+          cp /tmp/apk-badging.txt /tmp/cogni-0.3.3-artifact/
+          cp /tmp/apk-permissions.txt /tmp/cogni-0.3.3-artifact/
+          cp /tmp/apk-signature.txt /tmp/cogni-0.3.3-artifact/
+          printf '{"version":"0.3.3","versionCode":"%s","sha256":"%s","sourceCommit":"%s"}\n' \
+            "$VERSION_CODE" "$SHA256" "$GITHUB_SHA" > /tmp/cogni-0.3.3-artifact/metadata.json
+          echo "Built and inspected Cogni 0.3.3 versionCode=$VERSION_CODE sha256=$SHA256"
+
+      - name: Upload the exact inspected APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.3.3-exact-apk
+          path: /tmp/cogni-0.3.3-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Preserve local build evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.3.3-local-build-debug
+          path: /tmp/eas-local-build
+          if-no-files-found: warn
+          retention-days: 7
+
+  auth-route-runtime:
+    needs: build-exact-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      API_LEVEL: "36"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download the exact inspected APK
+        uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.3.3-exact-apk
+          path: /tmp/cogni-0.3.3-artifact
+
+      - name: Derive and provision the disposable E2E account
+        shell: bash
+        run: |
+          set -euo pipefail
+          EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
+          SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni-auth-route" | sha256sum | cut -c1-28)
+          PASSWORD="Cg${SECRET}9a"
+          echo "::add-mask::$EMAIL"
+          echo "::add-mask::$PASSWORD"
+          echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD,data:{full_name:"Cogni Route E2E"}}))' \
+            > /tmp/signup-body.json
+          SIGNUP_STATUS=$(curl -sS -o /tmp/signup.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/auth/v1/signup" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/signup-body.json)
+          echo "Signup status: $SIGNUP_STATUS"
+
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' \
+            > /tmp/signin-body.json
+          SIGNIN_STATUS=$(curl -sS -o /tmp/signin.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/signin-body.json)
+          echo "Sign-in preflight status: $SIGNIN_STATUS"
+
+          ACCESS_TOKEN=$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("/tmp/signin.json","utf8"));process.stdout.write(j.access_token??"")')
+          if [ -z "$ACCESS_TOKEN" ]; then
+            MESSAGE=$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("/tmp/signin.json","utf8"));process.stdout.write(j.msg??j.message??j.error_description??j.error??"unknown authentication response")')
+            echo "E2E account cannot sign in yet: $MESSAGE"
+            echo "E2E_CONFIRMATION_REQUIRED_RUN_ID=$GITHUB_RUN_ID"
+            exit 42
+          fi
+          echo "Disposable E2E account is confirmed and sign-in ready."
+        env:
+          EMAIL: cogni.e2e.route.${{ github.run_id }}@example.com
+          PASSWORD: Cg${{ github.run_id }}placeholder9a
+
+      - name: Enable KVM acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Exercise password-reset controls and authenticated route fallbacks on Android 16
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: APK_PATH=/tmp/cogni-0.3.3-artifact/Cogni-0.3.3.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" API_LEVEL=36 python3 .github/scripts/cogni-auth-route-e2e.py
+
+      - name: Preserve Android interaction evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.3.3-auth-route-api-36
+          path: /tmp/cogni-auth-route-api-36
+          if-no-files-found: warn
+          retention-days: 7
+
+  delete-test-account:
+    needs: auth-route-runtime
+    if: needs.auth-route-runtime.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+    steps:
+      - name: Delete the disposable account through Cogni's authenticated API
+        shell: bash
+        run: |
+          set -euo pipefail
+          EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
+          SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni-auth-route" | sha256sum | cut -c1-28)
+          PASSWORD="Cg${SECRET}9a"
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' > /tmp/signin-body.json
+          curl -fsSL -o /tmp/signin.json \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/signin-body.json
+          ACCESS_TOKEN=$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("/tmp/signin.json","utf8"));process.stdout.write(j.access_token??"")')
+          test -n "$ACCESS_TOKEN"
+          curl -fsSL \
+            -X DELETE "$SUPABASE_URL/functions/v1/mobile-api/api/mobile/account" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $ACCESS_TOKEN"
+          echo "Disposable E2E account deleted."
+        env:
+          EMAIL: cogni.e2e.route.${{ github.run_id }}@example.com
+          PASSWORD: placeholder

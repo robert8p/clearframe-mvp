@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run every Android authentication and account-route interaction suite."""
+"""Run every Android authentication, onboarding and account-route interaction suite."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent
 SUITES = [
     ROOT / "cogni-auth-main-flow.py",
     ROOT / "cogni-profile-password-e2e.py",
+    ROOT / "cogni-signup-onboarding-e2e.py",
 ]
 
 for suite in SUITES:
@@ -20,4 +21,4 @@ for suite in SUITES:
     if result.returncode != 0:
         raise SystemExit(result.returncode)
 
-print("\nPASS: all Cogni Android authentication, account and tab interaction suites completed.")
+print("\nPASS: all Cogni Android launch, authentication, onboarding, account and tab interaction suites completed.")

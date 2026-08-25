@@ -28,7 +28,14 @@ def load_suite(path: Path) -> ModuleType:
     return module
 
 
-def install_reliable_input(module: ModuleType) -> None:
+def install_reliable_automation(module: ModuleType) -> None:
+    def matches(node: object, label: str) -> bool:
+        """Match visible labels independent of UI text casing or typography."""
+        needle = label.casefold().strip()
+        text = str(getattr(node, "text", "")).casefold().strip()
+        description = str(getattr(node, "description", "")).casefold().strip()
+        return needle == text or needle == description or needle in text or needle in description
+
     def type_android_text(value: str) -> None:
         # Android's `input text` is unreliable for @ on recent API levels. Type
         # the two email segments separately and emit KEYCODE_AT explicitly.
@@ -50,7 +57,7 @@ def install_reliable_input(module: ModuleType) -> None:
             candidates = [
                 item
                 for item in last_nodes
-                if getattr(item, "description", "") == field_label
+                if str(getattr(item, "description", "")).casefold() == field_label.casefold()
                 and getattr(item, "enabled", False)
             ]
             if candidates:
@@ -68,15 +75,13 @@ def install_reliable_input(module: ModuleType) -> None:
                     print(item)
             raise AssertionError(f"Timed out waiting for editable field {field_label!r}")
 
-        # Supabase Auth deliberately rejects RFC-reserved example.com addresses
-        # for recovery email delivery even though signup/sign-in accept them.
-        # Keep the disposable account email for authentication, but use a valid
-        # deliverable-domain address when exercising the reset-email endpoint.
+        # Supabase Auth rejects RFC-reserved example.com addresses for recovery
+        # delivery even though signup/sign-in accept them. Keep the disposable
+        # account address for auth, but exercise the reset endpoint with a valid
+        # deliverable-domain address.
         effective_value = value
-        on_reset_screen = any(
-            getattr(item, "text", "") == "Reset your password" for item in last_nodes
-        )
-        if field_label == "Email" and on_reset_screen and value.endswith("@example.com"):
+        on_reset_screen = any(matches(item, "Reset your password") for item in last_nodes)
+        if field_label.casefold() == "email" and on_reset_screen and value.endswith("@example.com"):
             local = value.split("@", 1)[0].replace(".", "")
             effective_value = f"{local}@gmail.com"
 
@@ -95,16 +100,16 @@ def install_reliable_input(module: ModuleType) -> None:
 
         # Android deliberately hides secure-field content from UI automation.
         # For ordinary text fields, verify the labelled editable node changed.
-        if "password" in field_label.lower():
+        if "password" in field_label.casefold():
             return
 
         verified = False
         verify_deadline = time.time() + 6
         while time.time() < verify_deadline:
             for item in module.dump_ui("input-verify"):
-                if getattr(item, "description", "") == field_label:
-                    observed = getattr(item, "text", "")
-                    if observed and observed != field_label:
+                if str(getattr(item, "description", "")).casefold() == field_label.casefold():
+                    observed = str(getattr(item, "text", ""))
+                    if observed and observed.casefold() != field_label.casefold():
                         verified = True
                         break
             if verified:
@@ -113,13 +118,14 @@ def install_reliable_input(module: ModuleType) -> None:
         if not verified:
             raise AssertionError(f"Android did not enter text into {field_label!r}")
 
+    module.matches = matches
     module.input_text = input_text
 
 
 for suite_path in SUITES:
-    print(f"\n=== Running {suite_path.name} with reliable field targeting ===", flush=True)
+    print(f"\n=== Running {suite_path.name} with reliable UI automation ===", flush=True)
     suite = load_suite(suite_path)
-    install_reliable_input(suite)
+    install_reliable_automation(suite)
     result = suite.main()
     if result not in (None, 0):
         raise SystemExit(int(result))

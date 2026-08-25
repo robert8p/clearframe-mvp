@@ -24,6 +24,7 @@ import {
   requirePro,
   syncFromRevenueCat,
 } from "./monetization.ts";
+import { progressHistory } from "./progress-history.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -330,6 +331,8 @@ Deno.serve(async (req: Request) => {
       result = await completeLesson(admin, user, envelope.body, timeZone);
     } else if (path === "/api/mobile/context-feedback" && method === "POST") {
       result = await contextFeedback(admin, user, envelope.body);
+    } else if (path === "/api/mobile/progress-history" && method === "GET") {
+      result = await progressHistory(admin, user.id);
     } else if (path === "/api/mobile/entitlements" && method === "GET") {
       result = await loadEntitlementState(admin, user.id);
     } else if (path === "/api/mobile/entitlements/sync" && method === "POST") {

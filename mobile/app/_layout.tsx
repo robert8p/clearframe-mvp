@@ -6,12 +6,25 @@ import { useReducedMotion } from "@/lib/accessibility";
 import { SplashScreenController } from "@/components/splash-screen-controller";
 import { StartupConfigurationScreen } from "@/components/startup-configuration-screen";
 import { StartupErrorBoundary } from "@/components/startup-error-boundary";
+import { LoadingState } from "@/components/ui";
 import { RUNTIME_CONFIGURATION_ERROR } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
 
+// Keep the signed-out welcome route as the stack anchor for normal launches and
+// for deep links. Protected routes then fall back to the first valid route for
+// the current authentication state instead of an unrelated recovery screen.
+export const unstable_settings = {
+  initialRouteName: "index",
+};
+
 function RootNavigator() {
-  const { session } = useAuth();
+  const { session, loading } = useAuth();
   const reducedMotion = useReducedMotion();
+
+  // Do not construct protected route availability until the persisted session
+  // and any incoming auth deep link have both been resolved.
+  if (loading) return <LoadingState label="Opening Cogni…" />;
+
   const signedIn = Boolean(session);
 
   return (
@@ -25,20 +38,22 @@ function RootNavigator() {
         animation: reducedMotion ? "none" : "default",
       }}
     >
-      <Stack.Screen name="forgot-password" options={{ title: "Reset password" }} />
-      <Stack.Screen name="auth/confirm" options={{ title: "Confirm account" }} />
-      <Stack.Screen name="auth/recovery" options={{ title: "Choose new password" }} />
-
       <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="login" options={{ title: "Sign in", presentation: "modal" }} />
-        <Stack.Screen name="signup" options={{ title: "Create account", presentation: "modal" }} />
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
+        <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/confirm" options={{ headerShown: false }} />
       </Stack.Protected>
 
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ title: "Your learning context" }} />
       </Stack.Protected>
+
+      {/* A valid recovery link creates a temporary authenticated session. Keep
+          this route available while auth is resolving and when a link expires. */}
+      <Stack.Screen name="auth/recovery" options={{ headerShown: false }} />
     </Stack>
   );
 }

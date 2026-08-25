@@ -68,6 +68,18 @@ def install_reliable_input(module: ModuleType) -> None:
                     print(item)
             raise AssertionError(f"Timed out waiting for editable field {field_label!r}")
 
+        # Supabase Auth deliberately rejects RFC-reserved example.com addresses
+        # for recovery email delivery even though signup/sign-in accept them.
+        # Keep the disposable account email for authentication, but use a valid
+        # deliverable-domain address when exercising the reset-email endpoint.
+        effective_value = value
+        on_reset_screen = any(
+            getattr(item, "text", "") == "Reset your password" for item in last_nodes
+        )
+        if field_label == "Email" and on_reset_screen and value.endswith("@example.com"):
+            local = value.split("@", 1)[0].replace(".", "")
+            effective_value = f"{local}@gmail.com"
+
         left, top, right, bottom = node.bounds
         x = (left + right) // 2
         y = (top + bottom) // 2
@@ -78,7 +90,7 @@ def install_reliable_input(module: ModuleType) -> None:
         module.adb("shell", "input", "tap", str(x), str(y))
         time.sleep(0.4)
         module.adb("shell", "input", "keyevent", "KEYCODE_MOVE_END", check=False)
-        type_android_text(value)
+        type_android_text(effective_value)
         time.sleep(0.8)
 
         # Android deliberately hides secure-field content from UI automation.

@@ -36,6 +36,30 @@ const rootLayout = read("app/_layout.tsx");
 requireText(rootLayout, "StartupErrorBoundary", "The app root must retain a visible startup/render error boundary.");
 requireText(rootLayout, "RUNTIME_CONFIGURATION_ERROR", "The app root must intercept malformed runtime configuration without crashing.");
 requireText(rootLayout, "StartupConfigurationScreen", "Malformed builds must render an explicit configuration failure screen.");
+requireText(rootLayout, 'initialRouteName: "index"', "The signed-out welcome route must remain the root stack anchor.");
+requireText(rootLayout, "if (loading) return <LoadingState", "Protected route availability must wait until session/deep-link resolution is complete.");
+
+const signedOutGuardStart = rootLayout.indexOf("<Stack.Protected guard={!signedIn}>");
+const signedInGuardStart = rootLayout.indexOf("<Stack.Protected guard={signedIn}>");
+const recoveryScreenIndex = rootLayout.indexOf('<Stack.Screen name="auth/recovery"');
+if (signedOutGuardStart < 0) failures.push("Missing signed-out protected route group.");
+if (signedInGuardStart < 0) failures.push("Missing signed-in protected route group.");
+if (signedOutGuardStart >= 0 && signedInGuardStart >= 0 && signedOutGuardStart > signedInGuardStart) failures.push("Signed-out routes must be declared before signed-in routes so the welcome screen is the signed-out fallback.");
+if (recoveryScreenIndex < 0) failures.push("Missing recovery route.");
+if (recoveryScreenIndex >= 0 && signedInGuardStart >= 0 && recoveryScreenIndex < signedInGuardStart) failures.push("The always-available recovery route must follow both protected route groups so it cannot become the default screen.");
+
+if (signedOutGuardStart >= 0 && signedInGuardStart > signedOutGuardStart) {
+  const signedOutRoutes = rootLayout.slice(signedOutGuardStart, signedInGuardStart);
+  for (const route of ["index", "login", "signup", "forgot-password", "auth/confirm"]) {
+    requireText(signedOutRoutes, `<Stack.Screen name="${route}"`, `${route} must be available only while signed out.`);
+  }
+}
+if (signedInGuardStart >= 0 && recoveryScreenIndex > signedInGuardStart) {
+  const signedInRoutes = rootLayout.slice(signedInGuardStart, recoveryScreenIndex);
+  requireText(signedInRoutes, '<Stack.Screen name="(tabs)"', "Signed-in learners must fall back to the product tabs.");
+  requireText(signedInRoutes, '<Stack.Screen name="onboarding"', "Signed-in onboarding must remain available.");
+}
+
 const startupBoundaryPath = path.join(root, "components/startup-error-boundary.tsx");
 if (!fs.existsSync(startupBoundaryPath)) failures.push("Missing native startup error boundary component.");
 else {
@@ -45,6 +69,13 @@ else {
 }
 const startupConfigurationPath = path.join(root, "components/startup-configuration-screen.tsx");
 if (!fs.existsSync(startupConfigurationPath)) failures.push("Missing non-crashing build configuration screen.");
+
+const forgotPassword = read("app/forgot-password.tsx");
+requireText(forgotPassword, "useAuth", "Password recovery must know whether the learner is already signed in.");
+requireText(forgotPassword, "if (session) return <Redirect", "A signed-in learner must be redirected away from the signed-out password-reset route.");
+requireText(forgotPassword, 'router.replace("/login")', "Back to sign in must replace the recovery route deterministically.");
+requireText(forgotPassword, 'label="Back to sign in" secondary', "Password recovery must expose a full accessible sign-in return button.");
+requireText(forgotPassword, "Enter your email to enable the recovery button.", "The disabled recovery action must explain what input is required.");
 
 const onboarding = read("app/onboarding.tsx");
 requireText(onboarding, "OptionPicker", "Onboarding must use canonical context choices.");
@@ -113,6 +144,7 @@ console.log("Cogni logic/security audit passed.");
 console.log("✓ Supabase Edge backend only");
 console.log("✓ Expo public configuration is statically inlined");
 console.log("✓ Crash-safe secure auth persistence without SQLite startup coupling");
+console.log("✓ Stable auth route anchor, protected fallbacks and working recovery exit");
 console.log("✓ Visible root startup and configuration recovery");
 console.log("✓ Canonical context personalisation");
 console.log("✓ Exact multi-select requirements");

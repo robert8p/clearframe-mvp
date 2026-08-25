@@ -2,6 +2,7 @@ import React from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { EntitlementProvider } from "@/lib/entitlements";
 import { useReducedMotion } from "@/lib/accessibility";
 import { SplashScreenController } from "@/components/splash-screen-controller";
 import { StartupConfigurationScreen } from "@/components/startup-configuration-screen";
@@ -49,6 +50,7 @@ function RootNavigator() {
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ title: "Your learning context" }} />
+        <Stack.Screen name="paywall" options={{ headerShown: false, presentation: "modal" }} />
       </Stack.Protected>
 
       {/* A valid recovery link creates a temporary authenticated session. Keep
@@ -71,9 +73,11 @@ export default function RootLayout() {
   return (
     <StartupErrorBoundary>
       <AuthProvider>
-        <SplashScreenController />
-        <StatusBar style="light" />
-        <RootNavigator />
+        <EntitlementProvider>
+          <SplashScreenController />
+          <StatusBar style="light" />
+          <RootNavigator />
+        </EntitlementProvider>
       </AuthProvider>
     </StartupErrorBoundary>
   );

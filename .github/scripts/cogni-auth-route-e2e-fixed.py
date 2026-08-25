@@ -46,9 +46,6 @@ def install_reliable_automation(module: ModuleType) -> None:
         explicit = getattr(node, "clickable", None)
         if explicit is not None:
             return bool(explicit)
-        # React Native exposes actionable controls through accessibilityLabel / 
-        # content-desc. Some older suite Node dataclasses intentionally retained
-        # only that field, so a non-empty description is the reliable action cue.
         return bool(str(getattr(node, "description", "")).strip())
 
     def tap(label: str, *, enabled: bool | None = True, scroll: bool = False) -> None:
@@ -95,14 +92,9 @@ def install_reliable_automation(module: ModuleType) -> None:
         raise AssertionError(f"Timed out waiting for clickable control {label!r}")
 
     def type_android_text(value: str) -> None:
-        # Android's `input text` is unreliable for @ on recent API levels. Type
-        # the two email segments separately and emit KEYCODE_AT explicitly.
-        if value.count("@") == 1:
-            local, domain = value.split("@", 1)
-            module.adb("shell", "input", "text", local.replace("%", "%25").replace(" ", "%s"))
-            module.adb("shell", "input", "keyevent", "KEYCODE_AT")
-            module.adb("shell", "input", "text", domain.replace("%", "%25").replace(" ", "%s"))
-            return
+        # Passing argv directly to adb avoids local shell expansion. Android 16
+        # accepts @ correctly this way; splitting it into KEYCODE_AT previously
+        # introduced an extra character on some keyboard layouts.
         escaped = value.replace("%", "%25").replace(" ", "%s")
         module.adb("shell", "input", "text", escaped)
 
@@ -152,29 +144,32 @@ def install_reliable_automation(module: ModuleType) -> None:
         )
         module.adb("shell", "input", "tap", str(x), str(y))
         time.sleep(0.4)
-        module.adb("shell", "input", "keyevent", "KEYCODE_MOVE_END", check=False)
         type_android_text(effective_value)
         time.sleep(0.8)
 
         # Android deliberately hides secure-field content from UI automation.
-        # For ordinary text fields, verify the labelled editable node changed.
-        if "password" in field_label.casefold():
-            return
+        if "password" not in field_label.casefold():
+            verified = False
+            verify_deadline = time.time() + 6
+            while time.time() < verify_deadline:
+                for item in module.dump_ui("input-verify"):
+                    if str(getattr(item, "description", "")).casefold() == field_label.casefold():
+                        observed = str(getattr(item, "text", ""))
+                        if observed == effective_value:
+                            verified = True
+                            break
+                if verified:
+                    break
+                time.sleep(0.5)
+            if not verified:
+                raise AssertionError(
+                    f"Android did not enter the exact expected value into {field_label!r}"
+                )
 
-        verified = False
-        verify_deadline = time.time() + 6
-        while time.time() < verify_deadline:
-            for item in module.dump_ui("input-verify"):
-                if str(getattr(item, "description", "")).casefold() == field_label.casefold():
-                    observed = str(getattr(item, "text", ""))
-                    if observed and observed.casefold() != field_label.casefold():
-                        verified = True
-                        break
-            if verified:
-                break
-            time.sleep(0.5)
-        if not verified:
-            raise AssertionError(f"Android did not enter text into {field_label!r}")
+        # Ensure the next action is not obscured by the soft keyboard. This was
+        # particularly important for the lower Create account button.
+        module.adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
+        time.sleep(0.6)
 
     module.matches = matches
     module.tap = tap

@@ -29,6 +29,18 @@ def load_suite(path: Path) -> ModuleType:
 
 
 def install_reliable_input(module: ModuleType) -> None:
+    def type_android_text(value: str) -> None:
+        # Android's `input text` is unreliable for @ on recent API levels. Type
+        # the two email segments separately and emit KEYCODE_AT explicitly.
+        if value.count("@") == 1:
+            local, domain = value.split("@", 1)
+            module.adb("shell", "input", "text", local.replace("%", "%25").replace(" ", "%s"))
+            module.adb("shell", "input", "keyevent", "KEYCODE_AT")
+            module.adb("shell", "input", "text", domain.replace("%", "%25").replace(" ", "%s"))
+            return
+        escaped = value.replace("%", "%25").replace(" ", "%s")
+        module.adb("shell", "input", "text", escaped)
+
     def input_text(field_label: str, value: str, *, scroll: bool = False) -> None:
         deadline = time.time() + 35
         node = None
@@ -66,8 +78,7 @@ def install_reliable_input(module: ModuleType) -> None:
         module.adb("shell", "input", "tap", str(x), str(y))
         time.sleep(0.4)
         module.adb("shell", "input", "keyevent", "KEYCODE_MOVE_END", check=False)
-        escaped = value.replace("%", "%25").replace(" ", "%s")
-        module.adb("shell", "input", "text", escaped)
+        type_android_text(value)
         time.sleep(0.8)
 
         # Android deliberately hides secure-field content from UI automation.

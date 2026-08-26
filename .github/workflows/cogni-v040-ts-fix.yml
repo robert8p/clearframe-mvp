@@ -1,0 +1,36 @@
+name: Cogni v0.4.0 TypeScript fix
+on:
+  push:
+    branches: [feat/cogni-0.4.0-monetisation]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Fix Cogni entitlement listener cleanup type'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/cogni-0.4.0-monetisation
+      - name: Apply narrow source fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('mobile/lib/entitlements.tsx')
+          text=path.read_text()
+          old='    let removeCustomerListener = () => undefined;\n'
+          new='    let removeCustomerListener: () => void = () => {};\n'
+          if old not in text and new not in text:
+              raise SystemExit('entitlement listener cleanup anchor mismatch')
+          if old in text:
+              text=text.replace(old,new,1)
+          path.write_text(text)
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add mobile/lib/entitlements.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Fix Cogni entitlement listener cleanup type'
+          git push origin HEAD:feat/cogni-0.4.0-monetisation

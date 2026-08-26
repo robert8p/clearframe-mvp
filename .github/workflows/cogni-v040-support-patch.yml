@@ -1,0 +1,42 @@
+name: Cogni v0.4.0 support patch
+on:
+  push:
+    branches: [feat/cogni-0.4.0-monetisation]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Apply Cogni 0.4.0 support route patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/cogni-0.4.0-monetisation
+      - name: Patch support route with assertions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('supabase/functions/mobile-api/index.ts')
+          text=path.read_text()
+          anchor='import { progressHistory } from "./progress-history.ts";\n'
+          if './support.ts' not in text:
+              if text.count(anchor)!=1: raise SystemExit('progress import anchor mismatch')
+              text=text.replace(anchor,anchor+'import { createSupportRequest } from "./support.ts";\n',1)
+          route='''    } else if (path === "/api/mobile/progress-history" && method === "GET") {\n      result = await progressHistory(admin, user.id);\n'''
+          if '/api/mobile/support' not in text:
+              if text.count(route)!=1: raise SystemExit('progress route anchor mismatch')
+              text=text.replace(route,'''    } else if (path === "/api/mobile/support" && method === "POST") {\n      result = await createSupportRequest(admin, user, envelope.body);\n    } else if (path === "/api/mobile/progress-history" && method === "GET") {\n      result = await progressHistory(admin, user.id);\n''',1)
+          error_anchor='''    if (error instanceof Error && error.message === "invalid_monetization_event") return response({ error: { code: "invalid_request", message: "Invalid analytics event." } }, 400);\n'''
+          if 'invalid_support_category' not in text:
+              if text.count(error_anchor)!=1: raise SystemExit('error anchor mismatch')
+              text=text.replace(error_anchor,error_anchor+'''    if (error instanceof Error && ["invalid_support_category", "invalid_support_message", "invalid_support_platform"].includes(error.message)) return response({ error: { code: "invalid_request", message: "Please check your support request and try again." } }, 400);\n''',1)
+          path.write_text(text)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/functions/mobile-api/index.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Apply Cogni 0.4.0 support route patch'
+          git push origin HEAD:feat/cogni-0.4.0-monetisation

@@ -56,7 +56,7 @@ Declare only categories actually present in the submitted binary and service con
 - **Purchases / Purchase History** — linked to user; App Functionality. Cogni stores subscription product/status/timing, not payment-card details.
 - **Contact Info / Email Address** — linked to user; App Functionality and account management.
 - **Identifiers / User ID** — linked to user; App Functionality, subscription reconciliation and security.
-- **User Content / Other User Content** — learning responses and optional profile context; linked to user; App Functionality and Personalisation.
+- **User Content / Other User Content** — learning responses, support requests and optional profile context; linked to user; App Functionality and Personalisation.
 - **Usage Data / Product Interaction** — sessions, answers, paywall/purchase/restore events; linked to user; App Functionality, Analytics and Personalisation as applicable.
 
 Current architecture does **not** intentionally add advertising tracking or third-party ad SDKs. Re-check the exact binary before answering Apple's tracking questions.
@@ -69,10 +69,11 @@ Current implementation collects:
 - stable user ID;
 - optional learning/profile context;
 - learning responses and interaction data;
+- support requests submitted by the user;
 - learning/progress state;
 - subscription/purchase entitlement metadata.
 
-Purposes include app functionality, account management, personalisation, analytics, fraud/security and subscription management. Card details are processed by Google Play, not stored by Cogni.
+Purposes include app functionality, account management, personalisation, analytics, fraud/security, customer support and subscription management. Card details are processed by Google Play, not stored by Cogni.
 
 RevenueCat and Supabase are service providers used to operate the app. Validate Google's then-current definitions of **collected** versus **shared** when completing the form; do not mark data as not collected merely because a service provider processes it.
 
@@ -82,6 +83,7 @@ Security statements supported by current implementation:
 - users can request deletion in-app;
 - authenticated access is scoped server-side;
 - premium entitlement writes are server-owned;
+- private support messages are submitted through the authenticated server API rather than a public issue tracker;
 - no full payment-card information is stored by Cogni.
 
 Do not claim independent security certification or end-to-end encryption unless separately obtained and verified.
@@ -115,9 +117,15 @@ Also prepare/verify:
 - Support: `https://robert8p.github.io/clearframe-mvp/support.html`
 - Account deletion: `https://robert8p.github.io/clearframe-mvp/delete-account.html`
 
+## Support architecture
+
+Authenticated users can submit a private support request from **Profile → Cogni Support**. Requests are written through the authenticated `mobile-api` to the server-only `support_requests` queue with the user's account email, category, app version and platform. The client cannot read or modify the support queue directly.
+
+The store listings still need the developer/support contact required by Apple/Google so a signed-out user can obtain help without first accessing Cogni. This should be a dedicated business/support contact, not a public GitHub issue tracker.
+
 ## Remaining legal/support release gates
 
 - Add the operator's legal identity where required by applicable consumer/privacy law.
-- Add a private customer-support contact address to `docs/support.html` and the store listings.
+- Configure the developer/support contact required by the App Store and Google Play listings for signed-out support.
 - Have Privacy, Terms and Subscription Terms reviewed professionally before a broad public paid launch.
 - Reconcile age-rating/minimum-age answers with final target audience and store questionnaires.

@@ -173,6 +173,7 @@ export default function ProfileScreen() {
 
     <Card>
       <Eyebrow>Account</Eyebrow><Body muted>Your session is stored securely on this device. You can also change your password or permanently remove your account.</Body>
+      <PrimaryButton label="Cogni Support" secondary onPress={() => router.push("/support")} />
       <PrimaryButton label="Change password" secondary onPress={() => router.push({ pathname: "/auth/recovery", params: { source: "profile" } })} />
       <PrimaryButton label="Sign out" secondary onPress={() => void logout()} />
       <PrimaryButton label={busy ? "Working…" : "Delete account"} secondary disabled={busy} onPress={confirmDeleteAccount} />

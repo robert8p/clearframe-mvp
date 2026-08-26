@@ -1,31 +1,66 @@
-# Cogni architecture — v0.7.0
+# Cogni architecture — active mobile 0.4.0
 
-Cogni remains one Next.js application with Supabase as the persistence/auth layer. Browser clients never receive the answer-key table directly; grading and state updates happen in server routes using the service role after authenticating the user.
+The production product is the Expo / React Native application in `mobile/`, backed by Supabase Auth, Postgres and authenticated Edge Functions. Retained legacy web/admin source is not the active mobile runtime and must not be treated as the deployment architecture.
 
-## Daily flow
+## Runtime boundary
 
-`Dashboard -> Daily Lesson -> Persisted 5-item Training Session -> Session Complete`
+`Expo mobile app -> Supabase Auth -> authenticated mobile-api Edge Function -> Postgres`
 
-The daily training session is created/persisted before the lesson so Cogni can align the lesson to the session's priority skill. `training_sessions.lesson_id` stores that assignment. `/training` enforces lesson completion for the current date before rendering questions.
+The mobile client uses the Supabase publishable key only. Sensitive grading, score mutation, XP/streak updates, session creation, account deletion and premium API enforcement happen server-side.
 
-## Mixed interaction engine
+Answer keys are not shipped in the app. User-scoped tables use RLS and the mobile API performs privileged operations with server credentials after authenticating the user.
 
-A common `Challenge` type drives five interfaces:
+## Daily free learning flow
 
-- single choice
-- multi-select
-- ranking
-- classification
-- triage
+`Welcome/Auth -> Onboarding -> Starting Check -> Daily Lesson -> Assigned Core Training -> Daily Complete`
 
-`interaction_type` chooses the renderer/evaluator and `interaction_config` stores format-specific metadata. `correct_answer jsonb`, `response_payload jsonb` and `score_fraction` allow deterministic server grading without creating one database table per format.
+The starting check, current daily lesson, one assigned core training experience, basic Skills, basic Progress, XP/streaks and account/privacy controls are part of the free product.
 
-## Adaptive sequencing
+## Cogni Pro subscription architecture
 
-The existing recommendation engine still targets measured weak skills, second-priority skills, variety, spaced exposure and AI-output verification. v0.7 additionally tracks interaction-format counts and preferentially adds non-MCQ formats when available, while preserving the previous challenge-type diversity caps.
+`Apple App Store / Google Play -> RevenueCat -> Cogni mobile client -> Supabase server entitlement projection -> protected premium API`
 
-## Learning evidence
+- Native purchases use `react-native-purchases` / RevenueCat.
+- Cogni identifies RevenueCat customers with the authenticated Supabase user UUID. The app avoids RevenueCat anonymous identities for normal authenticated use.
+- Store-derived offerings provide local price, currency, billing period and eligible introductory-offer data. Cogni does not hardcode displayed subscription prices.
+- `public.subscription_entitlements` is the server-owned entitlement projection. Authenticated users may read only their own row; clients cannot write subscription state.
+- `revenuecat-webhook` validates RevenueCat's HMAC signature over the raw body, then fetches current RevenueCat subscriber state and atomically projects it through the service-role-only `sync_subscription_entitlement` function.
+- Webhook event IDs are persisted for idempotency. Duplicate deliveries are harmless.
+- `mobile-api` independently checks the server entitlement before protected premium work. A forged local `isPro` value cannot unlock premium API operations.
+- Refunded/revoked/expired entitlements do not retain protected access. Cancelled subscriptions remain active only through verified expiry. Supported grace/billing-recovery states can retain access through verified expiry.
 
-Each response writes the observed score fraction, confidence, response time, error pattern, XP and exact before/after skill state. Partial-credit formats therefore influence Development Scores proportionally rather than pretending every response is binary.
+## Initial Free / Pro boundary
 
-Daily lesson free-text reflection is intentionally local and ungraded in v0.7. It exists to induce generation/self-explanation, not as an unvalidated assessment signal.
+Free:
+- account/auth/password recovery/onboarding/account deletion;
+- starting check;
+- daily lesson and assigned core training;
+- basic Skills map;
+- current/basic Progress snapshot;
+- most recent progress-history window configured by the server (default 7 days);
+- XP/streak/profile/privacy controls.
+
+Cogni Pro:
+- unlimited additional focused skill practice;
+- choose any available skill for focused practice;
+- full available progress-history trends in the mobile view (currently capped to one year for response size/performance).
+
+The remote configuration in `public.monetization_config` controls only a small set of monetisation rules. It defaults to `monetization_enabled = false`; this keeps the verified 0.3.3 baseline unaffected while 0.4.0 store setup and testing are incomplete.
+
+## Subscription failure behaviour
+
+A subscription-system outage is not interpreted as 'free user'. When monetisation is enabled and server entitlement state cannot be verified, protected premium requests return a retryable billing-unavailable response instead of showing a false paywall. Core free learning does not depend on RevenueCat availability.
+
+## Analytics
+
+Authoritative learning metrics remain server-based. Monetisation client events are allow-listed and written through `mobile-api`; entitlement activation/expiry/revocation events are emitted by the server projection. Payment-card information is never included.
+
+## Release architecture
+
+- EAS builds the native Android/iOS binaries.
+- Android real-billing validation must use a Google Play-installed internal/closed-test build.
+- iOS real-billing validation must use StoreKit sandbox/TestFlight with App Store Connect products.
+- A sideloaded APK is useful for regression testing but cannot prove store billing.
+- The exact binary offered for testing/submission must be the same artifact whose package/version/configuration and critical flows were exercised.
+
+The verified Cogni 0.3.3 evidence remains the rollback/source baseline until 0.4.0 passes its own gates.

@@ -126,6 +126,7 @@ export default function PaywallScreen() {
       <Card style={{ gap: 13 }}>
         <Text style={{ color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: "800" }}>✓ Unlimited additional focused practice</Text>
         <Text style={{ color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: "800" }}>✓ Train a specific skill whenever you choose</Text>
+        <Text style={{ color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: "800" }}>✓ Full available skill-progress history and trends</Text>
         <Text style={{ color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: "800" }}>✓ Cogni Pro follows your account across supported devices</Text>
         <Text style={{ color: colors.muted, fontSize: 13.5, lineHeight: 20 }}>Your starting check, daily lesson and assigned core training stay free.</Text>
       </Card>

@@ -180,7 +180,7 @@ export function EntitlementProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     let cancelled = false;
-    let removeCustomerListener = () => undefined;
+    let removeCustomerListener: () => void = () => {};
 
     if (!userId) {
       activeUser.current = null;

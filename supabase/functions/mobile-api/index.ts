@@ -25,6 +25,7 @@ import {
   syncFromRevenueCat,
 } from "./monetization.ts";
 import { progressHistory } from "./progress-history.ts";
+import { createSupportRequest } from "./support.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -331,6 +332,8 @@ Deno.serve(async (req: Request) => {
       result = await completeLesson(admin, user, envelope.body, timeZone);
     } else if (path === "/api/mobile/context-feedback" && method === "POST") {
       result = await contextFeedback(admin, user, envelope.body);
+    } else if (path === "/api/mobile/support" && method === "POST") {
+      result = await createSupportRequest(admin, user, envelope.body);
     } else if (path === "/api/mobile/progress-history" && method === "GET") {
       result = await progressHistory(admin, user.id);
     } else if (path === "/api/mobile/entitlements" && method === "GET") {
@@ -363,6 +366,7 @@ Deno.serve(async (req: Request) => {
     if (error instanceof BillingUnavailableError) return response({ error: { code: error.code, message: error.message } }, error.status);
     if (error instanceof HttpError) return response({ error: error.message }, error.status);
     if (error instanceof Error && error.message === "invalid_monetization_event") return response({ error: { code: "invalid_request", message: "Invalid analytics event." } }, 400);
+    if (error instanceof Error && ["invalid_support_category", "invalid_support_message", "invalid_support_platform"].includes(error.message)) return response({ error: { code: "invalid_request", message: "Please check your support request and try again." } }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("mobile-api", message, error);
     return response({ error: "Cogni couldn't complete that request. Please try again." }, 500);

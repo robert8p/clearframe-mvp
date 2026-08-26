@@ -51,6 +51,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ title: "Your learning context" }} />
         <Stack.Screen name="paywall" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="support" options={{ title: "Cogni Support" }} />
       </Stack.Protected>
 
       {/* A valid recovery link creates a temporary authenticated session. Keep

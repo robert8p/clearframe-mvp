@@ -286,28 +286,43 @@ jobs:
             APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" SUPABASE_URL="$SUPABASE_URL" SUPABASE_KEY="$SUPABASE_KEY" API_LEVEL=36 python3 .github/scripts/cogni-auth-route-e2e-fixed.py
             APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" API_LEVEL=36 python3 .github/scripts/cogni-monetization-prestore-e2e.py
 
-      - name: Delete disposable account through Cogni API
+      - name: Delete and verify the disposable account through Cogni API
         if: always()
         shell: bash
         run: |
-          set +e
+          set -euo pipefail
           export EMAIL="$E2E_EMAIL" PASSWORD="$E2E_PASSWORD"
           node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' > /tmp/cleanup-signin-body.json
-          curl -sS -o /tmp/cleanup-signin.json \
+          SIGNIN_STATUS=$(curl -sS -o /tmp/cleanup-signin.json -w '%{http_code}' \
             -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY" \
             -H 'Content-Type: application/json' \
-            --data-binary @/tmp/cleanup-signin-body.json
+            --data-binary @/tmp/cleanup-signin-body.json)
           ACCESS_TOKEN=$(node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("/tmp/cleanup-signin.json","utf8"))}catch{};process.stdout.write(j.access_token??"")')
-          if [ -n "$ACCESS_TOKEN" ]; then
-            curl -sS -X DELETE "$SUPABASE_URL/functions/v1/mobile-api/api/mobile/account" \
-              -H "apikey: $SUPABASE_KEY" \
-              -H "Authorization: Bearer $ACCESS_TOKEN" >/tmp/cleanup-delete.json
-            echo "Disposable E2E account cleanup requested."
-          else
-            echo "Disposable E2E account was already absent or could not be reopened."
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "Disposable E2E account was already absent (sign-in status $SIGNIN_STATUS)."
+            exit 0
           fi
+
+          node -e 'process.stdout.write(JSON.stringify({path:"/api/mobile/account",method:"DELETE",body:null,context:{timeZone:"UTC"}}))' > /tmp/cleanup-delete-body.json
+          DELETE_STATUS=$(curl -sS -o /tmp/cleanup-delete.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/functions/v1/mobile-api" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/cleanup-delete-body.json)
+          test "$DELETE_STATUS" = "200"
+
+          VERIFY_STATUS=$(curl -sS -o /tmp/cleanup-verify.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/cleanup-signin-body.json)
+          VERIFY_TOKEN=$(node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("/tmp/cleanup-verify.json","utf8"))}catch{};process.stdout.write(j.access_token??"")')
+          test -z "$VERIFY_TOKEN"
+          echo "Disposable E2E account deletion verified (post-delete sign-in status $VERIFY_STATUS)."
 
       - name: Preserve Android interaction evidence
         if: always()

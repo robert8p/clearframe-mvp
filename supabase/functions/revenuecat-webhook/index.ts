@@ -80,7 +80,7 @@ async function fetchSubscriber(appUserId: string, secret: string) {
   }
 }
 
-async function loadProjection(appUserId: string, secret: string, eventType: string, eventEnvironment: unknown, allowMissing: boolean) {
+async function loadProjection(appUserId: string, secret: string, eventType: string, eventEnvironment: unknown) {
   let customerResponse: Response;
   try {
     customerResponse = await fetchSubscriber(appUserId, secret);
@@ -88,15 +88,22 @@ async function loadProjection(appUserId: string, secret: string, eventType: stri
     console.error("RevenueCat customer sync request failed", error instanceof Error ? error.name : "unknown");
     throw new RevenueCatSyncError();
   }
-  if (customerResponse.status === 404 && allowMissing) {
-    return projectProEntitlement({}, eventType, eventEnvironment);
-  }
   if (!customerResponse.ok) {
     console.error("RevenueCat customer sync failed", customerResponse.status);
     throw new RevenueCatSyncError();
   }
   const customerPayload = await customerResponse.json() as { subscriber?: RevenueCatSubscriber };
   return projectProEntitlement(customerPayload.subscriber ?? {}, eventType, eventEnvironment);
+}
+
+async function loadTransferDestinationProjection(appUserId: string, secret: string, eventEnvironment: unknown) {
+  let projection = await loadProjection(appUserId, secret, "TRANSFER", eventEnvironment);
+  for (const delayMs of [500, 1_500]) {
+    if (projection.status !== "unknown") break;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    projection = await loadProjection(appUserId, secret, "TRANSFER", eventEnvironment);
+  }
+  return projection;
 }
 
 function projectionPayload(userId: string, projection: EntitlementProjection) {
@@ -181,13 +188,12 @@ Deno.serve(async (req: Request) => {
 
       const projections = [];
       for (const target of knownTargets) {
-        const projection = await loadProjection(
-          target.userId,
-          revenueCatSecret,
-          eventType,
-          event?.environment,
-          target.role === "source",
-        );
+        // RevenueCat defines TRANSFER as removing transactions/entitlements from every
+        // transferred_from ID. Revoke those source IDs directly rather than risking an
+        // alias lookup that accidentally returns the destination customer's current state.
+        const projection = target.role === "source"
+          ? projectProEntitlement({}, "TRANSFER", event?.environment)
+          : await loadTransferDestinationProjection(target.userId, revenueCatSecret, event?.environment);
         projections.push(projectionPayload(target.userId, projection));
       }
 
@@ -218,7 +224,7 @@ Deno.serve(async (req: Request) => {
       return response(200, { ok: true, ignored: "deleted_or_unknown_user" });
     }
 
-    const projection = await loadProjection(appUserId, revenueCatSecret, eventType, event?.environment, false);
+    const projection = await loadProjection(appUserId, revenueCatSecret, eventType, event?.environment);
     const originalAppUserId = typeof event?.original_app_user_id === "string" ? event.original_app_user_id.slice(0, 1500) : appUserId;
 
     const { data: syncResult, error: syncError } = await admin.rpc("sync_subscription_entitlement", {

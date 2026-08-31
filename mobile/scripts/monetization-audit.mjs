@@ -27,9 +27,9 @@ forbidText(purchases, 'identifier.includes("month")', "Package-name heuristics m
 forbidText(purchases, "Purchases.logOut", "Custom-ID-only RevenueCat mode must not create an anonymous identity on Cogni sign-out.");
 
 const entitlements = readMobile("lib/entitlements.tsx");
-requireText(entitlements, 'apiFetch<EntitlementState>("/api/mobile/entitlements")', "The client must load the server entitlement projection.");
-requireText(entitlements, 'apiFetch<EntitlementState>("/api/mobile/entitlements/sync"', "Purchases and restores must reconcile through the trusted server.");
-requireText(entitlements, "state?.isPro", "Premium UI state must derive from the server response.");
+requireText(entitlements, 'apiFetch<ServerEntitlementState>("/api/mobile/entitlements")', "The client must load the server entitlement projection.");
+requireText(entitlements, 'apiFetch<ServerEntitlementState>("/api/mobile/entitlements/sync"', "Purchases and restores must reconcile through the trusted server.");
+requireText(entitlements, "isPro: server.isPro", "Premium UI state must derive from the server response.");
 requireText(entitlements, "AppState.addEventListener", "Entitlement state must refresh on foreground.");
 
 const paywall = readMobile("app/paywall.tsx");
@@ -54,25 +54,25 @@ const monetization = readRepo("supabase/functions/mobile-api/monetization.ts");
 const reliableCheck = monetization.indexOf("if (!state.stateReliable) throw new BillingUnavailableError()");
 const disabledReturn = monetization.indexOf("if (!state.config.monetizationEnabled || !featureRequiresPro) return state", reliableCheck);
 if (reliableCheck < 0 || disabledReturn < reliableCheck) failures.push("Protected routes must fail closed when monetisation configuration cannot be verified.");
-requireText(monetization, "DELETE", "Account deletion must call the RevenueCat customer deletion API.");
+requireText(monetization, 'method: "DELETE"', "Account deletion must call the RevenueCat customer deletion API.");
 requireText(monetization, "REVENUECAT_SECRET_API_KEY", "RevenueCat server sync/deletion must use a server-only secret.");
 
 const migrationPath = path.join(repoRoot, "supabase/migrations/20260825234024_cogni_monetisation_foundation.sql");
 if (!fs.existsSync(migrationPath)) failures.push("Monetisation migration filename must match the production migration ledger.");
 else {
-  const migration = fs.readFileSync(migrationPath, "utf8");
+  const migration = fs.readFileSync(migrationPath, "utf8").toLowerCase();
   for (const [needle, message] of [
     ["enable row level security", "Entitlement tables must retain RLS."],
-    ["revoke insert, update, delete", "Authenticated clients must not write entitlement state."],
+    ["revoke all on table public.subscription_entitlements from anon, authenticated", "Authenticated clients must not write entitlement state."],
     ["security definer", "Entitlement sync must remain SECURITY DEFINER."],
     ["set search_path = ''", "Entitlement sync must retain an empty search_path."],
     ["grant execute on function public.sync_subscription_entitlement", "Only the trusted service role may project entitlements."],
     ["on conflict (event_id) do nothing", "Webhook idempotency must remain atomic."],
-  ]) requireText(migration.toLowerCase(), needle, message);
+  ]) requireText(migration, needle, message);
 }
 
 const webhook = readRepo("supabase/functions/revenuecat-webhook/index.ts");
-requireText(webhook, 'req.headers.get("X-RevenueCat-Webhook-Signature")', "Webhook must read RevenueCat's HMAC signature header.");
+requireText(webhook, 'req.headers.get("x-revenuecat-webhook-signature")', "Webhook must read RevenueCat's HMAC signature header.");
 requireText(webhook, "new Uint8Array(await req.arrayBuffer())", "Webhook HMAC must verify the raw body before JSON parsing.");
 requireText(webhook, "verifyRevenueCatSignature", "Webhook must reject invalid HMAC signatures.");
 requireText(webhook, "REVENUECAT_WEBHOOK_AUTHORIZATION", "Webhook must support the independent Authorization secret.");

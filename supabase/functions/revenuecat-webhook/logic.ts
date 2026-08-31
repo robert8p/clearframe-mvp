@@ -151,7 +151,8 @@ function constantTimeEqual(a: Uint8Array, b: Uint8Array) {
 }
 
 export async function sha256Hex(bytes: Uint8Array) {
-  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+  const owned = Uint8Array.from(bytes);
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", owned.buffer)));
 }
 
 export async function revenueCatSignature(secret: string, timestamp: string, rawBody: Uint8Array) {

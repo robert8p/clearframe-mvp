@@ -1,62 +1,50 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.110.8";
 import { BillingUnavailableError, loadEntitlementState } from "./monetization.ts";
 
-type SkillUpdateRow = {
+type DailySkillPoint = {
+  day: string;
   skill_id: string;
-  score_after: number | string;
-  reliability_after: number | string;
-  attempts_after: number;
-  created_at: string;
-  skills: { slug: string; name: string } | { slug: string; name: string }[] | null;
+  skill_slug: string | null;
+  skill_name: string;
+  score: number | string;
+  reliability: number | string;
+  attempts: number;
 };
-
-function skillRelation(value: SkillUpdateRow["skills"]) {
-  return Array.isArray(value) ? value[0] ?? null : value;
-}
-
-function localDay(iso: string) {
-  return iso.slice(0, 10);
-}
 
 export async function progressHistory(admin: SupabaseClient, userId: string) {
   const state = await loadEntitlementState(admin, userId);
-  if (state.config.monetizationEnabled && !state.stateReliable) throw new BillingUnavailableError("Cogni couldn't verify your progress-history access right now. Your current progress snapshot is still available.");
+  if (state.config.monetizationEnabled && !state.stateReliable) {
+    throw new BillingUnavailableError("Cogni couldn't verify your progress-history access right now. Your current progress snapshot is still available.");
+  }
 
   const isFullHistory = !state.config.monetizationEnabled || state.isPro;
   const freeDays = Math.max(0, state.config.progressHistoryFreeDays);
   const since = new Date();
-  since.setUTCDate(since.getUTCDate() - (isFullHistory ? 365 : freeDays));
+  if (!isFullHistory) since.setUTCDate(since.getUTCDate() - freeDays);
 
-  const query = await admin
-    .from("user_response_skill_updates")
-    .select("skill_id,score_after,reliability_after,attempts_after,created_at,skills:skill_id(slug,name)")
-    .eq("user_id", userId)
-    .gte("created_at", since.toISOString())
-    .order("created_at", { ascending: true })
-    .limit(5000);
+  const query = await admin.rpc("get_user_skill_progress_history", {
+    p_user_id: userId,
+    p_since: isFullHistory ? null : since.toISOString(),
+  });
   if (query.error) throw query.error;
 
-  const rows = (query.data ?? []) as unknown as SkillUpdateRow[];
-  const latestByDayAndSkill = new Map<string, SkillUpdateRow>();
-  for (const row of rows) latestByDayAndSkill.set(`${localDay(row.created_at)}:${row.skill_id}`, row);
-
-  const points = [...latestByDayAndSkill.values()].map((row) => {
-    const skill = skillRelation(row.skills);
-    return {
-      date: localDay(row.created_at),
-      skillId: row.skill_id,
-      skillSlug: skill?.slug ?? null,
-      skillName: skill?.name ?? "Skill",
-      score: Math.round(Number(row.score_after) * 10) / 10,
-      reliability: Math.round(Number(row.reliability_after) * 1000) / 1000,
-      attempts: Number(row.attempts_after),
-    };
-  });
+  const rows = (query.data ?? []) as unknown as DailySkillPoint[];
+  const points = rows.map((row) => ({
+    date: row.day,
+    skillId: row.skill_id,
+    skillSlug: row.skill_slug,
+    skillName: row.skill_name || "Skill",
+    score: Math.round(Number(row.score) * 10) / 10,
+    reliability: Math.round(Number(row.reliability) * 1000) / 1000,
+    attempts: Number(row.attempts),
+  }));
 
   return {
     access: isFullHistory ? "full" : "limited",
     freeDays,
-    windowDays: isFullHistory ? 365 : freeDays,
+    windowDays: isFullHistory ? null : freeDays,
+    availableFrom: points[0]?.date ?? null,
+    availableTo: points[points.length - 1]?.date ?? null,
     points,
   };
 }

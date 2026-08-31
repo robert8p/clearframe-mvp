@@ -10,6 +10,7 @@ on:
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
       - ".github/workflows/eas-android-preview.yml"
+      - ".github/workflows/cogni-0.4.0-exact-apk.yml"
   pull_request:
     paths:
       - "mobile/**"
@@ -18,6 +19,7 @@ on:
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
       - ".github/workflows/eas-android-preview.yml"
+      - ".github/workflows/cogni-0.4.0-exact-apk.yml"
 
 jobs:
   mobile-validation:
@@ -66,18 +68,24 @@ jobs:
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
           EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: goog_ci_public_key
           EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: appl_ci_public_key
+          REVENUECAT_SECRET_API_KEY: rc_server_secret_SENTINEL_must_never_ship_8f31
+          REVENUECAT_WEBHOOK_HMAC_SECRET: rc_hmac_SENTINEL_must_never_ship_8f31
+          REVENUECAT_WEBHOOK_AUTHORIZATION: Bearer_rc_webhook_SENTINEL_must_never_ship_8f31
+          SUPABASE_SECRET_KEYS: sb_secret_SENTINEL_must_never_ship_8f31
         run: |
           rm -rf /tmp/cogni-export /tmp/cogni-export-strings.txt
           CI=1 npx expo export --platform android --output-dir /tmp/cogni-export --clear
           find /tmp/cogni-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-export-strings.txt
-          grep -Fq "https://dhklfrqhsmofqrawfdjz.supabase.co" /tmp/cogni-export-strings.txt
-          grep -Fq "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b" /tmp/cogni-export-strings.txt
-          grep -Fq "goog_ci_public_key" /tmp/cogni-export-strings.txt
-          if grep -Eqi 'REVENUECAT_(SECRET_API_KEY|WEBHOOK_HMAC_SECRET|WEBHOOK_AUTHORIZATION)|SUPABASE_(SERVICE_ROLE_KEY|SECRET_KEYS)|sb_secret_' /tmp/cogni-export-strings.txt; then
-            echo 'Server-only secret identifier found in Android JavaScript bundle.' >&2
-            exit 1
-          fi
-          echo "Production Supabase and public RevenueCat client configuration are embedded without server secrets."
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY" /tmp/cogni-export-strings.txt
+          for sentinel in "$REVENUECAT_SECRET_API_KEY" "$REVENUECAT_WEBHOOK_HMAC_SECRET" "$REVENUECAT_WEBHOOK_AUTHORIZATION" "$SUPABASE_SECRET_KEYS"; do
+            if grep -Fq "$sentinel" /tmp/cogni-export-strings.txt; then
+              echo 'A server-only sentinel value was embedded in the Android JavaScript bundle.' >&2
+              exit 1
+            fi
+          done
+          echo "Production Supabase and public RevenueCat client configuration are embedded without server secret values."
       - name: Supabase mobile API typecheck
         working-directory: .
         run: deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts

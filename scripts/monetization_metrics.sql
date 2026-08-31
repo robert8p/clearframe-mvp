@@ -4,26 +4,48 @@
 -- <20 directional only; 20-49 early pilot; 50+ useful operating signal, not causality.
 
 -- -----------------------------------------------------------------------------
--- A. Activated learner -> intentional premium selection -> paywall -> verified Pro
--- Activation is the first completed core training session (training_sessions; focused
--- practice is stored separately in practice_sessions).
+-- A. Activated learner -> intentional premium selection -> paywall -> verified Pro.
+-- Activation is the first completed core training session. Every downstream event is
+-- sequenced after the prior funnel stage so an unrelated earlier purchase cannot count.
 -- -----------------------------------------------------------------------------
 with activation as (
   select user_id, min(completed_at) as activated_at
   from public.training_sessions
   where status = 'completed' and completed_at is not null
   group by user_id
-), event_firsts as (
+), selected as (
   select
     a.user_id,
     a.activated_at,
-    min(e.created_at) filter (where e.event_name = 'premium_feature_selected' and e.created_at >= a.activated_at) as selected_at,
-    min(e.created_at) filter (where e.event_name = 'paywall_viewed' and e.created_at >= a.activated_at) as paywall_at,
-    min(e.created_at) filter (where e.event_name = 'purchase_started' and e.created_at >= a.activated_at) as purchase_started_at,
-    min(e.created_at) filter (where e.event_name = 'entitlement_activated' and e.created_at >= a.activated_at) as verified_pro_at
+    min(e.created_at) as selected_at
   from activation a
-  left join public.analytics_events e on e.user_id = a.user_id
+  left join public.analytics_events e
+    on e.user_id = a.user_id
+   and e.event_name = 'premium_feature_selected'
+   and e.created_at >= a.activated_at
   group by a.user_id, a.activated_at
+), exposed as (
+  select
+    s.*,
+    min(e.created_at) as paywall_at
+  from selected s
+  left join public.analytics_events e
+    on e.user_id = s.user_id
+   and e.event_name = 'paywall_viewed'
+   and e.created_at >= coalesce(s.selected_at, s.activated_at)
+  group by s.user_id, s.activated_at, s.selected_at
+), sequenced as (
+  select
+    x.*,
+    min(e.created_at) filter (where e.event_name = 'purchase_started') as purchase_started_at,
+    min(e.created_at) filter (where e.event_name = 'entitlement_activated') as verified_pro_at
+  from exposed x
+  left join public.analytics_events e
+    on e.user_id = x.user_id
+   and x.paywall_at is not null
+   and e.created_at >= x.paywall_at
+   and e.event_name in ('purchase_started','entitlement_activated')
+  group by x.user_id, x.activated_at, x.selected_at, x.paywall_at
 )
 select
   count(*) as activated_learners,
@@ -33,30 +55,44 @@ select
   count(*) filter (where purchase_started_at is not null) as purchase_starters,
   count(*) filter (where verified_pro_at is not null) as verified_pro_learners,
   round(100.0 * count(*) filter (where verified_pro_at is not null) / nullif(count(*), 0), 1) as activated_to_verified_pro_pct
-from event_firsts;
+from sequenced;
 
 -- -----------------------------------------------------------------------------
 -- B. Paywall conversion. Client purchase_completed is reconciliation-only; the server
--- entitlement_activated event is the authority for verified access.
+-- entitlement_activated event is the authority. Events count only after first paywall.
 -- -----------------------------------------------------------------------------
-with users as (
-  select
-    count(distinct user_id) filter (where event_name = 'paywall_viewed') as paywall_users,
-    count(distinct user_id) filter (where event_name = 'purchase_started') as purchase_started_users,
-    count(distinct user_id) filter (where event_name = 'purchase_completed') as client_purchase_completed_users,
-    count(distinct user_id) filter (where event_name = 'entitlement_activated') as verified_pro_users
+with paywall_first as (
+  select user_id, min(created_at) as paywall_at
   from public.analytics_events
-  where event_name in ('paywall_viewed','purchase_started','purchase_completed','entitlement_activated')
+  where event_name = 'paywall_viewed'
+  group by user_id
+), sequenced as (
+  select
+    p.user_id,
+    p.paywall_at,
+    min(e.created_at) filter (where e.event_name = 'purchase_started') as purchase_started_at,
+    min(e.created_at) filter (where e.event_name = 'purchase_completed') as client_purchase_completed_at,
+    min(e.created_at) filter (where e.event_name = 'entitlement_activated') as verified_pro_at
+  from paywall_first p
+  left join public.analytics_events e
+    on e.user_id = p.user_id
+   and e.created_at >= p.paywall_at
+   and e.event_name in ('purchase_started','purchase_completed','entitlement_activated')
+  group by p.user_id, p.paywall_at
 )
 select
-  paywall_users,
-  purchase_started_users,
-  verified_pro_users,
-  round(100.0 * purchase_started_users / nullif(paywall_users, 0), 1) as paywall_to_purchase_start_pct,
-  round(100.0 * verified_pro_users / nullif(paywall_users, 0), 1) as paywall_to_verified_pro_pct,
-  round(100.0 * verified_pro_users / nullif(purchase_started_users, 0), 1) as purchase_start_to_verified_pro_pct,
-  client_purchase_completed_users as client_purchase_completed_users_for_reconciliation_only
-from users;
+  count(*) as paywall_users,
+  count(*) filter (where purchase_started_at is not null) as purchase_started_users,
+  count(*) filter (where verified_pro_at is not null) as verified_pro_users,
+  round(100.0 * count(*) filter (where purchase_started_at is not null) / nullif(count(*), 0), 1) as paywall_to_purchase_start_pct,
+  round(100.0 * count(*) filter (where verified_pro_at is not null) / nullif(count(*), 0), 1) as paywall_to_verified_pro_pct,
+  round(
+    100.0 * count(*) filter (where verified_pro_at is not null)
+    / nullif(count(*) filter (where purchase_started_at is not null), 0),
+    1
+  ) as purchase_start_to_verified_pro_pct,
+  count(*) filter (where client_purchase_completed_at is not null) as client_purchase_completed_users_for_reconciliation_only
+from sequenced;
 
 -- -----------------------------------------------------------------------------
 -- C. Monthly versus annual verified mix and current access inventory.
@@ -252,3 +288,57 @@ select
 from public.subscription_webhook_events
 group by event_type, environment, outcome
 order by last_received_at desc;
+
+-- -----------------------------------------------------------------------------
+-- H. Introductory-trial lifecycle, only if a store offer is introduced later.
+-- Do not report a conversion percentage without both starts and converted users.
+-- -----------------------------------------------------------------------------
+select
+  count(distinct app_user_id) filter (where event_type = 'INITIAL_PURCHASE' and outcome = 'processed') as initial_purchase_users,
+  count(distinct app_user_id) filter (where event_type = 'TRIAL_STARTED' and outcome = 'processed') as trial_started_users,
+  count(distinct app_user_id) filter (where event_type = 'TRIAL_CONVERTED' and outcome = 'processed') as trial_converted_users,
+  count(distinct app_user_id) filter (where event_type = 'TRIAL_CANCELLED' and outcome = 'processed') as trial_cancelled_users,
+  round(
+    100.0 * count(distinct app_user_id) filter (where event_type = 'TRIAL_CONVERTED' and outcome = 'processed')
+    / nullif(count(distinct app_user_id) filter (where event_type = 'TRIAL_STARTED' and outcome = 'processed'), 0),
+    1
+  ) as trial_start_to_conversion_pct
+from public.subscription_webhook_events
+where event_type in ('INITIAL_PURCHASE','TRIAL_STARTED','TRIAL_CONVERTED','TRIAL_CANCELLED');
+
+-- -----------------------------------------------------------------------------
+-- I. Current paid-retention snapshot by first verified-Pro month.
+-- This is a current-state cohort view, not a full historical MRR or survival ledger.
+-- -----------------------------------------------------------------------------
+with first_activation as (
+  select user_id, min(created_at) as activated_at
+  from public.analytics_events
+  where event_name = 'entitlement_activated'
+  group by user_id
+), current_state as (
+  select
+    a.user_id,
+    date_trunc('month', a.activated_at)::date as activation_cohort,
+    e.product_id,
+    e.store,
+    e.status,
+    e.expiration_date,
+    e.will_renew,
+    e.billing_issue,
+    (e.status in ('active','cancelled','grace_period','billing_issue') and e.expiration_date > now()) as currently_granted
+  from first_activation a
+  left join public.subscription_entitlements e
+    on e.user_id = a.user_id
+   and e.entitlement = 'pro'
+)
+select
+  activation_cohort,
+  count(*) as activated_users,
+  count(*) filter (where currently_granted) as currently_granted_users,
+  round(100.0 * count(*) filter (where currently_granted) / nullif(count(*), 0), 1) as current_retention_pct,
+  count(*) filter (where currently_granted and will_renew) as current_will_renew_users,
+  count(*) filter (where currently_granted and not will_renew) as current_cancelled_but_active_users,
+  count(*) filter (where billing_issue) as billing_issue_users
+from current_state
+group by activation_cohort
+order by activation_cohort;

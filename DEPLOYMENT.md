@@ -39,33 +39,42 @@ Supabase Edge/server secrets:
 
 - `REVENUECAT_SECRET_API_KEY`
 - `REVENUECAT_WEBHOOK_HMAC_SECRET`
-- optional `REVENUECAT_WEBHOOK_AUTHORIZATION`
+- `REVENUECAT_WEBHOOK_AUTHORIZATION`
+
+Set all three server secrets before distributing a 0.4.0 build containing a RevenueCat public SDK key. `REVENUECAT_WEBHOOK_AUTHORIZATION` is technically optional at RevenueCat, but Cogni's production setup requires it as an independent check in addition to HMAC.
 
 ## Database and Edge Functions
 
-The 0.4.0 additive migration is:
+The production-ledger-aligned 0.4.0 additive migration is:
 
-`supabase/migrations/20260826010000_cogni_monetisation_foundation.sql`
+`supabase/migrations/20260825234024_cogni_monetisation_foundation.sql`
 
 It creates server-owned entitlement, webhook-idempotency and monetisation-config state. Production defaults to `monetization_enabled = false` so 0.3.3 behavior is not paywalled during store setup.
 
 Deploy/check:
 
-- authenticated `mobile-api` including `monetization.ts` and `progress-history.ts`;
-- public-JWT-disabled `revenuecat-webhook` using its own raw-body HMAC verification.
+- authenticated `mobile-api` including `monetization.ts`, `progress-history.ts` and `support.ts`;
+- public-JWT-disabled `revenuecat-webhook` using its own raw-body HMAC and Authorization verification.
 
 Do not enable monetisation until RevenueCat server secrets, store products, offerings and store-installed sandbox purchases have been tested.
 
+## Account deletion sequencing
+
+When RevenueCat is configured, `mobile-api` first deletes the RevenueCat Customer by the stable Supabase UUID and only then deletes the Supabase Auth user. A RevenueCat failure leaves the Cogni account intact and returns a retryable error rather than falsely claiming complete deletion. The subsequent Auth deletion cascades Cogni-side learning and entitlement rows.
+
+Deleting the RevenueCat Customer or Cogni account does not cancel an Apple App Store or Google Play subscription. Users must manage renewal separately in the store. Configure the RevenueCat server secret before distributing the RevenueCat-enabled client so this privacy path is always available.
+
 ## Before every mobile build
 
-From `mobile/`, the maintained CI runs strict dependency install, Expo dependency check, ESLint, UI audit, logic/security audit and TypeScript. It additionally:
+From `mobile/`, the maintained CI runs strict dependency install, Expo dependency check, ESLint, UI audit, logic/security/auth/monetisation audits and TypeScript. It additionally:
 
-- scans mobile source for server-only RevenueCat secret references;
+- scans mobile source for server-only RevenueCat/Supabase secret references;
 - rejects dynamic `process.env[...]` lookups;
 - exports an Android production bundle with public Supabase/RevenueCat test values and verifies they are compiled;
-- checks for obvious server secrets in the bundle;
+- checks for server-only secret identifiers in the bundle;
 - Deno-typechecks both Edge Functions;
 - runs context-engine behavior tests;
+- runs server-authoritative entitlement failure-mode tests;
 - runs RevenueCat HMAC/entitlement-projection security tests.
 
 All gates must pass before an EAS candidate is treated as buildable.
@@ -75,7 +84,7 @@ All gates must pass before an EAS candidate is treated as buildable.
 1. Build an installable preview APK for non-store regression testing if needed.
 2. Inspect the exact APK for package/version/signing/permissions/configuration and server-secret absence.
 3. Clean-install and execute that exact APK; run free flows plus paywall/error paths that do not require real Google Play billing.
-4. Build a production AAB from the same reviewed source revision with a new versionCode >36.
+4. Build a production AAB from the same reviewed source revision with a new versionCode greater than 36.
 5. Upload the exact AAB to Google Play Internal Testing or Closed Testing.
 6. Install Cogni from Google Play—not from a sideload—for billing validation.
 7. Test monthly/annual purchase, store-derived pricing, any configured eligible offer, immediate server entitlement, restore, reinstall, second sign-in/session, cancellation-still-active, and practical expiry/refund/billing-error paths.
@@ -99,7 +108,7 @@ A sideloaded APK cannot prove Google Play Billing.
 - annual product: `cogni_pro_annual`
 - RevenueCat App User ID: authenticated Supabase user UUID
 
-The app fetches prices/offers from the active RevenueCat/store offering. Do not hardcode display prices in mobile source.
+The app fetches prices/offers from the active RevenueCat/store offering. It rejects packages whose store product identifier is not one of the two approved product IDs. Do not hardcode display prices in mobile source.
 
 ## GitHub Pages legal site
 

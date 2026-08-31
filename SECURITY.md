@@ -1,71 +1,125 @@
 # Cogni security
 
-## Active mobile security boundary
+Last updated: 31 August 2026
 
-- Supabase RLS is enabled on user-facing tables.
-- Authenticated users can read only their own user-scoped profile/evidence rows.
-- Authenticated clients cannot directly edit privileged profile fields such as admin state, XP or streaks.
-- Published challenge prompts and skills are readable where required by the product; answer keys remain isolated from authenticated-client reads.
-- Supabase secret/service-role credentials exist only in trusted Edge/server environments and are never bundled into Expo.
-- The Expo app stores Supabase auth sessions in native SecureStore.
-- Mobile API calls require a valid Supabase JWT and are rate-limited per user.
-- The production rate-limit RPC remains a narrowly exposed `SECURITY DEFINER` function owned by `postgres`, with empty `search_path`; ordinary roles receive no direct private-schema access.
-- Profile mutation, grading, XP/streak awards, session creation and account deletion run through the authenticated `mobile-api` Edge Function.
-- Scoring uses a transactional Postgres function with per-user concurrency protection.
-- Unexpected server/database errors are logged server-side and returned as sanitized responses.
-- The active mobile source contains no Vercel runtime dependency and no silent production-backend fallback.
+## Security position
 
-## Subscription and premium-access boundary
+Cogni 0.4.0 keeps learning, identity and subscription authority on trusted server boundaries. A mobile client is treated as user-controlled and potentially modified.
 
-- The mobile app contains only RevenueCat **public SDK keys** (`EXPO_PUBLIC_REVENUECAT_*`). RevenueCat secret API keys and webhook secrets are server-only Supabase secrets.
-- RevenueCat customers use the stable authenticated Supabase user UUID. Cogni does not normally create RevenueCat anonymous identities.
-- Local RevenueCat `CustomerInfo` improves UX but is not the authority for protected server resources.
-- Only the exact `cogni_pro_monthly` and `cogni_pro_annual` store products can be mapped to Cogni Pro. A misconfigured unrelated package is ignored.
-- `public.subscription_entitlements` is server-owned. Authenticated users can select only their own row; they cannot insert, update or delete entitlement state.
-- `public.subscription_webhook_events` and `public.monetization_config` expose no authenticated client privileges.
-- `public.sync_subscription_entitlement(...)` is `SECURITY DEFINER`, owned by `postgres`, uses empty `search_path`, is revoked from `public`, `anon` and `authenticated`, and is executable by `service_role` only.
-- `revenuecat-webhook` does not rely on a public JWT. It verifies RevenueCat's HMAC signature against the raw request bytes before parsing JSON, applies a bounded timestamp/replay window, and requires a separately configured Authorization value for production.
-- Webhook IDs are unique/idempotent. Replayed or duplicate events cannot repeatedly mutate entitlement state.
-- The webhook refetches current RevenueCat subscriber state instead of trusting event fields alone for final access projection.
-- Unknown/deleted Cogni UUIDs are acknowledged without recreating user accounts.
-- Premium server checks are performed both when focused-practice sessions are requested and when practice answers are submitted, preventing replay of an old premium session after entitlement expiry.
-- Refunded, revoked and expired states do not grant premium access. Cancelled-but-unexpired and verified grace/billing-recovery states grant access only through verified expiry.
-- A local forged `isPro=true` value cannot grant protected API access.
+## Public mobile configuration
 
-## Subscription availability failure mode
+The compiled app contains only public client configuration:
 
-`monetization_enabled` defaults to false until store testing is complete. A positively read disabled configuration keeps existing free behavior open even if the unused entitlement table is temporarily unavailable. Once monetisation is enabled, inability to read either configuration or entitlement state is a retryable billing-verification outage—not proof of free access. Protected routes fail closed; core free learning does not require RevenueCat availability.
+- Supabase project URL
+- Supabase publishable key
+- one RevenueCat public SDK key for the relevant platform, once configured
 
-## Auth account lifecycle
+These values are expected to be discoverable in an APK/IPA. They are not server credentials.
 
-The native app includes email confirmation deep links, password recovery/update, sign out and authenticated permanent account deletion.
+The following must never be embedded in the mobile bundle or committed as client configuration:
 
-When RevenueCat is configured, account deletion first calls the server-only RevenueCat customer-deletion API using the authenticated Supabase UUID. Only after that succeeds does `mobile-api` delete the Supabase Auth identity, cascading Cogni-side learning and entitlement rows. A RevenueCat failure leaves the Cogni account intact and returns a retryable error rather than reporting partial deletion as complete.
+- Supabase secret/service-role keys
+- RevenueCat secret API key
+- RevenueCat webhook Authorization value
+- RevenueCat HMAC signing secret
+- store service-account or App Store Connect private keys
 
-Deleting the RevenueCat Customer or Cogni account does **not** cancel an App Store or Google Play subscription. The UI and public account-deletion page direct users to store subscription management. Apple, Google and any legally required provider transaction records remain governed by those providers.
+CI inspects source and the exported Android bundle for server-secret identifiers and repeats the static Expo public-variable regression check.
 
-Before public release, confirm Supabase Auth allows the native redirect scheme `cogni://**` (or exact confirmation/recovery routes).
+## Authentication and routing
 
-## CI security gates
+- Supabase Auth owns identity and access tokens.
+- The app stores sessions in native secure storage with a non-crashing memory fallback.
+- `mobile-api` independently validates the bearer token before user-specific work.
+- Welcome remains the fresh signed-out route.
+- Password reset is explicit and cannot become the default screen after force-stop/relaunch.
+- Primary buttons must navigate, show progress or return visible validation.
 
-Mobile CI checks:
+## Learning-data authority
 
-- static Expo environment references (no `process.env[name]`-style dynamic lookup regression);
-- only public RevenueCat SDK-key variables exist in mobile source;
-- server-only RevenueCat/Supabase secret names do not appear in mobile source;
-- an exported Android JS bundle contains expected public Supabase/RevenueCat configuration and no server-only secret identifiers;
-- exact app identity, product IDs, paywall disclosures, entitlement route ordering and account-deletion ordering;
-- `mobile-api` and `revenuecat-webhook` typecheck under Deno;
-- protected server routes fail closed for unknown configuration and deny free users when enabled;
-- RevenueCat HMAC validation rejects tampering and stale signatures;
-- entitlement projection tests cover active, cancelled, grace/billing, expiry, refund and unsupported-product paths.
+Answer keys do not ship to the mobile client. Answer grading, XP, streak and Development Score writes occur in `mobile-api`. The Development Score remains an adaptive learning indicator with separate evidence reliability; it is not an IQ, population percentile, diagnosis, employment assessment or permanent grade.
 
-## Remaining public-launch security gates
+## Subscription authority
 
-- Enable Supabase Auth leaked-password protection if still disabled.
-- Configure and rotate RevenueCat server/webhook secrets in Supabase before billing activation.
-- Confirm exact-binary secret scanning after EAS build.
-- Run direct free-token premium-route denial and verified-Pro route access tests against the store-integrated candidate.
-- Test invalid/duplicate RevenueCat webhooks against the deployed endpoint after secrets are configured.
-- Complete production monitoring/alerting and security review proportionate to launch scale.
-- Treat retained legacy web/admin source as a separate attack surface and remove it once no longer required.
+RevenueCat `CustomerInfo` is used for store interaction and responsive UI, but protected server functionality is authorised from `public.subscription_entitlements`.
+
+Every Pro operation must satisfy both layers:
+
+1. the UI intentionally exposes the feature or paywall;
+2. the server checks the current Supabase entitlement projection.
+
+A forged local `isPro=true`, modified navigation state or direct API call with a valid free-user token cannot create or answer focused-practice sessions after monetisation is enabled.
+
+When entitlement state or monetisation configuration cannot be verified, protected routes fail closed with a structured temporary billing-unavailable response. Core free learning fails open because it is not routed through a Pro gate.
+
+## Entitlement database controls
+
+- `subscription_entitlements` uses RLS; authenticated users may read only their own row.
+- `anon` and `authenticated` cannot insert, update or delete entitlements.
+- `subscription_webhook_events` is inaccessible to ordinary clients.
+- `monetization_config` is readable through trusted server logic, not writable by clients.
+- `support_requests` is server-only and direct client grants are revoked.
+- entitlement sync, transfer sync and daily progress-history projection are `SECURITY DEFINER`, owned by `postgres`, use an empty `search_path`, and are executable only by `service_role`.
+
+## RevenueCat webhook controls
+
+`revenuecat-webhook` has Supabase JWT verification disabled intentionally because it is a third-party callback. The function provides its own stronger boundary:
+
+- exact independent Authorization header comparison;
+- raw-body RevenueCat HMAC verification;
+- five-minute timestamp tolerance;
+- constant-time signature comparison;
+- event-ID idempotency;
+- payload hash retention without storing the raw receipt;
+- canonical subscriber refetch for ordinary events;
+- direct revocation of every valid `transferred_from` Cogni UUID;
+- brief retry when the transfer destination projection is temporarily unavailable;
+- one atomic database transaction for all transfer identities.
+
+Unknown/deleted Cogni users are recorded as ignored rather than recreated.
+
+## Subscription state rules
+
+Server access is granted only when:
+
+- entitlement is exactly `pro`;
+- product is exactly `cogni_pro_monthly` or `cogni_pro_annual` (Android base-plan suffixes are normalised to the approved product);
+- state is active, cancelled-but-unexpired, grace period, or valid billing issue;
+- effective expiry is in the future;
+- no refund or revocation applies.
+
+Expired/refunded/revoked subscriptions cannot retain server Pro access.
+
+## Account deletion
+
+The account-deletion API attempts RevenueCat customer deletion before removing the Supabase identity. If the RevenueCat privacy deletion cannot be completed when monetisation is configured, deletion returns a visible retryable error rather than claiming completion.
+
+Deleting a Cogni account does not cancel an Apple or Google subscription. Users must manage/cancel the subscription in the relevant store. The app and public deletion page state this explicitly.
+
+## Payment data
+
+Cogni does not collect or store payment-card data. Apple and Google process store payments. Cogni stores only the minimum entitlement metadata needed to operate access and support lifecycle reconciliation.
+
+## Release checks
+
+Source checks are necessary but not sufficient. Each candidate must also prove:
+
+- package and version identity;
+- signing certificate;
+- embedded public configuration;
+- absence of server secrets;
+- archive integrity and required ABIs;
+- real cold launch and critical flows on the exact APK;
+- Play-installed purchase/restore/lifecycle tests before Android paid launch;
+- TestFlight/StoreKit purchase/restore/lifecycle tests before iOS paid launch.
+
+## Unresolved external controls
+
+The following cannot be honestly claimed from source/database inspection alone and remain external release gates until verified:
+
+- Supabase Auth leaked-password protection enabled;
+- RevenueCat project/store credentials and webhook secrets configured;
+- Google Play service-account/API connection and real subscription products;
+- App Store Connect subscription products and agreements;
+- Play/TestFlight sandbox purchase evidence;
+- final legal operator identity and professional legal review for a broad public paid launch.

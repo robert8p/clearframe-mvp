@@ -1,71 +1,132 @@
-# Cogni architecture — active mobile 0.4.0
+# Cogni architecture
 
-The production product is the Expo / React Native application in `mobile/`, backed by Supabase Auth, Postgres and authenticated Edge Functions. Retained legacy web/admin source is not the active mobile runtime and must not be treated as the deployment architecture.
+Last updated: 31 August 2026
 
-## Runtime boundary
+## Active product
 
-`Expo mobile app -> Supabase Auth -> authenticated mobile-api Edge Function -> Postgres`
+Cogni is an Expo / React Native mobile application. The active client is `mobile/`; the legacy web source is not a mobile-runtime dependency.
 
-The mobile client uses the Supabase publishable key only. Sensitive grading, score mutation, XP/streak updates, session creation, account deletion and premium API enforcement happen server-side.
+- Expo Router / Expo SDK 54 generation
+- React Native 0.81
+- Supabase Auth and Postgres
+- Authenticated Supabase Edge Function `mobile-api`
+- RevenueCat React Native SDK for Apple App Store and Google Play subscriptions
+- Server-authoritative subscription projection in Supabase
+- EAS-managed Android signing credentials and store builds
 
-Answer keys are not shipped in the app. User-scoped tables use RLS and the mobile API performs privileged operations with server credentials after authenticating the user.
+The verified Cogni 0.3.3 release at main commit `d6e3faa54360c28e1b7783d5b9e025cf8a1ed40d` remains the rollback baseline while 0.4.0 is developed on `feat/cogni-0.4.0-monetisation`.
 
-## Daily free learning flow
+## Mobile configuration and session boundary
 
-`Welcome/Auth -> Onboarding -> Starting Check -> Daily Lesson -> Assigned Core Training -> Daily Complete`
+`mobile/lib/supabase.ts` statically references:
 
-The starting check, current daily lesson, one assigned core training experience, basic Skills, basic Progress, XP/streaks and account/privacy controls are part of the free product.
+- `process.env.EXPO_PUBLIC_SUPABASE_URL`
+- `process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-## Cogni Pro subscription architecture
+Static references are a release invariant because Metro must embed those public values into the production bundle. Dynamic `process.env[name]` lookup is prohibited by CI.
 
-`Apple App Store / Google Play -> RevenueCat -> Cogni mobile client -> Supabase server entitlement projection -> protected premium API`
+Supabase sessions are stored through native secure storage with a crash-safe in-memory fallback. The app's signed-out root remains Welcome; password reset is an explicit route and must never become the default fallback.
 
-- Native purchases use `react-native-purchases` / RevenueCat.
-- Cogni identifies RevenueCat customers with the authenticated Supabase user UUID. The app avoids RevenueCat anonymous identities for normal authenticated use.
-- Store-derived offerings provide local price, currency, billing period and eligible introductory-offer data. Cogni does not hardcode displayed subscription prices.
-- Only the exact `cogni_pro_monthly` and `cogni_pro_annual` products are accepted into the paywall or projected as Cogni Pro.
-- `public.subscription_entitlements` is the server-owned entitlement projection. Authenticated users may read only their own row; clients cannot write subscription state.
-- `revenuecat-webhook` validates RevenueCat's HMAC signature over the raw body plus a separate Authorization value, then fetches current RevenueCat subscriber state and atomically projects it through the service-role-only `sync_subscription_entitlement` function.
-- Webhook event IDs are persisted for idempotency. Duplicate deliveries are harmless.
-- `mobile-api` independently checks the server entitlement before protected premium work. A forged local `isPro` value cannot unlock premium API operations.
-- Refunded/revoked/expired entitlements do not retain protected access. Cancelled subscriptions remain active only through verified expiry. Supported grace/billing-recovery states can retain access through verified expiry.
+## API flow
 
-## Initial Free / Pro boundary
+```text
+Cogni mobile app
+  -> Supabase Auth access token
+  -> mobile-api Edge Function
+  -> server-side validation / authorisation
+  -> Postgres
+```
 
-Free:
-- account/auth/password recovery/onboarding/account deletion;
-- starting check;
-- daily lesson and assigned core training;
-- basic Skills map;
-- current/basic Progress snapshot;
-- most recent progress-history window configured by the server (default 7 days);
-- XP/streak/profile/privacy controls.
+Answer keys, grading, Development Score updates and privileged writes remain server-side. The client cannot write trusted score or entitlement state.
 
-Cogni Pro:
-- unlimited additional focused skill practice;
-- choose any available skill for focused practice;
-- full available progress-history trends in the mobile view (currently capped to one year for response size/performance).
+## Monetisation flow
 
-The remote configuration in `public.monetization_config` controls only a small set of monetisation rules. It defaults to `monetization_enabled = false`; this keeps the verified 0.3.3 baseline unaffected while 0.4.0 store setup and testing are incomplete.
+```text
+Apple App Store / Google Play
+  -> RevenueCat store receipt and subscription state
+  -> RevenueCat CustomerInfo for device purchase UX
+  -> RevenueCat signed webhook / server subscriber lookup
+  -> Supabase subscription_entitlements
+  -> mobile-api premium authorisation
+```
 
-## Subscription failure behaviour
+The RevenueCat client result improves immediate UX but is not the authority for premium API access. Protected routes call the server entitlement layer. A forged local `isPro` value does not unlock protected functionality.
 
-A positively read disabled monetisation configuration preserves the existing free product without depending on RevenueCat. Once monetisation is enabled, a subscription-system/configuration outage is not interpreted as “free user.” Protected premium requests return a retryable billing-unavailable response instead of opening or creating premium work. Core free learning remains independent of RevenueCat availability.
+### RevenueCat identity
 
-## Account deletion architecture
+Cogni identifies RevenueCat customers with the stable Supabase user UUID. It uses custom IDs only and does not create a RevenueCat anonymous identity during Cogni sign-out. A subsequent Cogni sign-in switches RevenueCat directly to the new authenticated UUID.
 
-When RevenueCat is configured, the authenticated account-deletion operation first calls RevenueCat's server-only Customer deletion API using the Supabase UUID. It then deletes the Supabase Auth identity, which cascades Cogni-side learning and entitlement records. If external deletion fails, Cogni leaves the account intact and reports a retryable failure instead of claiming deletion completed. Store subscriptions are managed separately and are not cancelled by deleting Cogni or the RevenueCat Customer.
+### RevenueCat objects
 
-## Analytics
+- Entitlement: `pro`
+- Offering: `default`
+- Products: `cogni_pro_monthly`, `cogni_pro_annual`
+- Packages: monthly and annual
 
-Authoritative learning metrics remain server-based. Monetisation client events are allow-listed and written through `mobile-api`; entitlement activation/expiry/revocation events are emitted by the server projection. Payment-card information is never included.
+The paywall reads localised price, period and eligible store offer information from RevenueCat. Prices are never hardcoded in executable UI source.
+
+## Free and Cogni Pro
+
+Free remains a useful learning product:
+
+- account creation, authentication and password recovery
+- onboarding and starting check
+- Home and current daily lesson
+- one assigned core training session per day
+- basic Skills and Progress views
+- XP, streak, profile, support, privacy and account deletion
+
+Cogni Pro adds:
+
+- unlimited additional focused skill practice
+- intentional skill selection
+- complete available daily skill-progress history and trend insights
+
+Focused-practice creation and answer submission are both checked by `mobile-api`. The basic daily session is not routed through the Pro gate.
+
+## Supabase subscription model
+
+`public.subscription_entitlements` is a server-owned projection keyed by `(user_id, entitlement)`. It records status, product, store, purchase and expiry dates, renewal/billing state, environment and last processed event.
+
+`public.subscription_webhook_events` is a minimal idempotency and audit ledger. It stores an event ID, type, environment and payload hash—not the full receipt or payment-card data.
+
+`public.monetization_config` is a deliberately small server-owned configuration table. Its production default is disabled. When disabled, the free core and current focused practice remain available, allowing 0.3.3 clients to continue operating while 0.4.0 is configured and tested.
+
+## Webhook security and lifecycle
+
+The public `revenuecat-webhook` Edge Function uses custom authentication rather than a Supabase user JWT. It requires:
+
+1. an exact independent `Authorization` value;
+2. RevenueCat HMAC-SHA256 verification over the raw request bytes;
+3. a recent signature timestamp;
+4. a unique RevenueCat event ID.
+
+For ordinary lifecycle events, the function refetches canonical subscriber state before projecting access. For `TRANSFER`, every known former Cogni user ID is revoked directly, the destination is refetched with brief retry protection, and all source/destination projections are committed atomically by `sync_subscription_transfer` under one event claim.
+
+Active, cancelled-but-unexpired, grace-period and valid billing-issue states can retain access until the effective expiry. Expired, refunded and revoked states do not.
+
+## Progress history
+
+`get_user_skill_progress_history` is a service-role-only, `SECURITY DEFINER`, empty-`search_path` SQL function that returns the latest skill snapshot per UTC day. Free receives the configured recent window; Pro receives all available daily snapshots. There is no hidden one-year or 5,000-row Pro cap.
+
+## Account deletion and subscriptions
+
+Account deletion first requests deletion of the Cogni RevenueCat customer record, then deletes the Supabase user and dependent Cogni data. Deleting Cogni does not cancel a store subscription. The UI and legal pages direct the user to Apple or Google subscription management for cancellation.
+
+Financial transaction history retained by Apple, Google or RevenueCat is governed by those providers' legal and store obligations; Cogni does not claim to erase store records it does not control.
+
+## Legal and support surface
+
+Authenticated users can submit private support requests through `mobile-api`. `support_requests` is server-only; ordinary client roles have no table privileges.
+
+The public Privacy, Terms, Subscription Terms, Support and account-deletion pages live in `docs/` and are deployed independently as static GitHub Pages content. They are not required by the mobile runtime.
 
 ## Release architecture
 
-- EAS builds the native Android/iOS binaries.
-- Android real-billing validation must use a Google Play-installed internal/closed-test build.
-- iOS real-billing validation must use StoreKit sandbox/TestFlight with App Store Connect products.
-- A sideloaded APK is useful for regression testing but cannot prove store billing.
-- The exact binary offered for testing/submission must be the same artifact whose package/version/configuration and critical flows were exercised.
+- `main` remains the verified 0.3.3 baseline until 0.4.0 gates pass.
+- Source CI validates dependencies, lint, accessibility/UI rules, TypeScript, bundle configuration, secret absence, Edge Function typechecks and security/behaviour tests.
+- The exact-APK workflow builds a fresh signed 0.4.0 APK, inspects those exact bytes, installs the same artifact on Android 16 and runs free/auth/paywall regression flows.
+- Google Play billing is validated only from a Play-installed internal/closed-test AAB.
+- Apple billing is validated only through StoreKit sandbox/TestFlight with real App Store Connect products.
 
-The verified Cogni 0.3.3 evidence remains the rollback/source baseline until 0.4.0 passes its own gates.
+A rebuilt binary is a new artifact and must repeat the relevant binary and runtime gates.

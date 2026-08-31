@@ -53,13 +53,36 @@ function strings(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
+function uniqueStableUserIds(value: unknown): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const candidate of strings(value)) {
+    const normalized = candidate.trim();
+    if (!UUID_RE.test(normalized) || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+export function transferUserIds(event: RevenueCatEvent) {
+  const destinations = uniqueStableUserIds(event.transferred_to);
+  if (!destinations.length && typeof event.app_user_id === "string" && UUID_RE.test(event.app_user_id.trim())) {
+    destinations.push(event.app_user_id.trim());
+  }
+  const destinationSet = new Set(destinations);
+  const sources = uniqueStableUserIds(event.transferred_from).filter((userId) => !destinationSet.has(userId));
+  return { sources, destinations };
+}
+
 export function stableUserId(event: RevenueCatEvent): string | null {
+  const transfer = transferUserIds(event);
   const candidates: unknown[] = [
+    ...transfer.destinations,
     event.app_user_id,
     event.original_app_user_id,
     ...strings(event.aliases),
-    ...strings(event.transferred_to),
-    ...strings(event.transferred_from),
+    ...transfer.sources,
   ];
   for (const value of candidates) if (typeof value === "string" && UUID_RE.test(value)) return value;
   return null;

@@ -76,13 +76,12 @@ function productBase(value: string) {
 }
 
 function relevantSubscription(subscriber: RevenueCatSubscriber, preferredProduct?: string | null) {
-  const entries = Object.entries(subscriber.subscriptions ?? {});
-  if (preferredProduct) {
+  const entries = Object.entries(subscriber.subscriptions ?? {}).filter(([key]) => SUPPORTED_PRODUCTS.has(productBase(key)));
+  if (preferredProduct && SUPPORTED_PRODUCTS.has(productBase(preferredProduct))) {
     const direct = entries.find(([key]) => key === preferredProduct || productBase(key) === productBase(preferredProduct));
     if (direct) return direct;
   }
   return entries
-    .filter(([key]) => SUPPORTED_PRODUCTS.has(productBase(key)))
     .sort((a, b) => Math.max(epoch(b[1].grace_period_expires_date), epoch(b[1].expires_date)) - Math.max(epoch(a[1].grace_period_expires_date), epoch(a[1].expires_date)))[0] ?? null;
 }
 
@@ -92,14 +91,15 @@ export function projectProEntitlement(subscriber: RevenueCatSubscriber, eventTyp
   const subscriptionKey = selected?.[0] ?? null;
   const subscription = selected?.[1] ?? null;
   const rawProduct = entitlement?.product_identifier ?? subscriptionKey;
-  const productId = rawProduct ? productBase(rawProduct) : null;
+  const candidateProductId = rawProduct ? productBase(rawProduct) : null;
+  const supportedProduct = Boolean(candidateProductId && SUPPORTED_PRODUCTS.has(candidateProductId));
+  const productId = supportedProduct ? candidateProductId : null;
   const normalExpiry = Math.max(epoch(entitlement?.expires_date), epoch(subscription?.expires_date));
   const graceExpiry = Math.max(epoch(entitlement?.grace_period_expires_date), epoch(subscription?.grace_period_expires_date));
   const effectiveExpiry = Math.max(normalExpiry, graceExpiry);
   const refunded = Boolean(subscription?.refunded_at) || eventType === "REFUND";
   const billingIssue = Boolean(subscription?.billing_issues_detected_at);
   const cancelled = Boolean(subscription?.unsubscribe_detected_at);
-  const supportedProduct = Boolean(productId && SUPPORTED_PRODUCTS.has(productId));
   const active = supportedProduct && !refunded && effectiveExpiry > nowMs;
 
   let status: EntitlementProjection["status"];
@@ -109,7 +109,7 @@ export function projectProEntitlement(subscriber: RevenueCatSubscriber, eventTyp
   else if (active && cancelled) status = "cancelled";
   else if (active) status = "active";
   else if (eventType === "TRANSFER") status = "revoked";
-  else if (productId) status = "expired";
+  else if (supportedProduct) status = "expired";
   else status = "unknown";
 
   const eventEnv = typeof eventEnvironment === "string" ? eventEnvironment.toLowerCase() : "";
@@ -165,13 +165,17 @@ export async function revenueCatSignature(secret: string, timestamp: string, raw
 
 export async function verifyRevenueCatSignature(rawBody: Uint8Array, header: string | null, secret: string, nowMs = Date.now(), toleranceSeconds = 300) {
   if (!header || !secret) return false;
-  const parts = new Map(header.split(",").map((part) => part.trim().split("=", 2) as [string, string]));
-  const timestamp = parts.get("t") ?? "";
-  const expected = parts.get("v1") ?? "";
+  const parts = header.split(",").map((part) => part.trim().split("=", 2) as [string, string]);
+  const timestamp = parts.find(([key]) => key === "t")?.[1] ?? "";
+  const suppliedSignatures = parts.filter(([key]) => key === "v1").map(([, value]) => value).filter(Boolean);
   const seconds = Number(timestamp);
-  if (!Number.isFinite(seconds) || Math.abs(nowMs / 1000 - seconds) > toleranceSeconds) return false;
-  const expectedBytes = fromHex(expected);
-  if (!expectedBytes) return false;
+  if (!Number.isFinite(seconds) || Math.abs(nowMs / 1000 - seconds) > toleranceSeconds || !suppliedSignatures.length) return false;
   const computedBytes = fromHex(await revenueCatSignature(secret, timestamp, rawBody));
-  return Boolean(computedBytes && constantTimeEqual(computedBytes, expectedBytes));
+  if (!computedBytes) return false;
+  let matched = false;
+  for (const supplied of suppliedSignatures) {
+    const suppliedBytes = fromHex(supplied);
+    if (suppliedBytes && constantTimeEqual(computedBytes, suppliedBytes)) matched = true;
+  }
+  return matched;
 }

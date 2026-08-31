@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.110.8";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.110.8";
 import { projectProEntitlement, sha256Hex, stableUserId, verifyRevenueCatSignature, type RevenueCatEvent, type RevenueCatSubscriber } from "./logic.ts";
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
@@ -32,7 +32,7 @@ function serverCredentials() {
   return { url, key };
 }
 
-async function recordIgnored(admin: ReturnType<typeof createClient>, eventId: string, eventType: string, appUserId: string | null, environment: "sandbox" | "production" | "unknown", payloadHash: string) {
+async function recordIgnored(admin: SupabaseClient, eventId: string, eventType: string, appUserId: string | null, environment: "sandbox" | "production" | "unknown", payloadHash: string) {
   const { error } = await admin.from("subscription_webhook_events").insert({
     event_id: eventId,
     event_type: eventType,

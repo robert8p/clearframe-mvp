@@ -10,6 +10,8 @@ import Purchases, {
 
 const APPLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY?.trim() ?? "";
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY?.trim() ?? "";
+const MONTHLY_PRODUCT_ID = "cogni_pro_monthly";
+const ANNUAL_PRODUCT_ID = "cogni_pro_annual";
 
 let configured = false;
 let identifiedUserId: string | null = null;
@@ -60,9 +62,9 @@ export async function identifyPurchasesUser(userId: string) {
   return true;
 }
 
-// Cogni only uses authenticated, custom App User IDs. RevenueCat documents that
-// calling logOut() creates an anonymous ID, so sign-out clears app state only.
-// A later authenticated account switch is performed directly with logIn(newUuid).
+// Cogni uses authenticated custom App User IDs only. RevenueCat documents that
+// logOut() creates an anonymous ID, so sign-out clears app state/listeners and a
+// later account switch calls logIn(newUuid) directly.
 export function clearLocalPurchasesUserState() {
   identifiedUserId = null;
   if (listener) {
@@ -95,11 +97,8 @@ function productId(value: string) {
 
 function kindForPackage(pkg: PurchasesPackage): "monthly" | "annual" | null {
   const id = productId(pkg.product.identifier);
-  if (id === "cogni_pro_monthly") return "monthly";
-  if (id === "cogni_pro_annual") return "annual";
-  const identifier = pkg.identifier.toLowerCase();
-  if (identifier.includes("monthly")) return "monthly";
-  if (identifier.includes("annual") || identifier.includes("year")) return "annual";
+  if (id === MONTHLY_PRODUCT_ID) return "monthly";
+  if (id === ANNUAL_PRODUCT_ID) return "annual";
   return null;
 }
 

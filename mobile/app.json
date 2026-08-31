@@ -39,7 +39,8 @@
         {
           "configureAndroidBackup": true
         }
-      ]
+      ],
+      "./plugins/withRevenueCatAndroidLaunchMode"
     ],
     "experiments": {
       "typedRoutes": true

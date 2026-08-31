@@ -106,11 +106,11 @@ export function EntitlementProvider({ children }: { children: React.ReactNode })
 
   const recordAnalytics = useCallback(async (eventName: string, properties: Record<string, string | number | boolean | null> = {}) => {
     if (!userId) return;
-    try {
-      await apiFetch("/api/mobile/analytics", { method: "POST", body: JSON.stringify({ eventName, properties }) });
-    } catch (error) {
+    // Telemetry is deliberately best-effort. A measurement outage must never delay
+    // paywall dismissal, the native purchase sheet, restoration, or entitlement use.
+    void apiFetch("/api/mobile/analytics", { method: "POST", body: JSON.stringify({ eventName, properties }) }).catch((error) => {
       if (__DEV__) console.warn("Cogni monetisation analytics failed", error);
-    }
+    });
   }, [userId]);
 
   const loadServerState = useCallback(async () => {
@@ -298,7 +298,7 @@ export function EntitlementProvider({ children }: { children: React.ReactNode })
 }
 
 export function useEntitlements() {
-  const value = React.use(EntitlementContext);
+  const value = React.useContext(EntitlementContext);
   if (!value) throw new Error("useEntitlements must be used inside EntitlementProvider");
   return value;
 }

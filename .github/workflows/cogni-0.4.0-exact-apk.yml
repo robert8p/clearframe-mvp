@@ -33,8 +33,8 @@ jobs:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
-      EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: ""
-      EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: ""
+      EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: ""
+      EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: ""
       EAS_LOCAL_BUILD_SKIP_CLEANUP: "1"
       EAS_LOCAL_BUILD_WORKINGDIR: /tmp/eas-local-build
       EAS_LOCAL_BUILD_ARTIFACTS_DIR: /tmp/eas-local-artifacts
@@ -47,8 +47,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: "mobile/package-lock.json"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
       - uses: actions/setup-java@v5
         with:
@@ -72,10 +72,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build
 
-      - name: Require the existing Expo credential token
+      - name: Require existing Expo credentials
         run: test -n "$EXPO_TOKEN"
 
-      - name: Clean install and full source validation
+      - name: Clean install and source validation
         run: |
           rm -rf node_modules .expo android
           npm ci --include=dev --no-audit --no-fund
@@ -85,14 +85,14 @@ jobs:
           npm run logic-audit
           npm run typecheck
 
-      - name: Typecheck and test the server-authoritative billing boundary
+      - name: Typecheck and test server-authoritative billing
         working-directory: .
         run: |
           deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
-          deno check --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts
+          deno check --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts
           deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
           deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/monetization_test.ts
-          deno test --node-modules-dir=auto supabase/functions/revenuecat-webhook/logic_test.ts
+          deno test --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/logic_test.ts
 
       - name: Prove production Supabase configuration is compiled
         run: |
@@ -102,7 +102,7 @@ jobs:
           grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-export-strings.txt
           grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-export-strings.txt
 
-      - name: Configure a clean pre-store verification build
+      - name: Configure clean pre-store verification build
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -115,13 +115,13 @@ jobs:
             ...(profile.env || {}),
             EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
             EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-            EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: '',
-            EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: ''
+            EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: '',
+            EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: ''
           };
           fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
           NODE
 
-      - name: Build a clean signed Cogni 0.4.0 APK locally
+      - name: Build clean signed Cogni 0.4.0 APK locally
         run: |
           rm -rf /tmp/eas-local-build /tmp/eas-local-artifacts /tmp/cogni-0.4.0.apk
           mkdir -p /tmp/eas-local-artifacts
@@ -133,7 +133,7 @@ jobs:
             --output /tmp/cogni-0.4.0.apk
           test -s /tmp/cogni-0.4.0.apk
 
-      - name: Inspect the exact signed APK
+      - name: Inspect exact signed APK
         shell: bash
         run: |
           set -euo pipefail
@@ -191,7 +191,7 @@ jobs:
             "$VERSION_CODE" "$SHA256" "$SOURCE_COMMIT" > /tmp/cogni-0.4.0-artifact/metadata.json
           echo "Built and inspected Cogni 0.4.0 versionCode=$VERSION_CODE sha256=$SHA256 source=$SOURCE_COMMIT"
 
-      - name: Upload the exact inspected APK
+      - name: Upload exact inspected APK
         uses: actions/upload-artifact@v4
         with:
           name: cogni-0.4.0-prestore-exact-apk
@@ -220,13 +220,13 @@ jobs:
         with:
           ref: ${{ env.SOURCE_COMMIT }}
 
-      - name: Download the exact inspected APK
+      - name: Download exact inspected APK
         uses: actions/download-artifact@v4
         with:
           name: cogni-0.4.0-prestore-exact-apk
           path: /tmp/cogni-0.4.0-artifact
 
-      - name: Derive and provision the disposable E2E account
+      - name: Provision disposable E2E account
         shell: bash
         run: |
           set -euo pipefail
@@ -266,7 +266,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm
 
-      - name: Execute the exact APK and all available pre-store critical flows
+      - name: Execute exact APK and pre-store critical flows
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -286,7 +286,7 @@ jobs:
             APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" SUPABASE_URL="$SUPABASE_URL" SUPABASE_KEY="$SUPABASE_KEY" API_LEVEL=36 python3 .github/scripts/cogni-auth-route-e2e-fixed.py
             APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" API_LEVEL=36 python3 .github/scripts/cogni-monetization-prestore-e2e.py
 
-      - name: Delete the disposable account through Cogni's authenticated API
+      - name: Delete disposable account through Cogni API
         if: always()
         shell: bash
         run: |
@@ -309,7 +309,7 @@ jobs:
             echo "Disposable E2E account was already absent or could not be reopened."
           fi
 
-      - name: Preserve all Android interaction evidence
+      - name: Preserve Android interaction evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:

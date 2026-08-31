@@ -1,4 +1,4 @@
-import { projectProEntitlement, revenueCatSignature, stableUserId, verifyRevenueCatSignature } from "./logic.ts";
+import { projectProEntitlement, revenueCatSignature, stableUserId, transferUserIds, verifyRevenueCatSignature } from "./logic.ts";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -30,6 +30,26 @@ Deno.test("stable user identity prefers a Supabase UUID over RevenueCat anonymou
   const uuid = "2d931510-d99f-494a-8c67-87feb05e1594";
   const result = stableUserId({ app_user_id: "$RCAnonymousID:abc", aliases: ["$RCAnonymousID:def", uuid] });
   assert(result === uuid, "UUID alias should be selected");
+});
+
+Deno.test("transfer planning retains every distinct Cogni source and destination", () => {
+  const sourceA = "2d931510-d99f-494a-8c67-87feb05e1594";
+  const sourceB = "1269a9da-18f0-4e15-b410-58b155eb89b2";
+  const destination = "a68591a7-e19a-4c90-99ce-c0822aff145e";
+  const result = transferUserIds({
+    app_user_id: destination,
+    transferred_from: ["$RCAnonymousID:ignored", sourceA, sourceA, sourceB, destination],
+    transferred_to: [destination, destination, "not-a-user"],
+  });
+  assert(result.sources.join(",") === `${sourceA},${sourceB}`, "all distinct former owners must be reconciled");
+  assert(result.destinations.join(",") === destination, "the destination must be reconciled exactly once");
+  assert(stableUserId({ transferred_from: [sourceA], transferred_to: [destination] }) === destination, "the destination should be the primary transfer identity");
+});
+
+Deno.test("transfer planning falls back to the destination app user id", () => {
+  const destination = "a68591a7-e19a-4c90-99ce-c0822aff145e";
+  const result = transferUserIds({ app_user_id: destination, transferred_from: [] });
+  assert(result.destinations[0] === destination, "a valid transfer app user id should be treated as destination when the array is missing");
 });
 
 Deno.test("active subscription grants pro", () => {
@@ -84,4 +104,9 @@ Deno.test("refund revokes access", () => {
     subscriptions: { cogni_pro_monthly: { expires_date: "2026-09-20T00:00:00Z", refunded_at: "2026-08-25T00:00:00Z", store: "play_store" } },
   }, "REFUND", "PRODUCTION", now);
   assert(!result.isPro && result.status === "refunded", "refund should revoke pro");
+});
+
+Deno.test("a transfer source with no remaining subscription is revoked", () => {
+  const result = projectProEntitlement({}, "TRANSFER", "PRODUCTION", Date.parse("2026-08-26T00:00:00Z"));
+  assert(!result.isPro && result.status === "revoked", "former owners must not retain server-side Pro access after transfer");
 });

@@ -96,6 +96,10 @@ requireText(webhook, "new Uint8Array(await req.arrayBuffer())", "Webhook HMAC mu
 requireText(webhook, "verifyRevenueCatSignature", "Webhook must reject invalid HMAC signatures.");
 requireText(webhook, "REVENUECAT_WEBHOOK_AUTHORIZATION", "Webhook must support the independent Authorization secret.");
 requireText(webhook, "transferUserIds", "Transfer webhooks must enumerate source and destination Cogni identities.");
+requireText(webhook, 'target.role === "source"', "Transfer processing must distinguish former owners from the destination.");
+requireText(webhook, 'projectProEntitlement({}, "TRANSFER"', "Every transfer source must be revoked directly instead of trusting an alias lookup.");
+requireText(webhook, "loadTransferDestinationProjection", "Transfer destination state must be fetched separately from RevenueCat.");
+requireText(webhook, "for (const delayMs of [500, 1_500])", "Transfer destination lookup must retry a briefly lagging canonical projection.");
 requireText(webhook, 'admin.rpc("sync_subscription_transfer"', "Transfer webhooks must use the atomic database projection.");
 
 if (fs.existsSync(path.join(repoRoot, "supabase/functions/mobile-api-v04"))) {
@@ -131,7 +135,7 @@ console.log("Cogni monetisation audit passed.");
 console.log("✓ App identity and version preserved");
 console.log("✓ Exact store products and store-derived pricing only");
 console.log("✓ Server-authoritative entitlement and fail-closed premium enforcement");
-console.log("✓ Atomic source/destination transfer reconciliation");
+console.log("✓ Atomic source/destination transfer reconciliation with direct former-owner revocation");
 console.log("✓ Complete available Pro progress history without hidden row/date caps");
 console.log("✓ RevenueCat customer privacy deletion before account removal");
 console.log("✓ HMAC + Authorization webhook boundary and idempotent projection");

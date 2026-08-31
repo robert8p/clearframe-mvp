@@ -109,10 +109,39 @@ type IntroPriceShape = {
   cycles?: number | null;
 };
 
+type GooglePeriodShape = {
+  unit?: string | null;
+  value?: number | null;
+};
+
+type GooglePhaseShape = {
+  billingPeriod?: GooglePeriodShape | null;
+  billingCycleCount?: number | null;
+  price?: { formatted?: string | null } | null;
+};
+
+type GoogleOptionShape = {
+  freePhase?: GooglePhaseShape | null;
+  introPhase?: GooglePhaseShape | null;
+};
+
+function normalizedUnit(value: string | null | undefined) {
+  const unit = String(value ?? "period").toLowerCase();
+  return ["day", "week", "month", "year"].includes(unit) ? unit : "period";
+}
+
+function durationText(period: GooglePeriodShape | null | undefined, cycles: number | null | undefined) {
+  const periodValue = Math.max(1, Number(period?.value ?? 1) || 1);
+  const cycleCount = Math.max(1, Number(cycles ?? 1) || 1);
+  const duration = periodValue * cycleCount;
+  const unit = normalizedUnit(period?.unit);
+  return `${duration} ${duration === 1 ? unit : `${unit}s`}`;
+}
+
 function introDescription(intro: IntroPriceShape | null | undefined) {
   if (!intro?.priceString) return null;
   const units = Number(intro.periodNumberOfUnits ?? 1) || 1;
-  const unit = String(intro.periodUnit ?? "period").toLowerCase();
+  const unit = normalizedUnit(intro.periodUnit);
   const cycles = Number(intro.cycles ?? 1) || 1;
   const duration = units * cycles;
   const plural = duration === 1 ? unit : `${unit}s`;
@@ -120,7 +149,27 @@ function introDescription(intro: IntroPriceShape | null | undefined) {
   return `${intro.priceString} for ${duration} ${plural}`;
 }
 
+function eligibleGoogleIntroText(pkg: PurchasesPackage) {
+  const product = pkg.product as typeof pkg.product & { defaultOption?: GoogleOptionShape | null };
+  const option = product.defaultOption;
+  if (!option) return null;
+
+  // Google only returns subscription options for which the current Play account is
+  // eligible. purchasePackage() buys this same defaultOption, so the text below
+  // describes the exact offer the native purchase sheet will attempt to apply.
+  const phases: string[] = [];
+  if (option.freePhase) {
+    phases.push(`${durationText(option.freePhase.billingPeriod, option.freePhase.billingCycleCount)} free`);
+  }
+  const introPrice = option.introPhase?.price?.formatted?.trim();
+  if (option.introPhase && introPrice) {
+    phases.push(`${introPrice} for ${durationText(option.introPhase.billingPeriod, option.introPhase.billingCycleCount)}`);
+  }
+  return phases.length ? phases.join(", then ") : null;
+}
+
 async function eligibleIntroText(pkg: PurchasesPackage) {
+  if (Platform.OS === "android") return eligibleGoogleIntroText(pkg);
   if (Platform.OS !== "ios") return null;
   const product = pkg.product as typeof pkg.product & { introPrice?: IntroPriceShape | null };
   if (!product.introPrice) return null;

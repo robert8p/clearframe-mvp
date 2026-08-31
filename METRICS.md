@@ -3,6 +3,7 @@
 Cogni's product metrics deliberately prefer **authoritative server-side learning and entitlement facts** over client page views. The goal is to measure whether people get value, return to practise and—where relevant—choose to pay, not merely whether a screen rendered.
 
 The repeatable learning query pack is `scripts/internal_alpha_metrics.sql`.
+The repeatable subscription and paywall query pack is `scripts/monetization_metrics.sql`.
 
 ## North-star learning sequence
 

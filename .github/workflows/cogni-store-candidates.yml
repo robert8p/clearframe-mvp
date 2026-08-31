@@ -12,21 +12,84 @@ on:
           - android
           - ios
           - all
+  pull_request:
+    types:
+      - synchronize
+      - ready_for_review
 
 permissions:
   contents: read
 
 concurrency:
-  group: cogni-store-candidates-${{ github.ref }}-${{ inputs.platform }}
+  group: cogni-store-candidates-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 env:
-  SOURCE_COMMIT: ${{ github.sha }}
+  SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
   SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
   SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
 
 jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.detect.outputs.should_run }}
+      requested_platform: ${{ steps.detect.outputs.requested_platform }}
+    env:
+      GOOGLE_PUBLIC_KEY: ${{ secrets.REVENUECAT_GOOGLE_PUBLIC_API_KEY }}
+      APPLE_PUBLIC_KEY: ${{ secrets.REVENUECAT_APPLE_PUBLIC_API_KEY }}
+      DISPATCH_PLATFORM: ${{ inputs.platform }}
+      EVENT_ACTION: ${{ github.event.action }}
+      PR_DRAFT: ${{ github.event.pull_request.draft }}
+    steps:
+      - name: Select only an explicitly requested, credential-ready store build
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          should_run=false
+          requested_platform=""
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            should_run=true
+            requested_platform="$DISPATCH_PLATFORM"
+            case "$requested_platform" in
+              android)
+                test -n "$GOOGLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_GOOGLE_PUBLIC_API_KEY is missing."; exit 1; }
+                ;;
+              ios)
+                test -n "$APPLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_APPLE_PUBLIC_API_KEY is missing."; exit 1; }
+                ;;
+              all)
+                test -n "$GOOGLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_GOOGLE_PUBLIC_API_KEY is missing."; exit 1; }
+                test -n "$APPLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_APPLE_PUBLIC_API_KEY is missing."; exit 1; }
+                ;;
+              *)
+                echo "::error::Unknown platform selection: $requested_platform"
+                exit 1
+                ;;
+            esac
+          elif [ "$GITHUB_EVENT_NAME" = "pull_request" ] && { [ "$EVENT_ACTION" = "ready_for_review" ] || { [ "$EVENT_ACTION" = "synchronize" ] && [ "$PR_DRAFT" = "false" ]; }; }; then
+            should_run=true
+            if [ -n "$GOOGLE_PUBLIC_KEY" ] && [ -n "$APPLE_PUBLIC_KEY" ]; then
+              requested_platform=all
+            elif [ -n "$GOOGLE_PUBLIC_KEY" ]; then
+              requested_platform=android
+            elif [ -n "$APPLE_PUBLIC_KEY" ]; then
+              requested_platform=ios
+            else
+              echo "::error::Add at least one RevenueCat public SDK key before marking the monetisation PR ready for review."
+              exit 1
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "requested_platform=$requested_platform" >> "$GITHUB_OUTPUT"
+          echo "Store candidate run selected: $should_run; platform: ${requested_platform:-none}"
+
   source-gate:
+    needs: configuration
+    if: ${{ needs.configuration.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -34,6 +97,8 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
 
       - uses: actions/setup-node@v6
         with:
@@ -77,8 +142,10 @@ jobs:
           NODE
 
   android-aab:
-    needs: source-gate
-    if: ${{ inputs.platform == 'android' || inputs.platform == 'all' }}
+    needs:
+      - configuration
+      - source-gate
+    if: ${{ needs.source-gate.result == 'success' && (needs.configuration.outputs.requested_platform == 'android' || needs.configuration.outputs.requested_platform == 'all') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -91,6 +158,8 @@ jobs:
       EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: ${{ secrets.REVENUECAT_GOOGLE_PUBLIC_API_KEY }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
 
       - uses: actions/setup-node@v6
         with:
@@ -103,10 +172,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Require one-time store credentials
+      - name: Require only public client credentials
         run: |
           test -n "$EXPO_TOKEN"
           test -n "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY"
+          case "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY" in goog_*) ;; *) echo "::error::Expected a RevenueCat Google public SDK key beginning goog_."; exit 1;; esac
 
       - name: Install exact dependencies
         run: npm ci --include=dev --no-audit --no-fund
@@ -216,8 +286,10 @@ jobs:
           retention-days: 30
 
   ios-ipa:
-    needs: source-gate
-    if: ${{ inputs.platform == 'ios' || inputs.platform == 'all' }}
+    needs:
+      - configuration
+      - source-gate
+    if: ${{ needs.source-gate.result == 'success' && (needs.configuration.outputs.requested_platform == 'ios' || needs.configuration.outputs.requested_platform == 'all') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -230,6 +302,8 @@ jobs:
       EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: ${{ secrets.REVENUECAT_APPLE_PUBLIC_API_KEY }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
 
       - uses: actions/setup-node@v6
         with:
@@ -237,10 +311,11 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      - name: Require one-time store credentials
+      - name: Require only public client credentials
         run: |
           test -n "$EXPO_TOKEN"
           test -n "$EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY"
+          case "$EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY" in appl_*) ;; *) echo "::error::Expected a RevenueCat Apple public SDK key beginning appl_."; exit 1;; esac
 
       - name: Install exact dependencies
         run: npm ci --include=dev --no-audit --no-fund

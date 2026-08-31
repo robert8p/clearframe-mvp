@@ -23,8 +23,9 @@ The starting check, current daily lesson, one assigned core training experience,
 - Native purchases use `react-native-purchases` / RevenueCat.
 - Cogni identifies RevenueCat customers with the authenticated Supabase user UUID. The app avoids RevenueCat anonymous identities for normal authenticated use.
 - Store-derived offerings provide local price, currency, billing period and eligible introductory-offer data. Cogni does not hardcode displayed subscription prices.
+- Only the exact `cogni_pro_monthly` and `cogni_pro_annual` products are accepted into the paywall or projected as Cogni Pro.
 - `public.subscription_entitlements` is the server-owned entitlement projection. Authenticated users may read only their own row; clients cannot write subscription state.
-- `revenuecat-webhook` validates RevenueCat's HMAC signature over the raw body, then fetches current RevenueCat subscriber state and atomically projects it through the service-role-only `sync_subscription_entitlement` function.
+- `revenuecat-webhook` validates RevenueCat's HMAC signature over the raw body plus a separate Authorization value, then fetches current RevenueCat subscriber state and atomically projects it through the service-role-only `sync_subscription_entitlement` function.
 - Webhook event IDs are persisted for idempotency. Duplicate deliveries are harmless.
 - `mobile-api` independently checks the server entitlement before protected premium work. A forged local `isPro` value cannot unlock premium API operations.
 - Refunded/revoked/expired entitlements do not retain protected access. Cancelled subscriptions remain active only through verified expiry. Supported grace/billing-recovery states can retain access through verified expiry.
@@ -49,7 +50,11 @@ The remote configuration in `public.monetization_config` controls only a small s
 
 ## Subscription failure behaviour
 
-A subscription-system outage is not interpreted as 'free user'. When monetisation is enabled and server entitlement state cannot be verified, protected premium requests return a retryable billing-unavailable response instead of showing a false paywall. Core free learning does not depend on RevenueCat availability.
+A positively read disabled monetisation configuration preserves the existing free product without depending on RevenueCat. Once monetisation is enabled, a subscription-system/configuration outage is not interpreted as “free user.” Protected premium requests return a retryable billing-unavailable response instead of opening or creating premium work. Core free learning remains independent of RevenueCat availability.
+
+## Account deletion architecture
+
+When RevenueCat is configured, the authenticated account-deletion operation first calls RevenueCat's server-only Customer deletion API using the Supabase UUID. It then deletes the Supabase Auth identity, which cascades Cogni-side learning and entitlement records. If external deletion fails, Cogni leaves the account intact and reports a retryable failure instead of claiming deletion completed. Store subscriptions are managed separately and are not cancelled by deleting Cogni or the RevenueCat Customer.
 
 ## Analytics
 

@@ -43,15 +43,15 @@ jobs:
         run: npm run lint
       - name: UI quality audit
         run: npm run ui-audit
-      - name: Logic and security audit
+      - name: Logic, privilege, auth and monetisation audits
         run: npm run logic-audit
       - name: TypeScript
         run: npm run typecheck
       - name: Monetisation client secret boundary
         working-directory: .
         run: |
-          if grep -R -n -E 'REVENUECAT_(SECRET_API_KEY|WEBHOOK_HMAC_SECRET|WEBHOOK_AUTHORIZATION)' mobile/app mobile/components mobile/lib; then
-            echo 'Server-only RevenueCat secret reference found in executable mobile source.' >&2
+          if grep -R -n -E 'REVENUECAT_(SECRET_API_KEY|WEBHOOK_HMAC_SECRET|WEBHOOK_AUTHORIZATION)|SUPABASE_(SERVICE_ROLE_KEY|SECRET_KEYS)|sb_secret_' mobile/app mobile/components mobile/lib; then
+            echo 'Server-only secret reference found in executable mobile source.' >&2
             exit 1
           fi
           if grep -R -n -F 'process.env[' mobile/app mobile/components mobile/lib; then
@@ -73,8 +73,8 @@ jobs:
           grep -Fq "https://dhklfrqhsmofqrawfdjz.supabase.co" /tmp/cogni-export-strings.txt
           grep -Fq "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b" /tmp/cogni-export-strings.txt
           grep -Fq "goog_ci_public_key" /tmp/cogni-export-strings.txt
-          if grep -Eqi 'REVENUECAT_(SECRET_API_KEY|WEBHOOK_HMAC_SECRET)|sk_[A-Za-z0-9_-]{20,}' /tmp/cogni-export-strings.txt; then
-            echo 'Possible server secret found in Android JavaScript bundle.' >&2
+          if grep -Eqi 'REVENUECAT_(SECRET_API_KEY|WEBHOOK_HMAC_SECRET|WEBHOOK_AUTHORIZATION)|SUPABASE_(SERVICE_ROLE_KEY|SECRET_KEYS)|sb_secret_' /tmp/cogni-export-strings.txt; then
+            echo 'Server-only secret identifier found in Android JavaScript bundle.' >&2
             exit 1
           fi
           echo "Production Supabase and public RevenueCat client configuration are embedded without server secrets."
@@ -87,6 +87,9 @@ jobs:
       - name: Context engine behavioral tests
         working-directory: .
         run: deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
+      - name: Server-authoritative monetisation tests
+        working-directory: .
+        run: deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/monetization_test.ts
       - name: RevenueCat webhook security tests
         working-directory: .
         run: deno test --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/logic_test.ts

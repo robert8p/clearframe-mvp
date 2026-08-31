@@ -4,6 +4,7 @@ import { projectProEntitlement, sha256Hex, stableUserId, verifyRevenueCatSignatu
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const REVENUECAT_TIMEOUT_MS = 10_000;
 
 function response(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
@@ -13,11 +14,22 @@ function env(name: string) {
   return Deno.env.get(name)?.trim() ?? "";
 }
 
+function configuredSecretKey() {
+  const encoded = env("SUPABASE_SECRET_KEYS");
+  if (encoded) {
+    try {
+      const parsed = JSON.parse(encoded) as Record<string, string>;
+      if (typeof parsed.default === "string" && parsed.default) return parsed.default;
+    } catch { /* use individual automatic/legacy variables */ }
+  }
+  return [env("SUPABASE_SECRET_KEY"), env("SUPABASE_SERVICE_ROLE_KEY"), env("SB_SECRET_KEY")].find(Boolean) ?? "";
+}
+
 function serverCredentials() {
   const url = env("SUPABASE_URL");
-  const keys = [env("SUPABASE_SECRET_KEY"), env("SUPABASE_SERVICE_ROLE_KEY"), env("SB_SECRET_KEY")].filter(Boolean);
-  if (!url || !keys[0]) throw new Error("Supabase server credentials are unavailable.");
-  return { url, key: keys[0] };
+  const key = configuredSecretKey();
+  if (!url || !key) throw new Error("Supabase server credentials are unavailable.");
+  return { url, key };
 }
 
 async function recordIgnored(admin: ReturnType<typeof createClient>, eventId: string, eventType: string, appUserId: string | null, environment: "sandbox" | "production" | "unknown", payloadHash: string) {
@@ -39,15 +51,28 @@ function normalEnvironment(value: unknown): "sandbox" | "production" | "unknown"
   return lowered === "sandbox" ? "sandbox" : lowered === "production" ? "production" : "unknown";
 }
 
+async function fetchSubscriber(appUserId: string, secret: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REVENUECAT_TIMEOUT_MS);
+  try {
+    return await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`, {
+      signal: controller.signal,
+      headers: { authorization: `Bearer ${secret}`, accept: "application/json" },
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return response(405, { error: "method_not_allowed" });
 
   try {
     const hmacSecret = env("REVENUECAT_WEBHOOK_HMAC_SECRET");
-    if (!hmacSecret) return response(503, { error: "webhook_not_configured" });
-
     const configuredAuthorization = env("REVENUECAT_WEBHOOK_AUTHORIZATION");
-    if (configuredAuthorization && req.headers.get("authorization") !== configuredAuthorization) {
+    if (!hmacSecret || !configuredAuthorization) return response(503, { error: "webhook_not_configured" });
+
+    if (req.headers.get("authorization") !== configuredAuthorization) {
       return response(401, { error: "invalid_authorization" });
     }
 
@@ -96,11 +121,15 @@ Deno.serve(async (req: Request) => {
 
     const revenueCatSecret = env("REVENUECAT_SECRET_API_KEY");
     if (!revenueCatSecret) return response(503, { error: "revenuecat_api_not_configured" });
-    const customerResponse = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`, {
-      headers: { authorization: `Bearer ${revenueCatSecret}`, accept: "application/json" },
-    });
+    let customerResponse: Response;
+    try {
+      customerResponse = await fetchSubscriber(appUserId, revenueCatSecret);
+    } catch (error) {
+      console.error("RevenueCat customer sync request failed", error instanceof Error ? error.name : "unknown");
+      return response(502, { error: "revenuecat_sync_failed" });
+    }
     if (!customerResponse.ok) {
-      console.error("RevenueCat customer sync failed", customerResponse.status, await customerResponse.text());
+      console.error("RevenueCat customer sync failed", customerResponse.status);
       return response(502, { error: "revenuecat_sync_failed" });
     }
 
@@ -130,7 +159,7 @@ Deno.serve(async (req: Request) => {
 
     return response(200, { ok: true, result: syncResult });
   } catch (error) {
-    console.error("revenuecat-webhook error", error);
+    console.error("revenuecat-webhook error", error instanceof Error ? error.message : "unknown");
     return response(500, { error: "internal_error" });
   }
 });

@@ -2,6 +2,8 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2.110.8";
 
 export const PRO_ENTITLEMENT = "pro";
 export const PRO_PRODUCTS = new Set(["cogni_pro_monthly", "cogni_pro_annual"]);
+const REVENUECAT_API_BASE = "https://api.revenuecat.com/v1";
+const REVENUECAT_TIMEOUT_MS = 10_000;
 
 export type MonetizationConfig = {
   monetizationEnabled: boolean;
@@ -51,7 +53,7 @@ export class BillingUnavailableError extends Error {
   }
 }
 
-const SAFE_DEFAULT_CONFIG: MonetizationConfig = {
+export const SAFE_DEFAULT_CONFIG: MonetizationConfig = {
   monetizationEnabled: false,
   freeCoreSessionsPerDay: 1,
   focusedPracticeIsPro: true,
@@ -60,7 +62,7 @@ const SAFE_DEFAULT_CONFIG: MonetizationConfig = {
   paywallExperiment: "control",
 };
 
-function configFromRow(row: Record<string, unknown> | null): MonetizationConfig {
+export function configFromRow(row: Record<string, unknown> | null): MonetizationConfig {
   if (!row) return SAFE_DEFAULT_CONFIG;
   return {
     monetizationEnabled: row.monetization_enabled === true,
@@ -72,7 +74,7 @@ function configFromRow(row: Record<string, unknown> | null): MonetizationConfig 
   };
 }
 
-function grantsAccess(row: EntitlementRow | null, nowMs = Date.now()) {
+export function grantsAccess(row: EntitlementRow | null, nowMs = Date.now()) {
   if (!row) return false;
   if (!["active", "cancelled", "grace_period", "billing_issue"].includes(row.status)) return false;
   const expiration = row.expiration_date ? Date.parse(row.expiration_date) : 0;
@@ -90,7 +92,13 @@ export async function loadEntitlementState(admin: SupabaseClient, userId: string
   const entitlementQuery = await admin.from("subscription_entitlements").select("entitlement,status,product_id,store,purchase_date,expiration_date,will_renew,billing_issue,environment,updated_at").eq("user_id", userId).eq("entitlement", PRO_ENTITLEMENT).maybeSingle();
   if (entitlementQuery.error) {
     console.error("subscription entitlement unavailable", entitlementQuery.error.message);
-    return { isPro: false, stateReliable: false, entitlement: null, config, serverTime };
+    return {
+      isPro: false,
+      stateReliable: !config.monetizationEnabled,
+      entitlement: null,
+      config,
+      serverTime,
+    };
   }
   const entitlement = entitlementQuery.data as EntitlementRow | null;
   return { isPro: grantsAccess(entitlement), stateReliable: true, entitlement, config, serverTime };
@@ -98,9 +106,9 @@ export async function loadEntitlementState(admin: SupabaseClient, userId: string
 
 export async function requirePro(admin: SupabaseClient, userId: string, feature: "focused_practice" | "progress_history") {
   const state = await loadEntitlementState(admin, userId);
-  const featureRequiresPro = feature === "focused_practice" ? state.config.focusedPracticeIsPro : state.config.progressHistoryFreeDays >= 0;
-  if (!state.config.monetizationEnabled || !featureRequiresPro) return state;
+  const featureRequiresPro = feature === "focused_practice" ? state.config.focusedPracticeIsPro : true;
   if (!state.stateReliable) throw new BillingUnavailableError();
+  if (!state.config.monetizationEnabled || !featureRequiresPro) return state;
   if (!state.isPro) throw new PremiumRequiredError(feature);
   return state;
 }
@@ -131,7 +139,7 @@ function chooseSubscription(subscriptions: Record<string, unknown>, preferredPro
   })[0] ?? null;
 }
 
-function projectSubscriber(subscriber: Record<string, unknown>, nowMs = Date.now()) {
+export function projectSubscriber(subscriber: Record<string, unknown>, nowMs = Date.now()) {
   const entitlements = asRecord(subscriber.entitlements);
   const entitlement = asRecord(entitlements.pro);
   const preferredProduct = typeof entitlement.product_identifier === "string" ? entitlement.product_identifier : null;
@@ -141,21 +149,22 @@ function projectSubscriber(subscriber: Record<string, unknown>, nowMs = Date.now
   const subscription = asRecord(selected?.[1]);
   const rawProduct = preferredProduct ?? selectedKey;
   const productId = rawProduct ? productBase(rawProduct) : null;
+  const supportedProduct = Boolean(productId && PRO_PRODUCTS.has(productId));
   const normalExpiry = Math.max(dateMs(entitlement.expires_date), dateMs(subscription.expires_date));
   const graceExpiry = Math.max(dateMs(entitlement.grace_period_expires_date), dateMs(subscription.grace_period_expires_date));
   const expirationMs = Math.max(normalExpiry, graceExpiry);
   const refunded = Boolean(subscription.refunded_at);
   const billingIssue = Boolean(subscription.billing_issues_detected_at);
   const cancelled = Boolean(subscription.unsubscribe_detected_at);
-  const active = Boolean(productId && PRO_PRODUCTS.has(productId) && !refunded && expirationMs > nowMs);
-  const status = refunded ? "refunded" : active && billingIssue && graceExpiry > nowMs ? "grace_period" : active && billingIssue ? "billing_issue" : active && cancelled ? "cancelled" : active ? "active" : productId ? "expired" : "unknown";
+  const active = Boolean(supportedProduct && !refunded && expirationMs > nowMs);
+  const status = refunded && supportedProduct ? "refunded" : active && billingIssue && graceExpiry > nowMs ? "grace_period" : active && billingIssue ? "billing_issue" : active && cancelled ? "cancelled" : active ? "active" : supportedProduct ? "expired" : "unknown";
   const store = typeof subscription.store === "string" ? subscription.store : null;
   const purchaseDate = typeof entitlement.purchase_date === "string" ? entitlement.purchase_date : typeof subscription.purchase_date === "string" ? subscription.purchase_date : null;
   const isSandbox = subscription.is_sandbox;
   const environment = isSandbox === true ? "sandbox" : isSandbox === false ? "production" : "unknown";
   return {
     status,
-    productId,
+    productId: supportedProduct ? productId : null,
     store,
     purchaseDate,
     expirationDate: expirationMs > 0 ? new Date(expirationMs).toISOString() : null,
@@ -165,14 +174,33 @@ function projectSubscriber(subscriber: Record<string, unknown>, nowMs = Date.now
   };
 }
 
+async function revenueCatRequest(secret: string, path: string, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REVENUECAT_TIMEOUT_MS);
+  try {
+    return await fetch(`${REVENUECAT_API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        authorization: `Bearer ${secret}`,
+        accept: "application/json",
+        ...init.headers,
+      },
+    });
+  } catch (error) {
+    console.error("RevenueCat request failed", error instanceof Error ? error.name : "unknown");
+    throw new BillingUnavailableError();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function syncFromRevenueCat(admin: SupabaseClient, userId: string) {
   const secret = Deno.env.get("REVENUECAT_SECRET_API_KEY")?.trim();
   if (!secret) throw new BillingUnavailableError("Subscription syncing isn't configured yet.");
-  const response = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
-    headers: { authorization: `Bearer ${secret}`, accept: "application/json" },
-  });
+  const response = await revenueCatRequest(secret, `/subscribers/${encodeURIComponent(userId)}`);
   if (!response.ok) {
-    console.error("RevenueCat subscriber sync failed", response.status, await response.text());
+    console.error("RevenueCat subscriber sync failed", response.status);
     throw new BillingUnavailableError();
   }
   const payload = asRecord(await response.json());
@@ -199,6 +227,29 @@ export async function syncFromRevenueCat(admin: SupabaseClient, userId: string) 
     throw new BillingUnavailableError();
   }
   return loadEntitlementState(admin, userId);
+}
+
+export async function deleteRevenueCatCustomer(admin: SupabaseClient, userId: string) {
+  const configQuery = await admin.from("monetization_config").select("monetization_enabled").eq("singleton", true).maybeSingle();
+  if (configQuery.error) {
+    console.error("monetization config unavailable during account deletion", configQuery.error.message);
+    throw new BillingUnavailableError("Cogni couldn't complete subscription-data deletion right now. Your account has not been deleted; please try again.");
+  }
+  const monetizationEnabled = configQuery.data?.monetization_enabled === true;
+  const secret = Deno.env.get("REVENUECAT_SECRET_API_KEY")?.trim();
+  if (!secret) {
+    if (monetizationEnabled) {
+      throw new BillingUnavailableError("Cogni couldn't complete subscription-data deletion right now. Your account has not been deleted; please try again.");
+    }
+    return { configured: false, deleted: false };
+  }
+  const response = await revenueCatRequest(secret, `/subscribers/${encodeURIComponent(userId)}`, { method: "DELETE" });
+  if (response.status === 404) return { configured: true, deleted: true };
+  if (!response.ok) {
+    console.error("RevenueCat customer deletion failed", response.status);
+    throw new BillingUnavailableError("Cogni couldn't complete subscription-data deletion right now. Your account has not been deleted; please try again.");
+  }
+  return { configured: true, deleted: true };
 }
 
 const ANALYTICS_EVENTS = new Set([

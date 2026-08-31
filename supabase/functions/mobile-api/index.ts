@@ -19,6 +19,7 @@ import {
 import {
   BillingUnavailableError,
   PremiumRequiredError,
+  deleteRevenueCatCustomer,
   loadEntitlementState,
   recordMonetizationAnalytics,
   requirePro,
@@ -300,9 +301,10 @@ async function contextFeedback(admin: SupabaseClient, user: User, body: unknown)
   return { ok: true };
 }
 async function deleteAccount(admin: SupabaseClient, user: User) {
+  const revenueCatDeletion = await deleteRevenueCatCustomer(admin, user.id);
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) throw error;
-  return { ok: true };
+  return { ok: true, revenueCatDeletion };
 }
 
 Deno.serve(async (req: Request) => {

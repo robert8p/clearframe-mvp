@@ -57,6 +57,12 @@ if (reliableCheck < 0 || disabledReturn < reliableCheck) failures.push("Protecte
 requireText(monetization, 'method: "DELETE"', "Account deletion must call the RevenueCat customer deletion API.");
 requireText(monetization, "REVENUECAT_SECRET_API_KEY", "RevenueCat server sync/deletion must use a server-only secret.");
 
+const progressHistory = readRepo("supabase/functions/mobile-api/progress-history.ts");
+requireText(progressHistory, 'admin.rpc("get_user_skill_progress_history"', "Progress history must use the server-only daily projection.");
+requireText(progressHistory, "isFullHistory ? null : since.toISOString()", "Cogni Pro history must request every available daily snapshot.");
+forbidText(progressHistory, "365", "Cogni Pro history must not contain a hidden one-year cap.");
+forbidText(progressHistory, ".limit(5000)", "Cogni Pro history must not contain a hidden row cap.");
+
 const migrationPath = path.join(repoRoot, "supabase/migrations/20260825234024_cogni_monetisation_foundation.sql");
 if (!fs.existsSync(migrationPath)) failures.push("Monetisation migration filename must match the production migration ledger.");
 else {
@@ -71,11 +77,30 @@ else {
   ]) requireText(migration, needle, message);
 }
 
+const hardeningPath = path.join(repoRoot, "supabase/migrations/20260831190000_cogni_monetisation_hardening.sql");
+if (!fs.existsSync(hardeningPath)) failures.push("Monetisation hardening migration is missing.");
+else {
+  const hardening = fs.readFileSync(hardeningPath, "utf8").toLowerCase();
+  for (const [needle, message] of [
+    ["revoke all on table public.support_requests from anon, authenticated", "Support storage must be explicitly server-only."],
+    ["function public.get_user_skill_progress_history", "Full progress history must use a server-only SQL projection."],
+    ["function public.sync_subscription_transfer", "RevenueCat transfers must be reconciled atomically."],
+    ["on conflict (event_id) do nothing", "Transfer idempotency must claim the RevenueCat event once."],
+    ["grant execute on function public.sync_subscription_transfer", "Only service_role may reconcile transfer entitlements."],
+  ]) requireText(hardening, needle, message);
+}
+
 const webhook = readRepo("supabase/functions/revenuecat-webhook/index.ts");
 requireText(webhook, 'req.headers.get("x-revenuecat-webhook-signature")', "Webhook must read RevenueCat's HMAC signature header.");
 requireText(webhook, "new Uint8Array(await req.arrayBuffer())", "Webhook HMAC must verify the raw body before JSON parsing.");
 requireText(webhook, "verifyRevenueCatSignature", "Webhook must reject invalid HMAC signatures.");
 requireText(webhook, "REVENUECAT_WEBHOOK_AUTHORIZATION", "Webhook must support the independent Authorization secret.");
+requireText(webhook, "transferUserIds", "Transfer webhooks must enumerate source and destination Cogni identities.");
+requireText(webhook, 'admin.rpc("sync_subscription_transfer"', "Transfer webhooks must use the atomic database projection.");
+
+if (fs.existsSync(path.join(repoRoot, "supabase/functions/mobile-api-v04"))) {
+  failures.push("Abandoned duplicate mobile-api-v04 source tree must not exist.");
+}
 
 const executableRoots = ["app", "components", "lib"];
 for (const root of executableRoots) {
@@ -106,6 +131,8 @@ console.log("Cogni monetisation audit passed.");
 console.log("✓ App identity and version preserved");
 console.log("✓ Exact store products and store-derived pricing only");
 console.log("✓ Server-authoritative entitlement and fail-closed premium enforcement");
+console.log("✓ Atomic source/destination transfer reconciliation");
+console.log("✓ Complete available Pro progress history without hidden row/date caps");
 console.log("✓ RevenueCat customer privacy deletion before account removal");
 console.log("✓ HMAC + Authorization webhook boundary and idempotent projection");
 console.log("✓ No server-only billing secret in mobile executable source");

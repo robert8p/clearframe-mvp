@@ -1,10 +1,26 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.110.8";
-import { projectProEntitlement, sha256Hex, stableUserId, verifyRevenueCatSignature, type RevenueCatEvent, type RevenueCatSubscriber } from "./logic.ts";
+import {
+  projectProEntitlement,
+  sha256Hex,
+  stableUserId,
+  transferUserIds,
+  verifyRevenueCatSignature,
+  type EntitlementProjection,
+  type RevenueCatEvent,
+  type RevenueCatSubscriber,
+} from "./logic.ts";
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const REVENUECAT_TIMEOUT_MS = 10_000;
+
+class RevenueCatSyncError extends Error {
+  constructor() {
+    super("RevenueCat subscriber sync failed.");
+    this.name = "RevenueCatSyncError";
+  }
+}
 
 function response(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
@@ -64,6 +80,47 @@ async function fetchSubscriber(appUserId: string, secret: string) {
   }
 }
 
+async function loadProjection(appUserId: string, secret: string, eventType: string, eventEnvironment: unknown, allowMissing: boolean) {
+  let customerResponse: Response;
+  try {
+    customerResponse = await fetchSubscriber(appUserId, secret);
+  } catch (error) {
+    console.error("RevenueCat customer sync request failed", error instanceof Error ? error.name : "unknown");
+    throw new RevenueCatSyncError();
+  }
+  if (customerResponse.status === 404 && allowMissing) {
+    return projectProEntitlement({}, eventType, eventEnvironment);
+  }
+  if (!customerResponse.ok) {
+    console.error("RevenueCat customer sync failed", customerResponse.status);
+    throw new RevenueCatSyncError();
+  }
+  const customerPayload = await customerResponse.json() as { subscriber?: RevenueCatSubscriber };
+  return projectProEntitlement(customerPayload.subscriber ?? {}, eventType, eventEnvironment);
+}
+
+function projectionPayload(userId: string, projection: EntitlementProjection) {
+  return {
+    user_id: userId,
+    status: projection.status,
+    product_id: projection.productId,
+    store: projection.store,
+    original_app_user_id: userId,
+    purchase_date: projection.purchaseDate,
+    expiration_date: projection.expirationDate,
+    will_renew: projection.willRenew,
+    billing_issue: projection.billingIssue,
+    environment: projection.environment,
+  };
+}
+
+async function knownProfileIds(admin: SupabaseClient, userIds: string[]) {
+  if (!userIds.length) return new Set<string>();
+  const { data, error } = await admin.from("profiles").select("id").in("id", userIds);
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => String(row.id)));
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return response(405, { error: "method_not_allowed" });
 
@@ -93,7 +150,6 @@ Deno.serve(async (req: Request) => {
     if (!eventId) return response(400, { error: "missing_event_id" });
     const payloadHash = await sha256Hex(rawBody);
     const eventEnvironment = normalEnvironment(event?.environment);
-    const appUserId = stableUserId(event ?? {});
     const rawAppUserId = typeof event?.app_user_id === "string" ? event.app_user_id.slice(0, 1500) : null;
 
     const { url, key } = serverCredentials();
@@ -107,35 +163,62 @@ Deno.serve(async (req: Request) => {
     if (existingError) throw existingError;
     if (existing) return response(200, { ok: true, duplicate: true });
 
+    const revenueCatSecret = env("REVENUECAT_SECRET_API_KEY");
+    if (!revenueCatSecret) return response(503, { error: "revenuecat_api_not_configured" });
+
+    if (eventType === "TRANSFER") {
+      const transfer = transferUserIds(event ?? {});
+      const orderedTargets = [
+        ...transfer.sources.map((userId) => ({ userId, role: "source" as const })),
+        ...transfer.destinations.map((userId) => ({ userId, role: "destination" as const })),
+      ];
+      const known = await knownProfileIds(admin, orderedTargets.map((target) => target.userId));
+      const knownTargets = orderedTargets.filter((target) => known.has(target.userId));
+      if (!knownTargets.length) {
+        await recordIgnored(admin, eventId, eventType, rawAppUserId, eventEnvironment, payloadHash);
+        return response(200, { ok: true, ignored: "deleted_or_unknown_transfer_users" });
+      }
+
+      const projections = [];
+      for (const target of knownTargets) {
+        const projection = await loadProjection(
+          target.userId,
+          revenueCatSecret,
+          eventType,
+          event?.environment,
+          target.role === "source",
+        );
+        projections.push(projectionPayload(target.userId, projection));
+      }
+
+      const processedUserId = [...knownTargets].reverse().find((target) => target.role === "destination")?.userId
+        ?? knownTargets[knownTargets.length - 1].userId;
+      const { data: syncResult, error: syncError } = await admin.rpc("sync_subscription_transfer", {
+        p_event_id: eventId,
+        p_event_type: eventType,
+        p_app_user_id: rawAppUserId ?? processedUserId,
+        p_environment: eventEnvironment,
+        p_payload_sha256: payloadHash,
+        p_processed_user_id: processedUserId,
+        p_projections: projections,
+      });
+      if (syncError) throw syncError;
+      return response(200, { ok: true, transfer: true, result: syncResult });
+    }
+
+    const appUserId = stableUserId(event ?? {});
     if (!appUserId || !uuidRe.test(appUserId)) {
       await recordIgnored(admin, eventId, eventType, rawAppUserId, eventEnvironment, payloadHash);
       return response(200, { ok: true, ignored: "no_stable_user" });
     }
 
-    const { data: profile, error: profileError } = await admin.from("profiles").select("id").eq("id", appUserId).maybeSingle();
-    if (profileError) throw profileError;
-    if (!profile) {
+    const known = await knownProfileIds(admin, [appUserId]);
+    if (!known.has(appUserId)) {
       await recordIgnored(admin, eventId, eventType, rawAppUserId ?? appUserId, eventEnvironment, payloadHash);
       return response(200, { ok: true, ignored: "deleted_or_unknown_user" });
     }
 
-    const revenueCatSecret = env("REVENUECAT_SECRET_API_KEY");
-    if (!revenueCatSecret) return response(503, { error: "revenuecat_api_not_configured" });
-    let customerResponse: Response;
-    try {
-      customerResponse = await fetchSubscriber(appUserId, revenueCatSecret);
-    } catch (error) {
-      console.error("RevenueCat customer sync request failed", error instanceof Error ? error.name : "unknown");
-      return response(502, { error: "revenuecat_sync_failed" });
-    }
-    if (!customerResponse.ok) {
-      console.error("RevenueCat customer sync failed", customerResponse.status);
-      return response(502, { error: "revenuecat_sync_failed" });
-    }
-
-    const customerPayload = await customerResponse.json() as { subscriber?: RevenueCatSubscriber };
-    const subscriber = customerPayload.subscriber ?? {};
-    const projection = projectProEntitlement(subscriber, eventType, event?.environment);
+    const projection = await loadProjection(appUserId, revenueCatSecret, eventType, event?.environment, false);
     const originalAppUserId = typeof event?.original_app_user_id === "string" ? event.original_app_user_id.slice(0, 1500) : appUserId;
 
     const { data: syncResult, error: syncError } = await admin.rpc("sync_subscription_entitlement", {
@@ -159,6 +242,7 @@ Deno.serve(async (req: Request) => {
 
     return response(200, { ok: true, result: syncResult });
   } catch (error) {
+    if (error instanceof RevenueCatSyncError) return response(502, { error: "revenuecat_sync_failed" });
     console.error("revenuecat-webhook error", error instanceof Error ? error.message : "unknown");
     return response(500, { error: "internal_error" });
   }

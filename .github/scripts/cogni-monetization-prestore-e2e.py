@@ -101,6 +101,27 @@ def wait_for(label: str, *, timeout: float = 45, enabled: bool | None = None, sc
     raise AssertionError(f"Timed out waiting for {label!r}")
 
 
+def wait_for_input(label: str, *, timeout: float = 45, scroll: bool = False) -> Node:
+    """Target the accessible text-input node, not its visible field label."""
+    deadline = time.time() + timeout
+    last_nodes: list[Node] = []
+    while time.time() < deadline:
+        last_nodes = dump_ui("latest-input")
+        for node in last_nodes:
+            if node.description == label and node.enabled:
+                print(f"FOUND INPUT {label!r}: {node}")
+                return node
+        if scroll:
+            swipe_up()
+        else:
+            time.sleep(0.7)
+    for node in last_nodes:
+        if node.text or node.description:
+            print(node)
+    capture("missing-input-" + slug(label))
+    raise AssertionError(f"Timed out waiting for input {label!r}")
+
+
 def tap(label: str, *, scroll: bool = False) -> None:
     node = wait_for(label, enabled=True, scroll=scroll)
     left, top, right, bottom = node.bounds
@@ -117,9 +138,10 @@ def tap(label: str, *, scroll: bool = False) -> None:
 
 
 def input_text(label: str, value: str, *, scroll: bool = False) -> None:
-    node = wait_for(label, enabled=True, scroll=scroll)
+    node = wait_for_input(label, scroll=scroll)
     left, top, right, bottom = node.bounds
     adb("shell", "input", "tap", str((left + right) // 2), str((top + bottom) // 2))
+    adb("shell", "input", "keyevent", "KEYCODE_MOVE_END", check=False)
     escaped = value.replace("%", "%25").replace(" ", "%s")
     adb("shell", "input", "text", escaped)
     time.sleep(0.7)

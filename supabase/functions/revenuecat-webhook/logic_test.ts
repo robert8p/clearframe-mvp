@@ -16,6 +16,16 @@ Deno.test("webhook signature validates raw body and rejects tampering/replay", a
   assert(!await verifyRevenueCatSignature(body, header, secret, nowMs + 301_000), "stale signature should fail");
 });
 
+Deno.test("webhook signature accepts a valid v1 during signature rotation", async () => {
+  const secret = "test-secret";
+  const timestamp = "1787698800";
+  const nowMs = Number(timestamp) * 1000;
+  const body = new TextEncoder().encode('{"event":{"id":"evt_rotation"}}');
+  const valid = await revenueCatSignature(secret, timestamp, body);
+  const header = `t=${timestamp},v1=${"0".repeat(64)},v1=${valid}`;
+  assert(await verifyRevenueCatSignature(body, header, secret, nowMs), "any valid v1 signature should pass");
+});
+
 Deno.test("stable user identity prefers a Supabase UUID over RevenueCat anonymous aliases", () => {
   const uuid = "2d931510-d99f-494a-8c67-87feb05e1594";
   const result = stableUserId({ app_user_id: "$RCAnonymousID:abc", aliases: ["$RCAnonymousID:def", uuid] });
@@ -29,6 +39,24 @@ Deno.test("active subscription grants pro", () => {
     subscriptions: { cogni_pro_monthly: { expires_date: "2026-09-20T00:00:00Z", is_sandbox: false, store: "play_store" } },
   }, "RENEWAL", "PRODUCTION", now);
   assert(result.isPro && result.status === "active" && result.store === "play_store", "active subscription should grant pro");
+});
+
+Deno.test("Android base-plan product suffix normalizes to the approved Cogni product", () => {
+  const now = Date.parse("2026-08-26T00:00:00Z");
+  const result = projectProEntitlement({
+    entitlements: { pro: { product_identifier: "cogni_pro_annual:annual", expires_date: "2027-08-20T00:00:00Z" } },
+    subscriptions: { "cogni_pro_annual:annual": { expires_date: "2027-08-20T00:00:00Z", is_sandbox: true, store: "play_store" } },
+  }, "INITIAL_PURCHASE", "SANDBOX", now);
+  assert(result.isPro && result.productId === "cogni_pro_annual", "approved base-plan suffix should normalize safely");
+});
+
+Deno.test("unrelated product cannot be projected as Cogni Pro", () => {
+  const now = Date.parse("2026-08-26T00:00:00Z");
+  const result = projectProEntitlement({
+    entitlements: { pro: { product_identifier: "unrelated_premium", expires_date: "2099-01-01T00:00:00Z" } },
+    subscriptions: { unrelated_premium: { expires_date: "2099-01-01T00:00:00Z", store: "app_store" } },
+  }, "INITIAL_PURCHASE", "PRODUCTION", now);
+  assert(!result.isPro && result.status === "unknown" && result.productId === null, "unapproved product must not grant or persist Cogni Pro");
 });
 
 Deno.test("cancelled subscription remains pro until expiration", () => {

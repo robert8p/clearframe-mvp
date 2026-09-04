@@ -1,0 +1,250 @@
+name: Finalise Cogni copy, navigation and feedback
+
+on:
+  push:
+    branches:
+      - feat/cogni-0.4.0-monetisation
+    paths:
+      - .github/workflows/temp-finalize-copy-feedback.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cogni-finalize-copy-feedback
+  cancel-in-progress: false
+
+jobs:
+  finalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/cogni-0.4.0-monetisation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Apply focused source corrections
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              source = file.read_text()
+              if source.count(old) != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}: {old[:100]!r}; found {source.count(old)}")
+              file.write_text(source.replace(old, new, 1))
+
+          def regex_once(path: str, pattern: str, replacement: str) -> None:
+              file = Path(path)
+              source = file.read_text()
+              updated, count = re.subn(pattern, replacement, source, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one regex match in {path}: {pattern!r}; found {count}")
+              file.write_text(updated)
+
+          # Equal-weight bottom navigation, with Train represented as deliberate
+          # practice/focus rather than a media-play or floating-action control.
+          replace_once(
+              "mobile/app/(tabs)/_layout.tsx",
+              '''  if (name === "train") {
+            return <View style={{ width: 0, height: 0, borderTopWidth: 7, borderBottomWidth: 7, borderLeftWidth: 11, borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: color, marginLeft: 3 }} />;
+          }
+        ''',
+              '''  if (name === "train") {
+            return (
+              <View style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center" }}>
+                <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: color, alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+                </View>
+              </View>
+            );
+          }
+        ''',
+          )
+
+          # Profile settings must typecheck and accurately explain the restrained
+          # feedback model.
+          replace_once(
+              "mobile/app/(tabs)/profile.tsx",
+              'fontWeight: "850"',
+              'fontWeight: "800"',
+          )
+          replace_once(
+              "mobile/app/(tabs)/profile.tsx",
+              "Brief, gentle cues reinforce selections and results. Sounds respect silent mode and never replace the on-screen feedback.",
+              "Selections use gentle haptic feedback. Brief sounds mark learning outcomes and session completion, respect silent mode and never replace on-screen feedback.",
+          )
+
+          # Avoid repeating the question in the card heading, and use a neutral
+          # learning-review cue rather than a punitive failure sound.
+          replace_once(
+              "mobile/components/question-runner.tsx",
+              'triage: "What would you do?"',
+              'triage: "Choose the best response"',
+          )
+          replace_once(
+              "mobile/components/question-runner.tsx",
+              'playFeedback(result.correct ? "correct" : score >= .5 ? "review" : "incorrect");',
+              'playFeedback(result.correct ? "correct" : "review");',
+          )
+
+          # Keep selection haptic-only, reserve sound for meaningful outcomes,
+          # use quieter differentiated levels, and call the SDK 54 disposal API.
+          feedback = Path("mobile/lib/feedback.tsx")
+          source = feedback.read_text()
+          source = source.replace(
+              'export type FeedbackCue = "selection" | "correct" | "review" | "incorrect" | "complete";',
+              'export type FeedbackCue = "selection" | "correct" | "review" | "complete";',
+          )
+          source, count = re.subn(
+              r'''\n  incorrect: \[\n    \{ frequency: 392, durationMs: 70, gapMs: 14, gain: 0\.13 \},\n    \{ frequency: 329\.63, durationMs: 110, gain: 0\.12 \},\n  \],''',
+              "",
+              source,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("Could not remove the punitive incorrect tone exactly once")
+          source = source.replace(
+              '''    const androidCue = cue === "selection"
+      ? Haptics.AndroidHaptics.Segment_Tick
+      : cue === "correct" || cue === "complete"
+        ? Haptics.AndroidHaptics.Confirm
+        : cue === "incorrect"
+          ? Haptics.AndroidHaptics.Reject
+          : Haptics.AndroidHaptics.Segment_Frequent_Tick;''',
+              '''    const androidCue = cue === "selection"
+      ? Haptics.AndroidHaptics.Segment_Tick
+      : cue === "correct" || cue === "complete"
+        ? Haptics.AndroidHaptics.Confirm
+        : Haptics.AndroidHaptics.Segment_Frequent_Tick;''',
+          )
+          source = source.replace(
+              '''  } else if (cue === "incorrect") {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  } else {''',
+              '''  } else {''',
+          )
+          source = source.replace(
+              "        player.volume = 0.55;",
+              '        player.volume = cue === "complete" ? 0.34 : cue === "correct" ? 0.30 : 0.22;',
+          )
+          source = source.replace("player.release();", "player.remove();")
+          source = source.replace(
+              '''        if (!player) return;
+        await player.seekTo(0);
+        player.play();''',
+              '''        if (!player) return;
+        player.pause();
+        await player.seekTo(0);
+        player.play();''',
+          )
+          if '"incorrect"' in source or "player.release()" in source:
+              raise SystemExit("Deprecated/punitive feedback code remains")
+          feedback.write_text(source)
+
+          # Keep clean-install migrations convergent with the production wording.
+          replace_once(
+              "supabase/migrations/20260904010500_polish_training_copy.sql",
+              'A family group chat shares an AI-written message describing an expensive investment as “guaranteed”. The linked regulator page does not support the claim, and the message pressures everyone to act today.\\n\\nWhat would you do next?',
+              'A family group chat shares an AI-written message promoting an expensive investment as “guaranteed”. The cited regulator page does not support the claim, and the message urges everyone to act today.\\n\\nWhat should you do next?',
+          )
+
+          broad = Path("supabase/migrations/20260904015000_normalize_display_copy.sql")
+          broad_source = broad.read_text()
+          marker = "create schema if not exists private;\n"
+          cleanup = '''create schema if not exists private;
+
+-- Remove the temporary first-pass normalisers where they already exist. This
+-- leaves one canonical trigger per content table in both upgraded and clean databases.
+drop trigger if exists normalise_challenge_display_copy on public.challenges;
+drop trigger if exists normalise_lesson_display_copy on public.daily_lessons;
+drop trigger if exists normalise_skill_display_copy on public.skills;
+drop function if exists private.normalise_challenge_display_copy();
+drop function if exists private.normalise_lesson_display_copy();
+drop function if exists private.normalise_skill_display_copy();
+drop function if exists private.normalise_display_jsonb(jsonb);
+drop function if exists private.normalise_display_text(text);
+'''
+          if broad_source.count(marker) != 1:
+              raise SystemExit("Unexpected private-schema marker count")
+          broad_source = broad_source.replace(marker, cleanup, 1)
+          old_prompt = '''update public.challenges
+set prompt = 'A family group chat shares an AI-written message claiming that an expensive investment is “guaranteed”. The linked regulator page does not support that claim, and the message pressures everyone to act today.'
+  || E'\\n\\n'
+  || 'What would you do next?'
+where content_key = 'v020_casual_capstone_safe_verification';'''
+          new_prompt = '''update public.challenges
+set
+  prompt = 'A family group chat shares an AI-written message promoting an expensive investment as “guaranteed”. The cited regulator page does not support the claim, and the message urges everyone to act today.'
+    || E'\\n\\n'
+    || 'What should you do next?',
+  scenario_context = 'Everyday learner • money and AI claims',
+  scenario_text = 'A family group chat shares an AI-written message promoting an expensive investment as “guaranteed”. The cited regulator page does not support the claim, and the message urges everyone to act today.',
+  question_text = 'What should you do next?'
+where content_key = 'v020_casual_capstone_safe_verification';'''
+          if broad_source.count(old_prompt) != 1:
+              raise SystemExit("Could not locate broad migration prompt")
+          broad.write_text(broad_source.replace(old_prompt, new_prompt, 1))
+
+          # Strengthen automated regression guards around the exact defects.
+          audit = Path("mobile/scripts/copy-feedback-audit.mjs")
+          audit_source = audit.read_text()
+          audit_source = audit_source.replace(
+              '["player.release()", "Direct audio players must be released on provider cleanup."],',
+              '["player.remove()", "Direct audio players must use the Expo SDK 54 disposal API."],',
+          )
+          audit_source = audit_source.replace(
+              '''  ["AccessibilityInfo.announceForAccessibility", "Audio must supplement rather than replace visible and spoken feedback."],
+]) requireText(runner, needle, message);''',
+              '''  ["AccessibilityInfo.announceForAccessibility", "Audio must supplement rather than replace visible and spoken feedback."],
+  ['triage: "Choose the best response"', "Triage cards must not repeat the question as their heading."],
+  ['playFeedback(result.correct ? "correct" : "review")', "Non-correct outcomes must use a neutral review cue."],
+]) requireText(runner, needle, message);
+forbidText(runner, 'playFeedback(result.correct ? "correct" : score >= .5 ? "review" : "incorrect")', "Learning feedback must not use a punitive incorrect cue.");''',
+          )
+          audit_source = audit_source.replace(
+              '''  ["Sounds respect silent mode", "Profile must explain silent-mode behaviour."],''',
+              '''  ["Selections use gentle haptic feedback", "Profile must accurately distinguish selection haptics from outcome sounds."],
+  ["respect silent mode", "Profile must explain silent-mode behaviour."],''',
+          )
+          audit_source = audit_source.replace(
+              '''forbidText(tabs, "tabBarButton", "Train must remain navigation rather than a custom action button.");''',
+              '''forbidText(tabs, "tabBarButton", "Train must remain navigation rather than a custom action button.");
+forbidText(tabs, "borderLeftWidth: 11", "Train must use a learning-focus symbol, not a media-play triangle.");
+requireText(tabs, "width: 18, height: 18, borderRadius: 9", "Train must use the equal-weight focus-target glyph.");
+forbidText(feedback, '"incorrect"', "Feedback must use a neutral review cue rather than a punitive incorrect cue.");''',
+          )
+          audit_source = audit_source.replace(
+              "✓ Six affected learning prompts rewritten and protected by a database constraint",
+              "✓ The affected learning catalogue is normalised at source, API and database boundaries",
+          )
+          audit.write_text(audit_source)
+          PY
+
+      - name: Validate the completed mobile source
+        working-directory: mobile
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          npx expo install --check
+          npm run validate
+
+      - name: Commit the corrections and remove this one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/temp-finalize-copy-feedback.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile supabase/migrations
+          git commit -m "Polish training copy navigation and learning feedback"
+          git push origin HEAD:feat/cogni-0.4.0-monetisation

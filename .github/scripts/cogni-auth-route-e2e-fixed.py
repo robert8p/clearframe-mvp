@@ -12,6 +12,7 @@ from types import ModuleType
 ROOT = Path(__file__).resolve().parent
 SUITES = [
     ROOT / "cogni-auth-main-flow.py",
+    ROOT / "cogni-copy-feedback-e2e.py",
     ROOT / "cogni-profile-password-e2e.py",
     ROOT / "cogni-signup-onboarding-e2e.py",
 ]

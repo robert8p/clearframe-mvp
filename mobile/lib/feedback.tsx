@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 
 export type FeedbackCue = "selection" | "correct" | "review" | "incorrect" | "complete";
+type SoundCue = Exclude<FeedbackCue, "selection">;
 
 type FeedbackContextValue = {
   ready: boolean;
@@ -26,10 +27,11 @@ type Tone = {
 const SOUND_KEY = "cogni.feedback.sound.v1";
 const HAPTICS_KEY = "cogni.feedback.haptics.v1";
 const SAMPLE_RATE = 22_050;
-const SOUND_VERSION = 1;
+const SOUND_VERSION = 2;
 
-const TONES: Record<FeedbackCue, Tone[]> = {
-  selection: [{ frequency: 620, durationMs: 42, gain: 0.16 }],
+// Selection is deliberately haptic-only. Audible cues are reserved for outcomes
+// and completion so they remain informative rather than becoming tap noise.
+const TONES: Record<SoundCue, Tone[]> = {
   correct: [
     { frequency: 523.25, durationMs: 62, gapMs: 14, gain: 0.19 },
     { frequency: 659.25, durationMs: 105, gain: 0.20 },
@@ -50,8 +52,11 @@ const TONES: Record<FeedbackCue, Tone[]> = {
 };
 
 const FeedbackContext = createContext<FeedbackContextValue | null>(null);
-
 type Player = ReturnType<typeof createAudioPlayer>;
+
+function isSoundCue(cue: FeedbackCue): cue is SoundCue {
+  return cue !== "selection";
+}
 
 function writeAscii(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index += 1) view.setUint8(offset + index, value.charCodeAt(index));
@@ -103,7 +108,7 @@ function writeWav(notes: Tone[]) {
   return bytes;
 }
 
-function soundFile(cue: FeedbackCue) {
+function soundFile(cue: SoundCue) {
   const file = new File(Paths.cache, `cogni-feedback-v${SOUND_VERSION}-${cue}.wav`);
   if (!file.exists) {
     file.create({ intermediates: true, overwrite: true });
@@ -143,7 +148,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const soundEnabledRef = useRef(true);
   const hapticsEnabledRef = useRef(true);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  const playersRef = useRef<Map<FeedbackCue, Player>>(new Map());
+  const playersRef = useRef<Map<SoundCue, Player>>(new Map());
   const preparationRef = useRef<Promise<void> | null>(null);
   const lastSelectionAtRef = useRef(0);
 
@@ -155,10 +160,9 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
       await setAudioModeAsync({
         playsInSilentMode: false,
         shouldPlayInBackground: false,
-        shouldRouteThroughEarpiece: false,
         interruptionMode: "mixWithOthers",
       });
-      for (const cue of Object.keys(TONES) as FeedbackCue[]) {
+      for (const cue of Object.keys(TONES) as SoundCue[]) {
         if (playersRef.current.has(cue)) continue;
         const player = createAudioPlayer({ uri: soundFile(cue).uri });
         player.volume = 0.55;
@@ -203,7 +207,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       subscription.remove();
-      for (const player of playersRef.current.values()) player.remove();
+      for (const player of playersRef.current.values()) player.release();
       playersRef.current.clear();
     };
   }, [prepareAudio]);
@@ -222,7 +226,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    if (soundEnabledRef.current) {
+    if (soundEnabledRef.current && isSoundCue(cue)) {
       void (async () => {
         await prepareAudio();
         const player = playersRef.current.get(cue);

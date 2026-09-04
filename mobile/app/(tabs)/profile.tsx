@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Alert, Linking, Text, View } from "react-native";
+import { Alert, Linking, Switch, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { FormField } from "@/components/form-field";
@@ -17,6 +17,7 @@ import {
   RESPONSIBILITY_OPTIONS,
   STUDY_STAGE_OPTIONS,
 } from "@/lib/context-options";
+import { useFeedback } from "@/lib/feedback";
 import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from "@/lib/legal";
 import { useProGate } from "@/lib/pro-gate";
 import { supabase } from "@/lib/supabase";
@@ -31,9 +32,43 @@ function readableDate(value: string | null | undefined) {
   return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
+function PreferenceRow({
+  title,
+  description,
+  value,
+  onValueChange,
+  disabled,
+}: {
+  title: string;
+  description: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={{ minHeight: 68, flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 10 }}>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: "850" }}>{title}</Text>
+        <Text style={{ color: colors.muted, fontSize: 13.5, lineHeight: 19 }}>{description}</Text>
+      </View>
+      <Switch
+        accessibilityLabel={title}
+        accessibilityHint={description}
+        disabled={disabled}
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: "rgba(91,107,158,.46)", true: "rgba(0,229,255,.44)" }}
+        thumbColor={value ? colors.cyan : colors.soft}
+        ios_backgroundColor="rgba(91,107,158,.46)"
+      />
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { isPro, entitlement, billingStatus, managementUrl, restore, openPaywall } = useProGate();
+  const { ready: feedbackReady, soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled } = useFeedback();
   const [data, setData] = useState<MobileProfileResponse | null>(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
   const [name, setName] = useState(""); const [functionArea, setFunctionArea] = useState(""); const [industry, setIndustry] = useState(""); const [goal, setGoal] = useState("");
   const [studyStage, setStudyStage] = useState(""); const [responsibilityScope, setResponsibilityScope] = useState(""); const [organisationScale, setOrganisationScale] = useState("");
@@ -137,6 +172,17 @@ export default function ProfileScreen() {
     <Card><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}><Eyebrow>Milestones</Eyebrow><Text style={{ color: colors.soft, fontSize: 12.5 }}>Progress markers</Text></View><View style={{ gap: 0 }}>{milestones.map((item, index) => <View accessible accessibilityLabel={`${item.label}. ${item.unlocked ? "Unlocked" : "Locked"}.`} key={item.label} style={{ minHeight: 62, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: index === milestones.length - 1 ? 0 : 1, borderBottomColor: colors.line }}><Text accessible={false} style={{ width: 30, fontSize: 21, textAlign: "center", opacity: item.unlocked ? 1 : .48 }}>{item.icon}</Text><View style={{ flex: 1, gap: 2 }}><Text style={{ color: colors.text, fontSize: 15.5, lineHeight: 21, fontWeight: "800" }}>{item.label}</Text><Text style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 12.5, lineHeight: 18, fontWeight: "700" }}>{item.unlocked ? "Unlocked" : "Not yet unlocked"}</Text></View><Text accessible={false} style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 18, fontWeight: "900" }}>{item.unlocked ? "✓" : "○"}</Text></View>)}</View></Card>
 
     <Card><Eyebrow>Learning context</Eyebrow><Body muted>Changing context never resets your scores, XP, streak or history. It changes the situations Cogni uses next.</Body><PrimaryButton label="Change learning context" secondary onPress={() => router.push("/onboarding")} /></Card>
+
+    <Card>
+      <Eyebrow>Feedback</Eyebrow>
+      <Title size={23}>Sound and touch</Title>
+      <Body muted>Brief, gentle cues reinforce selections and results. Sounds respect silent mode and never replace the on-screen feedback.</Body>
+      <View style={{ borderTopWidth: 1, borderTopColor: colors.line, marginTop: 2 }}>
+        <PreferenceRow title="Sound effects" description="Subtle tones for answers and session completion." value={soundEnabled} disabled={!feedbackReady} onValueChange={setSoundEnabled} />
+        <View style={{ height: 1, backgroundColor: colors.line }} />
+        <PreferenceRow title="Haptic feedback" description="Gentle touch feedback for selections and results." value={hapticsEnabled} disabled={!feedbackReady} onValueChange={setHapticsEnabled} />
+      </View>
+    </Card>
 
     <Card style={{ borderColor: isPro ? "rgba(0,229,255,.36)" : colors.line }}>
       <Eyebrow>Subscription</Eyebrow>

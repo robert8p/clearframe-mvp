@@ -17,7 +17,13 @@ function TabGlyph({ name, color }: { name: TabGlyphName; color: string }) {
   }
 
   if (name === "train") {
-    return <View style={{ width: 0, height: 0, borderTopWidth: 7, borderBottomWidth: 7, borderLeftWidth: 11, borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: color, marginLeft: 3 }} />;
+    return (
+      <View style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: color, alignItems: "center", justifyContent: "center" }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+        </View>
+      </View>
+    );
   }
 
   if (name === "progress") {

@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { EntitlementProvider } from "@/lib/entitlements";
+import { FeedbackProvider } from "@/lib/feedback";
 import { useReducedMotion } from "@/lib/accessibility";
 import { SplashScreenController } from "@/components/splash-screen-controller";
 import { StartupConfigurationScreen } from "@/components/startup-configuration-screen";
@@ -75,9 +76,11 @@ export default function RootLayout() {
     <StartupErrorBoundary>
       <AuthProvider>
         <EntitlementProvider>
-          <SplashScreenController />
-          <StatusBar style="light" />
-          <RootNavigator />
+          <FeedbackProvider>
+            <SplashScreenController />
+            <StatusBar style="light" />
+            <RootNavigator />
+          </FeedbackProvider>
         </EntitlementProvider>
       </AuthProvider>
     </StartupErrorBoundary>

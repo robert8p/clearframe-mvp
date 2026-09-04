@@ -1,3 +1,4 @@
+import { cleanDisplayPayload } from "@/lib/copy";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
 
 const FUNCTION_URL = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/mobile-api`;
@@ -40,7 +41,7 @@ function readCached<T>(path: string): T | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { savedAt?: number; data?: T };
     if (!parsed.savedAt || Date.now() - parsed.savedAt > CACHE_TTL_MS) return null;
-    return parsed.data ?? null;
+    return parsed.data === undefined ? null : cleanDisplayPayload(parsed.data);
   } catch {
     return null;
   }
@@ -88,12 +89,12 @@ async function invoke<T>(path: string, method: string, body: unknown, accessToke
 function errorFromPayload(payload: unknown, status: number) {
   const record = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
   const raw = record.error;
-  if (typeof raw === "string") return new ApiError(raw, status);
+  if (typeof raw === "string") return new ApiError(cleanDisplayPayload(raw), status);
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     const error = raw as Record<string, unknown>;
-    const message = typeof error.message === "string" ? error.message : "Cogni couldn't complete that request.";
+    const message = typeof error.message === "string" ? cleanDisplayPayload(error.message) : "Cogni couldn't complete that request.";
     const code = typeof error.code === "string" ? error.code : null;
-    const details = error.details && typeof error.details === "object" && !Array.isArray(error.details) ? error.details as Record<string, unknown> : null;
+    const details = error.details && typeof error.details === "object" && !Array.isArray(error.details) ? cleanDisplayPayload(error.details as Record<string, unknown>) : null;
     return new ApiError(message, status, code, details);
   }
   return new ApiError("Cogni couldn't complete that request.", status);
@@ -122,7 +123,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       }
 
       if (result.response.ok) {
-        const payload = result.payload as T;
+        const payload = cleanDisplayPayload(result.payload as T);
         if (method === "GET") writeCached(path, payload);
         return payload;
       }

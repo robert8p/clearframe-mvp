@@ -48,7 +48,7 @@ function PreferenceRow({
   return (
     <View style={{ minHeight: 68, flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 10 }}>
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: "850" }}>{title}</Text>
+        <Text style={{ color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: "800" }}>{title}</Text>
         <Text style={{ color: colors.muted, fontSize: 13.5, lineHeight: 19 }}>{description}</Text>
       </View>
       <Switch

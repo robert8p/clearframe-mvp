@@ -1,0 +1,79 @@
+name: Temporary copy and feedback source finaliser
+
+on:
+  push:
+    branches:
+      - feat/cogni-0.4.0-monetisation
+    paths:
+      - .github/workflows/temp-finish-copy-feedback.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cogni-copy-feedback-source-finaliser
+  cancel-in-progress: true
+
+jobs:
+  finalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/cogni-0.4.0-monetisation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply deterministic final fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          profile = Path('mobile/app/(tabs)/profile.tsx')
+          text = profile.read_text()
+          text = text.replace('fontWeight: "850"', 'fontWeight: "800"')
+          profile.write_text(text)
+
+          orchestrator = Path('.github/scripts/cogni-auth-route-e2e-fixed.py')
+          text = orchestrator.read_text()
+          marker = '    ROOT / "cogni-auth-main-flow.py",\n'
+          addition = marker + '    ROOT / "cogni-copy-feedback-e2e.py",\n'
+          if 'cogni-copy-feedback-e2e.py' not in text:
+              if marker not in text:
+                  raise SystemExit('Could not find E2E suite insertion point')
+              text = text.replace(marker, addition, 1)
+          orchestrator.write_text(text)
+
+          workflow = Path('.github/workflows/cogni-0.4.0-exact-apk.yml')
+          text = workflow.read_text()
+          permission_marker = '          ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" /tmp/apk-permissions.txt\n'
+          permission_addition = permission_marker + '          ! grep -q "android.permission.RECORD_AUDIO" /tmp/apk-permissions.txt\n'
+          if 'android.permission.RECORD_AUDIO" /tmp/apk-permissions.txt' not in text:
+              if permission_marker not in text:
+                  raise SystemExit('Could not find permission assertion insertion point')
+              text = text.replace(permission_marker, permission_addition, 1)
+
+          artifact_marker = '            /tmp/cogni-profile-password-api-36\n'
+          artifact_addition = artifact_marker + '            /tmp/cogni-copy-feedback-api-36\n'
+          if '/tmp/cogni-copy-feedback-api-36' not in text:
+              if artifact_marker not in text:
+                  raise SystemExit('Could not find runtime artifact insertion point')
+              text = text.replace(artifact_marker, artifact_addition, 1)
+          workflow.write_text(text)
+          PY
+
+      - name: Commit final source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            'mobile/app/(tabs)/profile.tsx' \
+            '.github/scripts/cogni-auth-route-e2e-fixed.py' \
+            '.github/workflows/cogni-0.4.0-exact-apk.yml'
+          git diff --cached --check
+          git commit -m "Complete copy, Train and feedback validation"
+          git push origin HEAD:feat/cogni-0.4.0-monetisation

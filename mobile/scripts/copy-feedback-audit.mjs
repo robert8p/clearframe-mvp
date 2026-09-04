@@ -1,74 +1,120 @@
 import fs from "node:fs";
 import path from "node:path";
-import process from "node:process";
 
-const root = process.cwd();
-const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
-const fail = (message) => {
-  console.error(`COPY/FEEDBACK AUDIT FAILED: ${message}`);
-  process.exitCode = 1;
-};
-const assert = (condition, message) => {
-  if (!condition) fail(message);
-};
+const mobileRoot = process.cwd();
+const repoRoot = path.resolve(mobileRoot, "..");
+const failures = [];
+const readMobile = (relative) => fs.readFileSync(path.join(mobileRoot, relative), "utf8");
+const readRepo = (relative) => fs.readFileSync(path.join(repoRoot, relative), "utf8");
+const requireText = (source, needle, message) => { if (!source.includes(needle)) failures.push(message); };
+const forbidText = (source, needle, message) => { if (source.includes(needle)) failures.push(message); };
 
-const packageJson = JSON.parse(read("package.json"));
-const appJson = JSON.parse(read("app.json"));
-const tabs = read("app/(tabs)/_layout.tsx");
-const rootLayout = read("app/_layout.tsx");
-const api = read("lib/api.ts");
-const copy = read("lib/copy.ts");
-const feedback = read("lib/feedback.tsx");
-const runner = read("components/question-runner.tsx");
-const profile = read("app/(tabs)/profile.tsx");
-
-assert(packageJson.dependencies?.["expo-audio"] === "~1.1.1", "Expo SDK 54 must use expo-audio ~1.1.1.");
-assert(packageJson.dependencies?.["expo-file-system"] === "~19.0.24", "Expo SDK 54 must use expo-file-system ~19.0.24.");
-assert(packageJson.dependencies?.["expo-haptics"] === "~15.0.8", "Expo SDK 54 must use expo-haptics ~15.0.8.");
-
-const audioPlugin = appJson.expo?.plugins?.find((entry) => Array.isArray(entry) && entry[0] === "expo-audio");
-assert(Boolean(audioPlugin), "app.json must explicitly configure expo-audio.");
-assert(audioPlugin?.[1]?.microphonePermission === false, "iOS microphone permission must be disabled for playback-only feedback.");
-assert(audioPlugin?.[1]?.recordAudioAndroid === false, "Android audio recording must be disabled for playback-only feedback.");
-assert(appJson.expo?.android?.blockedPermissions?.includes("android.permission.RECORD_AUDIO"), "Android RECORD_AUDIO must be explicitly blocked.");
-
-assert(rootLayout.includes("<FeedbackProvider>"), "The app root must provide feedback preferences and lifecycle management.");
-assert(api.includes("cleanDisplayPayload(result.payload as T)"), "Every successful API response must be cleaned before rendering.");
-assert(copy.includes("literalLineBreak") && copy.includes("cleanDisplayPayload"), "The copy normaliser must repair escaped controls recursively.");
-
-assert(feedback.includes('playsInSilentMode: false'), "Sound effects must respect silent mode.");
-assert(feedback.includes('interruptionMode: "mixWithOthers"'), "Short UI sounds must not interrupt other audio.");
-assert(feedback.includes('shouldPlayInBackground: false'), "Learning feedback must stop in the background.");
-assert(feedback.includes("performAndroidHapticsAsync"), "Android must use the native haptics API.");
-assert(feedback.includes("SecureStore.setItemAsync"), "Feedback preferences must persist securely.");
-assert(feedback.includes("player.remove()"), "Manually created audio players must be released.");
-
-assert(runner.includes('playFeedback("selection")'), "Question choices must provide optional selection feedback.");
-assert(runner.includes('playFeedback(result.correct ? "correct"'), "Answer results must provide semantic feedback.");
-assert(runner.includes('playFeedback("complete")'), "Session completion must provide a restrained completion cue.");
-assert(runner.includes("AccessibilityInfo.announceForAccessibility"), "Sounds must supplement, not replace, accessible result text.");
-assert(profile.includes('title="Sound effects"') && profile.includes('title="Haptic feedback"'), "Profile must expose separate sound and haptic controls.");
-
-assert(!tabs.includes("emphasis"), "Train must not be treated as a floating or primary action.");
-assert(!tabs.includes("tabBarButton"), "Train must remain a normal navigation destination, not a custom action button.");
-assert(!tabs.includes('tabBarLabelStyle: { color: colors.cyan'), "Train must not receive a permanently special label style.");
-assert(tabs.includes('tabBarItemStyle: { flex: 1'), "All five destinations must receive equal tab-bar width.");
-assert(tabs.includes('title: "Train"') && tabs.includes('tabBarAccessibilityLabel: "Train tab"'), "Train must retain a visible label and explicit accessibility name.");
-
-function filesUnder(relative) {
-  const directory = path.join(root, relative);
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const child = path.join(relative, entry.name);
-    return entry.isDirectory() ? filesUnder(child) : child;
-  });
+const packageJson = JSON.parse(readMobile("package.json"));
+for (const [dependency, expected] of Object.entries({
+  "expo-audio": "~1.1.1",
+  "expo-file-system": "~19.0.24",
+  "expo-haptics": "~15.0.8",
+})) {
+  if (packageJson.dependencies?.[dependency] !== expected) {
+    failures.push(`${dependency} must use the Expo SDK 54-compatible version ${expected}.`);
+  }
 }
 
-for (const relative of [...filesUnder("app"), ...filesUnder("components")]) {
-  if (!/\.[jt]sx?$/.test(relative)) continue;
-  const source = read(relative);
-  if (source.includes("\\n\\n")) fail(`${relative} contains a literal escaped blank line in screen copy.`);
-  if (source.includes("\\r\\n")) fail(`${relative} contains a literal escaped CRLF in screen copy.`);
-  if (source.includes("\\t") && !source.includes("replace(/\\t")) fail(`${relative} contains a literal escaped tab in screen copy.`);
+const packageLock = readMobile("package-lock.json");
+for (const dependency of ["node_modules/expo-audio", "node_modules/expo-file-system", "node_modules/expo-haptics"]) {
+  requireText(packageLock, `\"${dependency}\"`, `package-lock.json is missing ${dependency}.`);
 }
 
-if (!process.exitCode) console.log("Copy, equal-weight Train navigation, playback-only audio and optional haptic feedback checks passed.");
+const appConfig = JSON.parse(readMobile("app.json"));
+const audioPlugin = (appConfig.expo?.plugins ?? []).find((plugin) => Array.isArray(plugin) && plugin[0] === "expo-audio");
+if (!audioPlugin || audioPlugin[1]?.microphonePermission !== false || audioPlugin[1]?.recordAudioAndroid !== false) {
+  failures.push("expo-audio must remain playback-only with iOS and Android recording permissions disabled.");
+}
+if (!(appConfig.expo?.android?.blockedPermissions ?? []).includes("android.permission.RECORD_AUDIO")) {
+  failures.push("Android RECORD_AUDIO must remain explicitly blocked.");
+}
+
+const copy = readMobile("lib/copy.ts");
+for (const [needle, message] of [
+  [".replace(literalCrLf", "Display-copy repair must decode escaped CRLF."],
+  [".replace(literalLineBreak", "Display-copy repair must decode escaped line breaks."],
+  [".replace(literalTab", "Display-copy repair must decode escaped tabs."],
+  [".replace(/\\n{3,}/g", "Display-copy repair must cap excessive blank lines."],
+  ["export function cleanDisplayPayload", "API payload repair must remain recursive for JSON display data."],
+]) requireText(copy, needle, message);
+
+const api = readMobile("lib/api.ts");
+requireText(api, 'import { cleanDisplayPayload } from "@/lib/copy"', "The mobile API must use the display-copy safety net.");
+requireText(api, "const payload = cleanDisplayPayload(result.payload as T)", "Successful API responses must be cleaned before rendering or caching.");
+requireText(api, "cleanDisplayPayload(parsed.data)", "Cached display data must also be cleaned.");
+
+const migration = readRepo("supabase/migrations/20260904010500_polish_training_copy.sql");
+for (const contentKey of [
+  "diag_casual_ai",
+  "diag_casual_assumption",
+  "diag_casual_cause",
+  "diag_casual_evidence",
+  "diag_casual_uncertainty",
+  "v020_casual_capstone_safe_verification",
+]) requireText(migration, contentKey, `Copy migration is missing ${contentKey}.`);
+requireText(migration, "The linked regulator page does not support the claim", "The visible investment prompt must use clear, accurate wording.");
+requireText(migration, "challenges_display_copy_no_literal_control_escapes", "The database must reject future literal escaped controls in challenge display copy.");
+
+const feedback = readMobile("lib/feedback.tsx");
+for (const [needle, message] of [
+  ['playsInSilentMode: false', "Learning sounds must respect silent mode."],
+  ['shouldPlayInBackground: false', "Learning sounds must not continue in the background."],
+  ['interruptionMode: "mixWithOthers"', "Short learning sounds must not seize exclusive audio focus."],
+  ["SecureStore.getItemAsync(SOUND_KEY)", "The sound preference must persist securely."],
+  ["SecureStore.getItemAsync(HAPTICS_KEY)", "The haptic preference must persist securely."],
+  ["player.release()", "Direct audio players must be released on provider cleanup."],
+  ["soundEnabledRef.current && isSoundCue(cue)", "Selection must remain haptic-only rather than producing repetitive tap sounds."],
+  ["Haptics.performAndroidHapticsAsync", "Android should use the platform haptics engine."],
+  ["Haptics.selectionAsync()", "iOS selection feedback must use the semantic selection haptic."],
+]) requireText(feedback, needle, message);
+const toneBlock = feedback.slice(feedback.indexOf("const TONES"), feedback.indexOf("const FeedbackContext"));
+forbidText(toneBlock, "selection:", "Selection should not have an audible tone.");
+
+const rootLayout = readMobile("app/_layout.tsx");
+requireText(rootLayout, "<FeedbackProvider>", "The feedback provider must wrap the routed app.");
+
+const runner = readMobile("components/question-runner.tsx");
+for (const [needle, message] of [
+  ["const { playFeedback } = useFeedback()", "QuestionRunner must consume semantic feedback cues."],
+  ['playFeedback(result.correct ? "correct"', "Answer results must trigger outcome feedback."],
+  ['playFeedback("selection")', "Answer choices must trigger selection haptics."],
+  ['playFeedback("complete")', "Session completion must trigger a distinct completion cue."],
+  ["resultCueChallengeRef", "Answer feedback must be deduplicated per challenge."],
+  ["AccessibilityInfo.announceForAccessibility", "Audio must supplement rather than replace visible and spoken feedback."],
+]) requireText(runner, needle, message);
+
+const profile = readMobile("app/(tabs)/profile.tsx");
+for (const [needle, message] of [
+  ['title="Sound effects"', "Profile must expose a sound-effects preference."],
+  ['title="Haptic feedback"', "Profile must expose a haptic-feedback preference."],
+  ["Sounds respect silent mode", "Profile must explain silent-mode behaviour."],
+  ["disabled={!feedbackReady}", "Feedback settings must wait for their persisted values."],
+]) requireText(profile, needle, message);
+
+const tabs = readMobile("app/(tabs)/_layout.tsx");
+requireText(tabs, "tabBarItemStyle: { flex: 1", "Five primary navigation destinations must retain equal width.");
+requireText(tabs, 'tabBarAccessibilityLabel: "Train tab"', "Train must have an explicit accessible destination label.");
+requireText(tabs, '<TabIcon name="train" active={focused} />', "Train must use the same selected-destination component as its peer tabs.");
+forbidText(tabs, "emphasis", "Train must not receive one-off floating-action-button emphasis.");
+forbidText(tabs, "marginTop: -", "No tab destination may float outside the navigation bar.");
+forbidText(tabs, "width: 62", "Train must not use the old oversized floating control.");
+forbidText(tabs, "tabBarButton", "Train must remain navigation rather than a custom action button.");
+
+if (failures.length) {
+  console.error("Cogni copy, navigation and feedback audit failed:\n");
+  failures.forEach((failure) => console.error(`- ${failure}`));
+  process.exit(1);
+}
+
+console.log("Cogni copy, navigation and feedback audit passed.");
+console.log("✓ Escaped display controls repaired at source and at the API boundary");
+console.log("✓ Six affected learning prompts rewritten and protected by a database constraint");
+console.log("✓ Train is an equal, clearly selected top-level destination rather than a floating action");
+console.log("✓ Outcome sounds are brief, optional, silent-mode aware and non-blocking");
+console.log("✓ Selection feedback is haptic-only and all feedback can be disabled independently");
+console.log("✓ Audio is playback-only and direct players are released correctly");

@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "ui-audit": "node scripts/ui-audit.mjs",
-    "logic-audit": "node scripts/logic-audit.mjs && node scripts/backend-privilege-audit.mjs && node scripts/auth-route-audit.mjs && node scripts/monetization-audit.mjs",
+    "logic-audit": "node scripts/logic-audit.mjs && node scripts/backend-privilege-audit.mjs && node scripts/auth-route-audit.mjs && node scripts/monetization-audit.mjs && node scripts/copy-feedback-audit.mjs",
     "typecheck": "tsc --noEmit",
     "validate": "npm run lint && npm run ui-audit && npm run logic-audit && npm run typecheck",
     "doctor": "npx expo-doctor"
@@ -19,6 +19,9 @@
     "@supabase/supabase-js": "2.110.8",
     "eslint-config-expo": "~10.0.0",
     "expo": "~54.0.37",
+    "expo-audio": "~1.1.1",
+    "expo-file-system": "~19.0.24",
+    "expo-haptics": "~15.0.8",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Cogni 0.4.0's no-store-key paywall on the exact Android APK."""
+"""Exercise Cogni 0.4.0's feedback settings and no-store-key paywall."""
 
 from __future__ import annotations
 
@@ -25,6 +25,9 @@ class Node:
     text: str
     description: str
     enabled: bool
+    checked: bool
+    checkable: bool
+    class_name: str
     bounds: tuple[int, int, int, int]
 
 
@@ -50,6 +53,8 @@ def dump_ui(label: str) -> list[Node]:
     adb("shell", "uiautomator", "dump", "--compressed", remote, check=False)
     xml_text = adb("shell", "cat", remote, check=False)
     (OUT / f"window-{label}.xml").write_text(xml_text, encoding="utf-8")
+    if "\\n" in xml_text or "\\r" in xml_text or "\\t" in xml_text:
+        raise AssertionError("Visible UI contains a literal escaped control character")
     if "<hierarchy" not in xml_text:
         return []
     root = ET.fromstring(xml_text)
@@ -61,6 +66,9 @@ def dump_ui(label: str) -> list[Node]:
                 text=element.attrib.get("text", ""),
                 description=element.attrib.get("content-desc", ""),
                 enabled=element.attrib.get("enabled", "false") == "true",
+                checked=element.attrib.get("checked", "false") == "true",
+                checkable=element.attrib.get("checkable", "false") == "true",
+                class_name=element.attrib.get("class", ""),
                 bounds=tuple(int(value) for value in match.groups()),
             ))
     return nodes
@@ -102,7 +110,6 @@ def wait_for(label: str, *, timeout: float = 45, enabled: bool | None = None, sc
 
 
 def wait_for_input(label: str, *, timeout: float = 45, scroll: bool = False) -> Node:
-    """Target the accessible text-input node, not its visible field label."""
     deadline = time.time() + timeout
     last_nodes: list[Node] = []
     while time.time() < deadline:
@@ -122,6 +129,35 @@ def wait_for_input(label: str, *, timeout: float = 45, scroll: bool = False) -> 
     raise AssertionError(f"Timed out waiting for input {label!r}")
 
 
+def wait_for_switch(label: str, checked: bool, *, timeout: float = 30, scroll: bool = False) -> Node:
+    deadline = time.time() + timeout
+    last_nodes: list[Node] = []
+    while time.time() < deadline:
+        last_nodes = dump_ui("latest-switch")
+        for node in last_nodes:
+            is_switch = node.checkable or "Switch" in node.class_name
+            if is_switch and node.enabled and matches(node, label) and node.checked is checked:
+                print(f"FOUND SWITCH {label!r} checked={checked}: {node}")
+                return node
+        if scroll:
+            swipe_up()
+        else:
+            time.sleep(0.7)
+    for node in last_nodes:
+        if node.text or node.description:
+            print(node)
+    capture("missing-switch-" + slug(label))
+    raise AssertionError(f"Timed out waiting for {label!r} switch checked={checked}")
+
+
+def tap_node(node: Node) -> None:
+    left, top, right, bottom = node.bounds
+    visible_top = max(top, 1)
+    visible_bottom = min(bottom, 2338)
+    adb("shell", "input", "tap", str((left + right) // 2), str((visible_top + visible_bottom) // 2))
+    time.sleep(1.1)
+
+
 def tap(label: str, *, scroll: bool = False) -> None:
     node = wait_for(label, enabled=True, scroll=scroll)
     left, top, right, bottom = node.bounds
@@ -130,11 +166,13 @@ def tap(label: str, *, scroll: bool = False) -> None:
     if visible_bottom - visible_top < 20 and scroll:
         swipe_up()
         node = wait_for(label, enabled=True, scroll=True)
-        left, top, right, bottom = node.bounds
-        visible_top = max(top, 1)
-        visible_bottom = min(bottom, 2338)
-    adb("shell", "input", "tap", str((left + right) // 2), str((visible_top + visible_bottom) // 2))
-    time.sleep(1.1)
+    tap_node(node)
+
+
+def toggle_switch(label: str, from_value: bool, to_value: bool, *, scroll: bool = False) -> None:
+    node = wait_for_switch(label, from_value, scroll=scroll)
+    tap_node(node)
+    wait_for_switch(label, to_value)
 
 
 def input_text(label: str, value: str, *, scroll: bool = False) -> None:
@@ -165,9 +203,9 @@ def assert_no_fatal_crash() -> None:
     logs = adb("logcat", "-d", "-v", "threadtime", check=False)
     (OUT / "logcat-complete.txt").write_text(logs, encoding="utf-8")
     if "FATAL EXCEPTION" in logs and f"Process: {PACKAGE}" in logs:
-        raise AssertionError("Fatal Android exception during monetisation flow")
+        raise AssertionError("Fatal Android exception during feedback/paywall flow")
     if "JavascriptException" in logs or "Cogni startup/render error" in logs:
-        raise AssertionError("React Native failure during monetisation flow")
+        raise AssertionError("React Native failure during feedback/paywall flow")
 
 
 def main() -> int:
@@ -186,6 +224,15 @@ def main() -> int:
 
     tap("Profile")
     wait_for("Cogni Route E2E", timeout=45)
+
+    wait_for("Sound and touch", scroll=True)
+    wait_for("Brief, gentle cues reinforce selections and results.", scroll=True)
+    toggle_switch("Sound effects", True, False, scroll=True)
+    toggle_switch("Sound effects", False, True)
+    toggle_switch("Haptic feedback", True, False, scroll=True)
+    toggle_switch("Haptic feedback", False, True)
+    capture("feedback-settings")
+
     tap("Explore Cogni Pro", scroll=True)
     wait_for("Cogni Pro", timeout=45)
     wait_for("More practice. Deeper progress.", timeout=45)
@@ -211,7 +258,7 @@ def main() -> int:
     assert_absent("Reset your password")
     assert_no_fatal_crash()
     capture("pass")
-    print("PASS: exact APK showed a dismissible, fully disclosed Cogni Pro paywall with purchase controls safely disabled when store keys were absent.")
+    print("PASS: exact APK exposed persistent sound/haptic controls and a dismissible, fully disclosed no-store-key Cogni Pro paywall without visible escaped copy.")
     return 0
 
 
@@ -219,6 +266,6 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as error:
-        print(f"MONETISATION PRE-STORE E2E FAILURE: {error}")
+        print(f"FEEDBACK/PAYWALL PRE-STORE E2E FAILURE: {error}")
         capture("failure")
         raise

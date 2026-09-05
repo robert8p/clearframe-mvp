@@ -164,7 +164,6 @@ def assert_equal_navigation_destinations() -> None:
     for label in labels:
         matches_for_label = [node for node in nodes if label.casefold() in node.description.casefold()]
         if not matches_for_label:
-            # Some Android accessibility bridges expose the visible label instead.
             visible = label.removesuffix(" tab")
             matches_for_label = [node for node in nodes if node.text.casefold().strip() == visible.casefold()]
         if not matches_for_label:
@@ -245,9 +244,19 @@ def main() -> int:
     time.sleep(4)
     wait_for("Home", timeout=45)
     assert_no_literal_controls("relaunch-copy")
+
+    # Every suite in the combined exact-artifact runner owns its authentication
+    # state. Leave the app signed out so the following profile/password suite
+    # can independently prove the signed-out entry route.
+    tap("Profile")
+    wait_for("Cogni Route E2E", timeout=45)
+    tap("Sign out", scroll=True)
+    scroll_to_top()
+    wait_for("Learn smarter. Think deeper.", timeout=45)
+
     assert_no_fatal_crash()
     capture("pass")
-    print("PASS: Train is an aligned top-level destination, live question copy contains no escaped controls, and feedback settings operate without a crash.")
+    print("PASS: Train is an aligned top-level destination, live question copy contains no escaped controls, feedback settings operate without a crash, and the suite restored signed-out state.")
     return 0
 
 

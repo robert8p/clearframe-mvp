@@ -229,6 +229,17 @@ def main() -> int:
     assert_no_literal_controls("training-copy")
     capture("train-equal-navigation-clean-copy")
 
+    # Open the live first question rather than validating only the Train landing
+    # page. This reproduces the surface where escaped “\\n\\n” copy was reported.
+    wait_for("Start your check", timeout=45, scroll=True)
+    tap("Start your check", scroll=True)
+    wait_for("Starting check", timeout=45)
+    assert_no_literal_controls("training-question-copy")
+    capture("training-question-clean-copy")
+    adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
+    time.sleep(1.2)
+    wait_for("Training", timeout=45)
+
     adb("shell", "am", "force-stop", PACKAGE)
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))
     time.sleep(4)
@@ -236,7 +247,7 @@ def main() -> int:
     assert_no_literal_controls("relaunch-copy")
     assert_no_fatal_crash()
     capture("pass")
-    print("PASS: Train is an aligned top-level destination, visible copy contains no escaped controls, and feedback settings operate without a crash.")
+    print("PASS: Train is an aligned top-level destination, live question copy contains no escaped controls, and feedback settings operate without a crash.")
     return 0
 
 

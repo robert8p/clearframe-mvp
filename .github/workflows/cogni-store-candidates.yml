@@ -1,0 +1,430 @@
+name: Cogni exact store candidates
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Store candidate to build
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+  pull_request:
+    types:
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cogni-store-candidates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+  SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+
+jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.detect.outputs.should_run }}
+      requested_platform: ${{ steps.detect.outputs.requested_platform }}
+    env:
+      GOOGLE_PUBLIC_KEY: ${{ secrets.REVENUECAT_GOOGLE_PUBLIC_API_KEY }}
+      APPLE_PUBLIC_KEY: ${{ secrets.REVENUECAT_APPLE_PUBLIC_API_KEY }}
+      DISPATCH_PLATFORM: ${{ inputs.platform }}
+      EVENT_ACTION: ${{ github.event.action }}
+      PR_DRAFT: ${{ github.event.pull_request.draft }}
+    steps:
+      - name: Select only an explicitly requested, credential-ready store build
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          should_run=false
+          requested_platform=""
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            should_run=true
+            requested_platform="$DISPATCH_PLATFORM"
+            case "$requested_platform" in
+              android)
+                test -n "$GOOGLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_GOOGLE_PUBLIC_API_KEY is missing."; exit 1; }
+                ;;
+              ios)
+                test -n "$APPLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_APPLE_PUBLIC_API_KEY is missing."; exit 1; }
+                ;;
+              all)
+                test -n "$GOOGLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_GOOGLE_PUBLIC_API_KEY is missing."; exit 1; }
+                test -n "$APPLE_PUBLIC_KEY" || { echo "::error::REVENUECAT_APPLE_PUBLIC_API_KEY is missing."; exit 1; }
+                ;;
+              *)
+                echo "::error::Unknown platform selection: $requested_platform"
+                exit 1
+                ;;
+            esac
+          elif [ "$GITHUB_EVENT_NAME" = "pull_request" ] && { [ "$EVENT_ACTION" = "ready_for_review" ] || { [ "$EVENT_ACTION" = "synchronize" ] && [ "$PR_DRAFT" = "false" ]; }; }; then
+            should_run=true
+            if [ -n "$GOOGLE_PUBLIC_KEY" ] && [ -n "$APPLE_PUBLIC_KEY" ]; then
+              requested_platform=all
+            elif [ -n "$GOOGLE_PUBLIC_KEY" ]; then
+              requested_platform=android
+            elif [ -n "$APPLE_PUBLIC_KEY" ]; then
+              requested_platform=ios
+            else
+              echo "::error::Add at least one RevenueCat public SDK key before marking the monetisation PR ready for review."
+              exit 1
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "requested_platform=$requested_platform" >> "$GITHUB_OUTPUT"
+          echo "Store candidate run selected: $should_run; platform: ${requested_platform:-none}"
+
+  source-gate:
+    needs: configuration
+    if: ${{ needs.configuration.outputs.should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install exact dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Run all source gates
+        run: |
+          npx expo install --check
+          npm run lint
+          npm run ui-audit
+          npm run logic-audit
+          npm run typecheck
+
+      - name: Test server-authoritative entitlement boundary
+        working-directory: .
+        run: |
+          deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
+          deno check --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts
+          deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
+          deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/monetization_test.ts
+          deno test --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/logic_test.ts
+
+      - name: Verify immutable application identity
+        run: |
+          node - <<'NODE'
+          const app = require('./app.json').expo;
+          if (app.version !== '0.4.0') throw new Error(`Expected Cogni 0.4.0, got ${app.version}`);
+          if (app.android?.package !== 'app.gocogni.cogni') throw new Error('Unexpected Android package');
+          if (app.ios?.bundleIdentifier !== 'app.gocogni.cogni') throw new Error('Unexpected iOS bundle identifier');
+          if (app.extra?.eas?.projectId !== '24fc0fea-5e66-4365-a82c-ac668aded7d0') throw new Error('Unexpected EAS project');
+          console.log('Cogni application identity verified.');
+          NODE
+
+  android-aab:
+    needs:
+      - configuration
+      - source-gate
+    if: ${{ needs.source-gate.result == 'success' && (needs.configuration.outputs.requested_platform == 'android' || needs.configuration.outputs.requested_platform == 'all') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: ${{ secrets.REVENUECAT_GOOGLE_PUBLIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Require only public client credentials
+        run: |
+          test -n "$EXPO_TOKEN"
+          test -n "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY"
+          case "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY" in goog_*) ;; *) echo "::error::Expected a RevenueCat Google public SDK key beginning goog_."; exit 1;; esac
+
+      - name: Install exact dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Inject only the public Android RevenueCat key into the temporary build profile
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const file = 'eas.json';
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+          config.build.production.env = {
+            ...(config.build.production.env || {}),
+            EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY
+          };
+          delete config.build.production.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY;
+          fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+          NODE
+
+      - name: Prove the public Android key and Supabase configuration compile
+        run: |
+          rm -rf /tmp/cogni-android-export /tmp/cogni-android-strings.txt
+          npx expo export --platform android --output-dir /tmp/cogni-android-export --clear
+          find /tmp/cogni-android-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-android-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-android-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-android-strings.txt
+          grep -Fq "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY" /tmp/cogni-android-strings.txt
+          ! grep -Fq "REVENUECAT_SECRET_API_KEY" /tmp/cogni-android-strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_HMAC_SECRET" /tmp/cogni-android-strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_AUTHORIZATION" /tmp/cogni-android-strings.txt
+
+      - name: Build and await the signed Android App Bundle
+        run: |
+          npx eas-cli@21.7.1 build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json > /tmp/eas-android-build.json
+
+      - name: Download and inspect the exact AAB returned by EAS
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_URL=$(node - <<'NODE'
+          const fs = require('fs');
+          const parsed = JSON.parse(fs.readFileSync('/tmp/eas-android-build.json', 'utf8'));
+          const build = Array.isArray(parsed) ? parsed[0] : parsed;
+          const url = build?.artifacts?.buildUrl ?? build?.artifacts?.applicationArchiveUrl;
+          if (!url) throw new Error('EAS did not return an Android build URL');
+          process.stdout.write(url);
+          NODE
+          )
+          curl --fail --location --retry 3 "$BUILD_URL" --output /tmp/Cogni-0.4.0.aab
+          test -s /tmp/Cogni-0.4.0.aab
+          unzip -t /tmp/Cogni-0.4.0.aab >/dev/null
+
+          curl --fail --location --retry 3 \
+            https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar \
+            --output /tmp/bundletool.jar
+          java -jar /tmp/bundletool.jar validate --bundle=/tmp/Cogni-0.4.0.aab
+          java -jar /tmp/bundletool.jar dump manifest \
+            --bundle=/tmp/Cogni-0.4.0.aab \
+            --module=base \
+            --output=/tmp/aab-manifest.xml
+
+          grep -q 'package="app.gocogni.cogni"' /tmp/aab-manifest.xml
+          grep -q 'android:versionName="0.4.0"' /tmp/aab-manifest.xml
+          grep -q 'android:targetSdkVersion="36"' /tmp/aab-manifest.xml
+          grep -q 'android.permission.INTERNET' /tmp/aab-manifest.xml
+          grep -q 'com.android.vending.BILLING' /tmp/aab-manifest.xml
+          grep -Eq 'android:launchMode="singleTop"|android:launchMode="1"' /tmp/aab-manifest.xml
+
+          VERSION_CODE=$(sed -n 's/.*android:versionCode="\([0-9][0-9]*\)".*/\1/p' /tmp/aab-manifest.xml | head -1)
+          test "$VERSION_CODE" -gt 36
+
+          keytool -printcert -jarfile /tmp/Cogni-0.4.0.aab > /tmp/aab-certificate.txt
+          NORMALIZED_CERT=$(tr -d ':' < /tmp/aab-certificate.txt | tr '[:upper:]' '[:lower:]')
+          grep -q 'e0bfda379dfa0e11aee798e443ce3b33d006d83b7857062f8f639ca7f7572c7e' <<<"$NORMALIZED_CERT"
+
+          unzip -Z1 /tmp/Cogni-0.4.0.aab > /tmp/aab-files.txt
+          BUNDLE_PATH=$(awk '/(^|\/)index\.android\.bundle$/{print; exit}' /tmp/aab-files.txt)
+          test -n "$BUNDLE_PATH"
+          unzip -p /tmp/Cogni-0.4.0.aab "$BUNDLE_PATH" > /tmp/aab-index.android.bundle
+          strings -a /tmp/aab-index.android.bundle > /tmp/aab-index.android.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/aab-index.android.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/aab-index.android.strings.txt
+          grep -Fq "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY" /tmp/aab-index.android.strings.txt
+          ! grep -Fq "SUPABASE_SERVICE_ROLE_KEY" /tmp/aab-index.android.strings.txt
+          ! grep -Fq "REVENUECAT_SECRET_API_KEY" /tmp/aab-index.android.strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_HMAC_SECRET" /tmp/aab-index.android.strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_AUTHORIZATION" /tmp/aab-index.android.strings.txt
+
+          SHA256=$(sha256sum /tmp/Cogni-0.4.0.aab | awk '{print $1}')
+          mkdir -p /tmp/cogni-android-store-candidate
+          cp /tmp/Cogni-0.4.0.aab /tmp/cogni-android-store-candidate/
+          cp /tmp/eas-android-build.json /tmp/aab-manifest.xml /tmp/aab-certificate.txt /tmp/cogni-android-store-candidate/
+          printf '{"platform":"android","version":"0.4.0","versionCode":"%s","sha256":"%s","sourceCommit":"%s"}\n' \
+            "$VERSION_CODE" "$SHA256" "$SOURCE_COMMIT" > /tmp/cogni-android-store-candidate/metadata.json
+          echo "Exact Android store candidate: versionCode=$VERSION_CODE sha256=$SHA256 source=$SOURCE_COMMIT"
+
+      - name: Preserve exact Android store candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.4.0-exact-android-aab
+          path: /tmp/cogni-android-store-candidate
+          if-no-files-found: error
+          retention-days: 30
+
+  ios-ipa:
+    needs:
+      - configuration
+      - source-gate
+    if: ${{ needs.source-gate.result == 'success' && (needs.configuration.outputs.requested_platform == 'ios' || needs.configuration.outputs.requested_platform == 'all') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: ${{ secrets.REVENUECAT_APPLE_PUBLIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Require only public client credentials
+        run: |
+          test -n "$EXPO_TOKEN"
+          test -n "$EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY"
+          case "$EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY" in appl_*) ;; *) echo "::error::Expected a RevenueCat Apple public SDK key beginning appl_."; exit 1;; esac
+
+      - name: Install exact dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Inject only the public Apple RevenueCat key into the temporary build profile
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const file = 'eas.json';
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+          config.build.production.env = {
+            ...(config.build.production.env || {}),
+            EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY
+          };
+          delete config.build.production.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY;
+          fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+          NODE
+
+      - name: Prove the public Apple key and Supabase configuration compile
+        run: |
+          rm -rf /tmp/cogni-ios-export /tmp/cogni-ios-strings.txt
+          npx expo export --platform ios --output-dir /tmp/cogni-ios-export --clear
+          find /tmp/cogni-ios-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-ios-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-ios-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-ios-strings.txt
+          grep -Fq "$EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY" /tmp/cogni-ios-strings.txt
+          ! grep -Fq "REVENUECAT_SECRET_API_KEY" /tmp/cogni-ios-strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_HMAC_SECRET" /tmp/cogni-ios-strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_AUTHORIZATION" /tmp/cogni-ios-strings.txt
+
+      - name: Build and await the signed iOS archive
+        run: |
+          npx eas-cli@21.7.1 build \
+            --platform ios \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json > /tmp/eas-ios-build.json
+
+      - name: Download and inspect the exact IPA returned by EAS
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_URL=$(node - <<'NODE'
+          const fs = require('fs');
+          const parsed = JSON.parse(fs.readFileSync('/tmp/eas-ios-build.json', 'utf8'));
+          const build = Array.isArray(parsed) ? parsed[0] : parsed;
+          const url = build?.artifacts?.buildUrl ?? build?.artifacts?.applicationArchiveUrl;
+          if (!url) throw new Error('EAS did not return an iOS build URL');
+          process.stdout.write(url);
+          NODE
+          )
+          curl --fail --location --retry 3 "$BUILD_URL" --output /tmp/Cogni-0.4.0.ipa
+          test -s /tmp/Cogni-0.4.0.ipa
+          unzip -t /tmp/Cogni-0.4.0.ipa >/dev/null
+          rm -rf /tmp/cogni-ios-unpacked
+          mkdir -p /tmp/cogni-ios-unpacked
+          unzip -q /tmp/Cogni-0.4.0.ipa -d /tmp/cogni-ios-unpacked
+
+          python - <<'PY'
+          import json, plistlib
+          from pathlib import Path
+          apps = list(Path('/tmp/cogni-ios-unpacked/Payload').glob('*.app'))
+          if len(apps) != 1:
+              raise SystemExit(f'Expected one app bundle, found {len(apps)}')
+          with (apps[0] / 'Info.plist').open('rb') as handle:
+              info = plistlib.load(handle)
+          expected = {
+              'CFBundleIdentifier': 'app.gocogni.cogni',
+              'CFBundleShortVersionString': '0.4.0',
+          }
+          for key, value in expected.items():
+              if str(info.get(key)) != value:
+                  raise SystemExit(f'Unexpected {key}: {info.get(key)!r}')
+          build = str(info.get('CFBundleVersion', ''))
+          if not build.isdigit() or int(build) <= 0:
+              raise SystemExit(f'Invalid CFBundleVersion: {build!r}')
+          Path('/tmp/ios-info.json').write_text(json.dumps({
+              'bundleIdentifier': info['CFBundleIdentifier'],
+              'version': info['CFBundleShortVersionString'],
+              'buildNumber': build,
+          }, indent=2) + '\n')
+          PY
+
+          APP_DIR=$(find /tmp/cogni-ios-unpacked/Payload -maxdepth 1 -type d -name '*.app' | head -1)
+          BUNDLE_PATH=$(find "$APP_DIR" -type f \( -name 'main.jsbundle' -o -name '*.jsbundle' \) | head -1)
+          test -n "$BUNDLE_PATH"
+          strings -a "$BUNDLE_PATH" > /tmp/ios-main.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/ios-main.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/ios-main.strings.txt
+          grep -Fq "$EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY" /tmp/ios-main.strings.txt
+          ! grep -Fq "SUPABASE_SERVICE_ROLE_KEY" /tmp/ios-main.strings.txt
+          ! grep -Fq "REVENUECAT_SECRET_API_KEY" /tmp/ios-main.strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_HMAC_SECRET" /tmp/ios-main.strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_AUTHORIZATION" /tmp/ios-main.strings.txt
+
+          SHA256=$(sha256sum /tmp/Cogni-0.4.0.ipa | awk '{print $1}')
+          BUILD_NUMBER=$(python -c 'import json; print(json.load(open("/tmp/ios-info.json"))["buildNumber"])')
+          mkdir -p /tmp/cogni-ios-store-candidate
+          cp /tmp/Cogni-0.4.0.ipa /tmp/cogni-ios-store-candidate/
+          cp /tmp/eas-ios-build.json /tmp/ios-info.json /tmp/cogni-ios-store-candidate/
+          printf '{"platform":"ios","version":"0.4.0","buildNumber":"%s","sha256":"%s","sourceCommit":"%s"}\n' \
+            "$BUILD_NUMBER" "$SHA256" "$SOURCE_COMMIT" > /tmp/cogni-ios-store-candidate/metadata.json
+          echo "Exact iOS store candidate: build=$BUILD_NUMBER sha256=$SHA256 source=$SOURCE_COMMIT"
+
+      - name: Preserve exact iOS store candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.4.0-exact-ios-ipa
+          path: /tmp/cogni-ios-store-candidate
+          if-no-files-found: error
+          retention-days: 30

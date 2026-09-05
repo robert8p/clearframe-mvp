@@ -17,7 +17,13 @@ function TabGlyph({ name, color }: { name: TabGlyphName; color: string }) {
   }
 
   if (name === "train") {
-    return <View style={{ width: 0, height: 0, borderTopWidth: 7, borderBottomWidth: 7, borderLeftWidth: 11, borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: color, marginLeft: 3 }} />;
+    return (
+      <View style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: color, alignItems: "center", justifyContent: "center" }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+        </View>
+      </View>
+    );
   }
 
   if (name === "progress") {
@@ -47,7 +53,7 @@ function TabGlyph({ name, color }: { name: TabGlyphName; color: string }) {
   );
 }
 
-function TabIcon({ name, active, emphasis = false }: { name: TabGlyphName; active: boolean; emphasis?: boolean }) {
+function TabIcon({ name, active }: { name: TabGlyphName; active: boolean }) {
   const reducedMotion = useReducedMotion();
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -58,32 +64,32 @@ function TabIcon({ name, active, emphasis = false }: { name: TabGlyphName; activ
       return;
     }
     Animated.sequence([
-      Animated.spring(scale, { toValue: emphasis ? 1.08 : 1.06, damping: 12, stiffness: 250, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, damping: 15, stiffness: 220, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1.045, damping: 14, stiffness: 260, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, damping: 16, stiffness: 230, useNativeDriver: true }),
     ]).start();
-  }, [active, emphasis, reducedMotion, scale]);
+  }, [active, reducedMotion, scale]);
 
-  const color = active ? colors.cyan : colors.soft;
-
-  if (emphasis) {
-    return (
-      <Animated.View accessible={false} style={{ width: 50, height: 36, alignItems: "center", justifyContent: "center", transform: [{ scale }] }}>
-        <LinearGradient
-          colors={active ? ["#00b8ff", colors.violet, "#b83bff"] : ["rgba(0,184,255,.34)", "rgba(107,92,255,.44)", "rgba(184,59,255,.34)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ width: 48, height: 34, borderRadius: 17, borderWidth: 1, borderColor: active ? "rgba(207,243,255,.72)" : "rgba(107,130,210,.72)", alignItems: "center", justifyContent: "center", boxShadow: active ? "0 5px 18px rgba(72,105,255,.34)" : "0 3px 12px rgba(72,105,255,.16)" }}
-        >
-          <TabGlyph name="train" color={colors.white} />
-        </LinearGradient>
-      </Animated.View>
-    );
-  }
+  const glyph = <TabGlyph name={name} color={active ? colors.white : colors.soft} />;
 
   return (
-    <Animated.View accessible={false} style={{ minWidth: 30, height: 30, alignItems: "center", justifyContent: "center", transform: [{ scale }] }}>
-      <TabGlyph name={name} color={color} />
-      {active ? <View style={{ position: "absolute", bottom: -4, width: 4, height: 4, borderRadius: 4, backgroundColor: colors.cyan }} /> : null}
+    <Animated.View
+      accessible={false}
+      style={{ width: 48, height: 32, alignItems: "center", justifyContent: "center", transform: [{ scale }] }}
+    >
+      {active ? (
+        <LinearGradient
+          colors={["rgba(0,184,255,.78)", "rgba(107,92,255,.82)", "rgba(184,59,255,.72)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ width: 44, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "rgba(207,243,255,.46)", alignItems: "center", justifyContent: "center" }}
+        >
+          {glyph}
+        </LinearGradient>
+      ) : (
+        <View style={{ width: 44, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" }}>
+          {glyph}
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -107,23 +113,23 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.cyan,
         tabBarInactiveTintColor: colors.soft,
         tabBarHideOnKeyboard: true,
-        tabBarItemStyle: { paddingTop: 2 },
+        tabBarItemStyle: { flex: 1, paddingTop: 3 },
         tabBarStyle: {
           backgroundColor: "rgba(8,12,30,.985)",
           borderTopColor: "rgba(83,105,165,.48)",
           height: 70 + bottomInset,
-          paddingTop: 7,
+          paddingTop: 6,
           paddingBottom: bottomInset,
           boxShadow: "0 -8px 28px rgba(0,0,0,.18)",
         },
-        tabBarLabelStyle: { fontSize: 11.5, lineHeight: 15, fontWeight: "800", paddingTop: 2 },
+        tabBarLabelStyle: { fontSize: 11.5, lineHeight: 15, fontWeight: "800", paddingTop: 1 },
       }}
     >
-      <Tabs.Screen name="home" options={{ title: "Home", tabBarAccessibilityLabel: "Home", tabBarIcon: ({ focused }) => <TabIcon name="home" active={focused} /> }} />
-      <Tabs.Screen name="skills" options={{ title: "Skills", tabBarAccessibilityLabel: "Skills", tabBarIcon: ({ focused }) => <TabIcon name="skills" active={focused} /> }} />
-      <Tabs.Screen name="train" options={{ title: "Train", tabBarAccessibilityLabel: "Train", headerShown: false, tabBarLabelStyle: { color: colors.cyan, fontSize: 12, lineHeight: 15, fontWeight: "900", paddingTop: 1 }, tabBarIcon: ({ focused }) => <TabIcon name="train" active={focused} emphasis /> }} />
-      <Tabs.Screen name="progress" options={{ title: "Progress", tabBarAccessibilityLabel: "Progress", tabBarIcon: ({ focused }) => <TabIcon name="progress" active={focused} /> }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile", tabBarAccessibilityLabel: "Profile", tabBarIcon: ({ focused }) => <TabIcon name="profile" active={focused} /> }} />
+      <Tabs.Screen name="home" options={{ title: "Home", tabBarAccessibilityLabel: "Home tab", tabBarIcon: ({ focused }) => <TabIcon name="home" active={focused} /> }} />
+      <Tabs.Screen name="skills" options={{ title: "Skills", tabBarAccessibilityLabel: "Skills tab", tabBarIcon: ({ focused }) => <TabIcon name="skills" active={focused} /> }} />
+      <Tabs.Screen name="train" options={{ title: "Train", tabBarAccessibilityLabel: "Train tab", headerShown: false, tabBarIcon: ({ focused }) => <TabIcon name="train" active={focused} /> }} />
+      <Tabs.Screen name="progress" options={{ title: "Progress", tabBarAccessibilityLabel: "Progress tab", tabBarIcon: ({ focused }) => <TabIcon name="progress" active={focused} /> }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile", tabBarAccessibilityLabel: "Profile tab", tabBarIcon: ({ focused }) => <TabIcon name="profile" active={focused} /> }} />
     </Tabs>
   );
 }

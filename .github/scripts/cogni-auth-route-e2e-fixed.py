@@ -52,10 +52,10 @@ def install_reliable_automation(module: ModuleType) -> None:
     def tap(label: str, *, enabled: bool | None = True, scroll: bool = False) -> None:
         """Tap a labelled control without confusing it with surrounding copy.
 
-        Android system dialogs expose their buttons as enabled text-only nodes and
-        may omit both `clickable` and content-description metadata. Exact label
-        matches are therefore accepted even when those optional flags are absent;
-        partial matches still require a known interactive node.
+        Prefer an exact interactive accessibility node when visible text and its
+        associated switch/button share the same label. Android system dialogs can
+        expose buttons as enabled text-only nodes, so an exact non-interactive
+        match remains the second-choice fallback.
         """
         needle = label.casefold().strip()
         deadline = time.time() + 40
@@ -69,7 +69,8 @@ def install_reliable_automation(module: ModuleType) -> None:
             ]
             exact = [item for item in enabled_nodes if needle in values(item) and needle != ""]
             interactive = [item for item in enabled_nodes if is_interactive(item)]
-            candidates = exact or [item for item in interactive if matches(item, label)]
+            exact_interactive = [item for item in exact if is_interactive(item)]
+            candidates = exact_interactive or exact or [item for item in interactive if matches(item, label)]
             if candidates:
                 node = candidates[0]
                 left, top, right, bottom = node.bounds

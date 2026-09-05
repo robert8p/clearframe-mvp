@@ -11,6 +11,7 @@ const forbidText = (source, needle, message) => { if (source.includes(needle)) f
 
 const packageJson = JSON.parse(readMobile("package.json"));
 for (const [dependency, expected] of Object.entries({
+  "expo-asset": "~12.0.13",
   "expo-audio": "~1.1.1",
   "expo-file-system": "~19.0.24",
   "expo-haptics": "~15.0.8",
@@ -20,9 +21,21 @@ for (const [dependency, expected] of Object.entries({
   }
 }
 
-const packageLock = readMobile("package-lock.json");
-for (const dependency of ["node_modules/expo-audio", "node_modules/expo-file-system", "node_modules/expo-haptics"]) {
-  requireText(packageLock, `\"${dependency}\"`, `package-lock.json is missing ${dependency}.`);
+const packageLock = JSON.parse(readMobile("package-lock.json"));
+const lockedPackages = packageLock.packages ?? {};
+for (const dependency of ["node_modules/expo-asset", "node_modules/expo-audio", "node_modules/expo-file-system", "node_modules/expo-haptics"]) {
+  if (!lockedPackages[dependency]) failures.push(`package-lock.json is missing ${dependency}.`);
+}
+if (lockedPackages["node_modules/expo-asset"]?.version !== "12.0.13") {
+  failures.push(`Top-level expo-asset must be 12.0.13 for Expo SDK 54; found ${lockedPackages["node_modules/expo-asset"]?.version ?? "missing"}.`);
+}
+if (!String(lockedPackages["node_modules/expo-modules-core"]?.version ?? "").startsWith("3.0.")) {
+  failures.push(`expo-modules-core must remain on the Expo SDK 54 3.0.x ABI; found ${lockedPackages["node_modules/expo-modules-core"]?.version ?? "missing"}.`);
+}
+for (const [packagePath, metadata] of Object.entries(lockedPackages)) {
+  if (packagePath.includes("node_modules/expo-asset") && String(metadata?.version ?? "").startsWith("57.")) {
+    failures.push(`Cross-SDK expo-asset ${metadata.version} is forbidden at ${packagePath}; it crashes against Expo SDK 54 native modules.`);
+  }
 }
 
 const appConfig = JSON.parse(readMobile("app.json"));
@@ -30,8 +43,17 @@ const audioPlugin = (appConfig.expo?.plugins ?? []).find((plugin) => Array.isArr
 if (!audioPlugin || audioPlugin[1]?.microphonePermission !== false || audioPlugin[1]?.recordAudioAndroid !== false) {
   failures.push("expo-audio must remain playback-only with iOS and Android recording permissions disabled.");
 }
-if (!(appConfig.expo?.android?.blockedPermissions ?? []).includes("android.permission.RECORD_AUDIO")) {
-  failures.push("Android RECORD_AUDIO must remain explicitly blocked.");
+if (audioPlugin?.[1]?.enableBackgroundPlayback !== false || audioPlugin?.[1]?.enableBackgroundRecording !== false) {
+  failures.push("Learning feedback must not enable background playback or background recording.");
+}
+const blockedPermissions = appConfig.expo?.android?.blockedPermissions ?? [];
+for (const permission of [
+  "android.permission.RECORD_AUDIO",
+  "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+  "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+  "android.permission.POST_NOTIFICATIONS",
+]) {
+  if (!blockedPermissions.includes(permission)) failures.push(`${permission} must remain explicitly blocked.`);
 }
 
 const copy = readMobile("lib/copy.ts");
@@ -112,9 +134,10 @@ if (failures.length) {
 }
 
 console.log("Cogni copy, navigation and feedback audit passed.");
+console.log("✓ Expo SDK 54 native modules remain on one compatible ABI");
 console.log("✓ Escaped display controls repaired at source and at the API boundary");
 console.log("✓ Six affected learning prompts rewritten and protected by a database constraint");
 console.log("✓ Train is an equal, clearly selected top-level destination rather than a floating action");
 console.log("✓ Outcome sounds are brief, optional, silent-mode aware and non-blocking");
 console.log("✓ Selection feedback is haptic-only and all feedback can be disabled independently");
-console.log("✓ Audio is playback-only and direct players are released correctly");
+console.log("✓ Audio is playback-only, background audio is disabled and direct players are released correctly");

@@ -5,6 +5,10 @@ on:
     branches: [fix/cogni-ux-quality-20260906]
     paths:
       - 'mobile/**'
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'scripts/**'
       - '.github/workflows/cogni-ux-evidence.yml'
   workflow_dispatch:
 
@@ -44,10 +48,37 @@ jobs:
         run: |
           set -o pipefail
           npm run validate 2>&1 | tee /tmp/cogni-evidence/validation.txt
+          node scripts/copy-inventory.mjs --json > /tmp/cogni-evidence/copy-inventory.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cogni-ux-validation-${{ github.sha }}
-          path: /tmp/cogni-evidence/validation.txt
+          path: |
+            /tmp/cogni-evidence/validation.txt
+            /tmp/cogni-evidence/copy-inventory.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install web dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Web audience regression, lint, types and production build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/cogni-web-validation.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-web-validation-${{ github.sha }}
+          path: /tmp/cogni-web-validation.txt
           if-no-files-found: ignore
           retention-days: 14

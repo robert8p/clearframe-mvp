@@ -1,0 +1,53 @@
+name: Cogni UX evidence
+
+on:
+  push:
+    branches: [fix/cogni-ux-quality-20260906]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/cogni-ux-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cogni-ux-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Capture exact tracked source
+        run: |
+          mkdir -p /tmp/cogni-evidence
+          git archive --format=tar --output=/tmp/cogni-evidence/source.tar HEAD
+          git rev-parse HEAD > /tmp/cogni-evidence/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-ux-source-${{ github.sha }}
+          path: /tmp/cogni-evidence/
+          retention-days: 14
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install exact dependencies
+        working-directory: mobile
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Validate mobile UX and security boundaries
+        working-directory: mobile
+        run: |
+          set -o pipefail
+          npm run validate 2>&1 | tee /tmp/cogni-evidence/validation.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-ux-validation-${{ github.sha }}
+          path: /tmp/cogni-evidence/validation.txt
+          if-no-files-found: ignore
+          retention-days: 14

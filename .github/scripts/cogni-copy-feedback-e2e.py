@@ -216,13 +216,16 @@ def main() -> int:
 
     # Home must enter the first unanswered question without an intermediate landing tap.
     tap("Home")
+    wait_for("Start your check", scroll=True)
+    capture("home-primary-training-action")
     tap("Start your check", scroll=True)
     wait_for("Starting check", timeout=45)
     assert_no_literal_controls("home-direct-training-question")
     capture("home-direct-training-action")
     tap("Profile")
     wait_for("Sound and touch", timeout=45, scroll=True)
-    initial_sound = switch_state("Sound effects")
+    # Seeing the section heading does not imply that its switches are onscreen.
+    initial_sound = switch_state("Sound effects", scroll=True)
     initial_haptics = switch_state("Haptic feedback", scroll=True)
     tap("Sound effects", scroll=True)
     tap("Haptic feedback", scroll=True)
@@ -284,7 +287,7 @@ def main() -> int:
 
     assert_no_fatal_crash()
     capture("pass")
-    print("PASS: Train is an aligned top-level destination, live question copy contains no escaped controls, feedback settings operate without a crash, and the suite restored signed-out state.")
+    print("PASS: Train is an aligned top-level destination, live question copy contains no escaped controls, feedback settings persist across process restart, and the suite restored signed-out state.")
     return 0
 
 

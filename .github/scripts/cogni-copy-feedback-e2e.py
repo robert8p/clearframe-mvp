@@ -137,14 +137,21 @@ def capture(label: str) -> None:
     dump_ui(safe)
 
 
-def switch_state(label: str) -> bool:
-    candidates = [node for node in dump_ui("switch-state") if node.description.casefold().strip() == label.casefold()]
-    if not candidates:
-        raise AssertionError(f"Could not find switch {label!r}")
-    node = candidates[0]
-    if node.checked is None:
-        raise AssertionError(f"Switch {label!r} did not expose its checked state")
-    return node.checked
+def switch_state(label: str, *, scroll: bool = False, timeout: float = 45) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        candidates = [
+            node for node in dump_ui("switch-state")
+            if node.description.casefold().strip() == label.casefold() and node.checked is not None
+        ]
+        if candidates:
+            return candidates[0].checked is True
+        if scroll:
+            swipe_up()
+        else:
+            time.sleep(0.6)
+    capture("missing-switch-" + slug(label))
+    raise AssertionError(f"Could not find switch {label!r}")
 
 
 def assert_no_literal_controls(label: str) -> None:
@@ -212,13 +219,13 @@ def main() -> int:
     if switch_state("Sound effects") is not initial_sound:
         raise AssertionError("Sound-effects switch did not return to its original state")
 
-    initial_haptics = switch_state("Haptic feedback")
+    initial_haptics = switch_state("Haptic feedback", scroll=True)
     tap("Haptic feedback", scroll=True)
     time.sleep(0.5)
-    if switch_state("Haptic feedback") is initial_haptics:
+    if switch_state("Haptic feedback", scroll=True) is initial_haptics:
         raise AssertionError("Haptic-feedback switch did not change state")
     tap("Haptic feedback", scroll=True)
-    if switch_state("Haptic feedback") is not initial_haptics:
+    if switch_state("Haptic feedback", scroll=True) is not initial_haptics:
         raise AssertionError("Haptic-feedback switch did not return to its original state")
     capture("feedback-settings")
 

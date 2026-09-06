@@ -1,87 +1,227 @@
-# Cogni deployment — Expo / EAS + Supabase
+# Cogni deployment and release
 
-Cogni's active client is the Expo / React Native app in `mobile/`. Vercel is not an active build or backend target for current source.
+Last updated: 1 September 2026
 
-## Active deployment path
+## Release branches
 
-- Expo / EAS builds the iOS/Android app.
-- Supabase Auth provides identity.
-- Supabase Edge Function `mobile-api` is the trusted mobile backend.
-- Supabase Postgres stores profiles, content, sessions, answers, scores and analytics.
+- Verified rollback baseline: `main` at Cogni 0.3.3 commit `d6e3faa54360c28e1b7783d5b9e025cf8a1ed40d`
+- Monetisation candidate: `feat/cogni-0.4.0-monetisation`
+- Review: draft PR #28
 
-`vercel.json` disables Vercel Git deployments. Do not re-enable them.
+Do not overwrite or relabel the 0.3.3 evidence. Do not merge 0.4.0 until its own source, binary, runtime and store-specific gates are recorded.
 
-## Before every mobile build
+## Application identity
 
-From `mobile/` run:
+- App version: `0.4.0`
+- Android application ID: `app.gocogni.cogni`
+- iOS bundle identifier: `app.gocogni.cogni`
+- Expo / EAS project ID: `24fc0fea-5e66-4365-a82c-ac668aded7d0`
+- Supabase project: `dhklfrqhsmofqrawfdjz`
+- EAS version source: remote
+- Android release version code: must be greater than 36
 
-```bash
-npm ci
-npx expo install --check
-npm run lint
-npm run ui-audit
-npm run logic-audit
-npm run typecheck
-```
+## Database migrations
 
-All checks must pass. The maintained CI and EAS workflows also export an Android production bundle and verify that the intended Supabase URL and publishable key were actually compiled into it. This is a release gate, not merely a source-code check.
+Production contains both tracked monetisation migrations:
 
-## Development
+1. `20260825234024_cogni_monetisation_foundation.sql`
+2. `20260831190000_cogni_monetisation_hardening.sql`
 
-Create `mobile/.env` from `.env.example` and set the intended Supabase project's public URL and publishable key. There is intentionally no silent production fallback.
+The foundation creates the entitlement projection, webhook event ledger, remote configuration, support queue and service-role entitlement sync. The hardening migration adds atomic transfer reconciliation, complete daily progress-history projection, a missing webhook foreign-key index and explicit server-only support grants.
 
-```bash
-npx expo start
-```
+Migrations are idempotent where practical, but must still be applied through the Supabase migration system rather than copied into the SQL editor.
 
-## Installable Android preview
+## Edge Functions
 
-Use `.github/workflows/eas-android-preview.yml` or run from `mobile/`:
+Two functions are deployed from the matching candidate backend source:
 
-```bash
-npx eas-cli@21.7.1 build --platform android --profile preview
-```
+### `mobile-api`
 
-The preview profile creates an installable APK after the full validation suite passes. It disables EAS build caches so a replacement APK is produced from a clean native workspace.
+- Supabase JWT gateway verification is enabled.
+- The function also derives the authenticated user from the presented token before handling protected routes.
+- It includes `engine.ts`, `monetization.ts`, `progress-history.ts`, `support.ts`, `index.ts` and `deno.json`.
+- It preserves the 0.3.3 routes and adds entitlement state/sync, progress history and private support routes.
 
-## Local signed Android verification
+### `revenuecat-webhook`
 
-`mobile/eas.json` retains a `localVerification` profile for controlled use when cloud EAS build capacity is unavailable. It uses the existing remotely managed signing credentials but performs the native Android build on the local/CI machine:
+- Supabase JWT gateway verification is disabled because RevenueCat is not a Supabase user.
+- The function performs its own Authorization and HMAC signature checks before parsing or processing an event.
+- It includes `logic.ts`, `index.ts` and `deno.json`.
+- It rejects requests until all custom webhook and RevenueCat server secrets are present.
 
-```bash
-npx eas-cli@21.7.1 build \
-  --platform android \
-  --profile localVerification \
-  --local \
-  --non-interactive \
-  --output /tmp/cogni.apk
-```
+## Supabase server secrets
 
-A locally built artifact is not release-ready merely because Gradle succeeded. Before distribution, inspect the exact APK for identity, signing certificate, permissions, ABIs, 16 KB page alignment and compiled runtime configuration, then clean-install and cold-launch that same file on supported Android runtime versions. The maintained regression script is `.github/scripts/verify-cogni-apk-runtime.sh`.
+These values belong in the Supabase Edge Functions secret dashboard, never in Expo, GitHub source or a mobile bundle:
 
-## Production mobile release
+- `REVENUECAT_SECRET_API_KEY`
+- `REVENUECAT_WEBHOOK_AUTHORIZATION`
+- `REVENUECAT_WEBHOOK_HMAC_SECRET`
 
-Use the production profile in `mobile/eas.json`:
+Webhook endpoint:
 
-```bash
-npx eas-cli@21.7.1 build --platform android --profile production
-npx eas-cli@21.7.1 build --platform ios --profile production
-```
+`https://dhklfrqhsmofqrawfdjz.supabase.co/functions/v1/revenuecat-webhook`
 
-Use EAS Submit when store credentials and listings are ready.
+Keep `public.monetization_config.monetization_enabled = false` until RevenueCat, at least one selected launch store, webhook authentication and real store-installed sandbox purchases are proven.
 
-## Supabase deployment
+## Public mobile build values
 
-Database changes live in `supabase/migrations/` and should be applied in migration order. Trusted mobile backend code lives in `supabase/functions/mobile-api/` and is deployed as the authenticated `mobile-api` Edge Function.
+- `EXPO_PUBLIC_SUPABASE_URL=https://dhklfrqhsmofqrawfdjz.supabase.co`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<current publishable key>`
+- `EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY=<RevenueCat Android public SDK key>`
+- `EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY=<RevenueCat iOS public SDK key>`
 
-Before public release, Supabase Auth must allow the native deep-link scheme (`cogni://**`) for email confirmation/password recovery and leaked-password protection should be enabled.
+RevenueCat SDK keys are intentionally public platform client keys. Server keys and webhook secrets must not use `EXPO_PUBLIC_`.
 
-## Vercel decommission status
+For the exact store-candidate workflow, store the platform client keys as GitHub Actions secrets:
 
-- New Vercel Git deployments: **disabled**
-- Active product client: **Expo only**
-- Active mobile backend: **Supabase Edge Function**
-- New Expo source dependency on Vercel: **none**
-- Frozen historic Vercel runtime: may remain reachable only for older already-installed app builds until users install the Supabase-backed Expo build
+- `REVENUECAT_GOOGLE_PUBLIC_API_KEY`
+- `REVENUECAT_APPLE_PUBLIC_API_KEY`
 
-Once the replacement Expo build is installed on test devices, the old Vercel project/runtime can be deleted without affecting the new app. The Vercel connector used by this project does not expose project deletion, so that final destructive removal is a deliberate Vercel-dashboard action rather than an application-code step.
+The workflow injects only the selected public key into a temporary build profile. It never commits the value to source.
+
+The pre-store exact APK deliberately omits RevenueCat SDK keys to verify the safe no-offering state. That APK is not evidence that Play or App Store billing works.
+
+## Source quality gate
+
+`mobile-ci.yml` validates:
+
+- clean dependency install and Expo compatibility;
+- ESLint and accessibility/UI audit;
+- TypeScript;
+- auth, privilege and monetisation static audits;
+- Android bundle embedding of static Supabase values;
+- absence of server-only billing secrets in executable output;
+- `mobile-api` typecheck and behaviour tests;
+- RevenueCat webhook typecheck, HMAC, transfer and entitlement projection tests.
+
+A green source gate is not a release artifact.
+
+## Exact pre-store Android gate
+
+`cogni-0.4.0-exact-apk.yml` builds one fresh signed APK with the existing remote Cogni Android credentials and then operates on that same file:
+
+1. records the candidate source commit;
+2. checks version name `0.4.0` and version code greater than 36;
+3. verifies `app.gocogni.cogni` and the established signing certificate;
+4. verifies v2 signing, 16 KB alignment, required ABIs, target SDK and permissions;
+5. proves the production Supabase URL/key are embedded;
+6. proves server-only RevenueCat/Supabase secrets are absent;
+7. records SHA-256 and metadata;
+8. uploads the exact APK;
+9. clean-installs the downloaded artifact on Android 16;
+10. exercises Welcome, password recovery, authentication, all primary tabs, force-stop/relaunch, deep links, sign-out, signup/onboarding/account deletion and the dismissible no-store-key paywall;
+11. deletes and independently verifies deletion of its disposable test account;
+12. uploads screenshots, UI dumps and logcat evidence.
+
+If this workflow rebuilds, the old runtime evidence does not transfer to the new bytes.
+
+## Exact Google Play and TestFlight candidates
+
+`cogni-store-candidates.yml` builds the actual store archives from one immutable source commit after public RevenueCat keys and store credentials exist.
+
+Before the PR is merged:
+
+1. add the relevant GitHub Actions secret or secrets;
+2. leave monetisation disabled in production;
+3. open draft PR #28;
+4. click **Ready for review** only when the platform credentials are ready;
+5. the workflow detects the configured platform keys and runs the corresponding build;
+6. download the exact archived AAB and/or IPA evidence from that workflow run;
+7. submit those exact bytes to Play Internal Testing and/or TestFlight;
+8. do not rebuild after testing and call the replacement tested.
+
+After the workflow exists on `main`, it can also be started from **Actions → Cogni exact store candidates → Run workflow**.
+
+### Android AAB controls
+
+The workflow:
+
+- requires a RevenueCat Google public SDK key beginning `goog_`;
+- builds the EAS production Android profile as an AAB;
+- downloads the exact EAS result;
+- validates it with Bundletool;
+- checks package, version, version code, target SDK, Billing permission and `singleTop` launch mode;
+- checks the established Cogni signing certificate;
+- proves the public RevenueCat key and production Supabase values are embedded;
+- rejects server-only secrets;
+- records the AAB SHA-256 and source commit;
+- preserves the exact AAB as a GitHub Actions artifact.
+
+### iOS IPA controls
+
+The workflow:
+
+- requires a RevenueCat Apple public SDK key beginning `appl_`;
+- builds the EAS production iOS profile;
+- downloads the exact EAS result;
+- checks bundle identifier, marketing version and build number;
+- proves the public RevenueCat key and production Supabase values are embedded;
+- rejects server-only secrets;
+- records the IPA SHA-256 and source commit;
+- preserves the exact IPA as a GitHub Actions artifact.
+
+## Google Play validation
+
+After the Android app, subscriptions and RevenueCat connection are configured:
+
+- upload the exact AAB to Google Play Internal Testing or Closed Testing;
+- install Cogni from the Play test link, not by sideloading;
+- test monthly and annual purchase, cancellation, restore, reinstall, second session/device, cancellation while active, billing issue/grace where practical, expiry/revocation, no-offering and offline/error states;
+- reconcile RevenueCat customer state, Supabase entitlement state and app UI for each lifecycle case;
+- use a valid free bearer token to confirm direct premium API calls are denied.
+
+A sideloaded APK cannot prove Google Play Billing.
+
+## iOS validation
+
+After Apple Developer/App Store Connect and RevenueCat iOS configuration:
+
+- upload the exact build to App Store Connect/TestFlight;
+- install through TestFlight or an approved StoreKit sandbox route;
+- test the real monthly and annual products;
+- verify purchase, cancellation, restore, reinstall, second session/device, cancellation while active and expiry/revocation reconciliation;
+- use a valid free bearer token to confirm direct premium API calls are denied.
+
+No iOS billing status may be claimed without those tests.
+
+## Legal site
+
+`legal-pages.yml` deploys the static files under `docs/` to GitHub Pages. It is separate from the mobile runtime. Store records use the resulting Privacy, Terms, Subscription Terms, Support and account-deletion URLs.
+
+Final public store metadata must include a real operator/developer identity and signed-out support contact. Do not substitute a GitHub issue tracker. Obtain formal legal review before broad public paid launch.
+
+## Enabling monetisation
+
+Only after the selected launch stores and server lifecycle tests are healthy:
+
+1. confirm RevenueCat `default` contains exact monthly and annual packages;
+2. confirm both products attach to entitlement `pro`;
+3. confirm webhook HMAC and Authorization tests return 200 and duplicate delivery is harmless;
+4. confirm free users are denied direct protected API calls;
+5. confirm paid sandbox users receive server Pro access;
+6. enable monetisation through a reviewed Supabase migration/change;
+7. repeat a free daily-learning and paid focused-practice smoke test.
+
+## How to release future Cogni versions
+
+1. Branch from the latest verified `main`.
+2. Increase the app version and both store build numbers.
+3. Run source CI.
+4. Build, inspect and execute the exact Android APK regression candidate.
+5. Build the exact Android AAB and iOS IPA from the approved source.
+6. Install those archives through Play and TestFlight.
+7. Run free, purchase, restore, offline, lifecycle and direct-API-bypass tests.
+8. Record source commit, store build IDs, hashes, signatures and evidence.
+9. Merge only after the applicable release gates pass.
+10. Submit the already-tested store archives and confirm RevenueCat/Supabase entitlement health.
+
+## Rollback
+
+If 0.4.0 regresses the core product:
+
+- keep monetisation disabled;
+- withdraw the 0.4.0 store test build rather than altering the 0.3.3 evidence;
+- fix the feature branch and build a new version code;
+- retest the replacement exact artifact.
+
+Server entitlement tables may remain in place while disabled; they do not paywall the 0.3.3 client.

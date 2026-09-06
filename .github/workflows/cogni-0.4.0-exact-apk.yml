@@ -1,0 +1,340 @@
+name: Cogni 0.4.0 exact signed APK gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - "supabase/functions/**"
+      - "supabase/migrations/**"
+      - ".github/scripts/**"
+      - ".github/workflows/cogni-0.4.0-exact-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cogni-0.4.0-exact-apk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+  SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+
+jobs:
+  build-exact-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: ""
+      EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: ""
+      EAS_LOCAL_BUILD_SKIP_CLEANUP: "1"
+      EAS_LOCAL_BUILD_WORKINGDIR: /tmp/eas-local-build
+      EAS_LOCAL_BUILD_ARTIFACTS_DIR: /tmp/eas-local-artifacts
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android build prerequisites
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Require existing Expo credentials
+        run: test -n "$EXPO_TOKEN"
+
+      - name: Clean install and source validation
+        run: |
+          rm -rf node_modules .expo android
+          npm ci --include=dev --no-audit --no-fund
+          npx expo install --check
+          npm run lint
+          npm run ui-audit
+          npm run logic-audit
+          npm run typecheck
+
+      - name: Typecheck and test server-authoritative billing
+        working-directory: .
+        run: |
+          deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
+          deno check --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts
+          deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
+          deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/monetization_test.ts
+          deno test --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/logic_test.ts
+
+      - name: Prove production Supabase configuration is compiled
+        run: |
+          rm -rf /tmp/cogni-export /tmp/cogni-export-strings.txt
+          npx expo export --platform android --output-dir /tmp/cogni-export --clear
+          find /tmp/cogni-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-export-strings.txt
+
+      - name: Configure clean pre-store verification build
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const file = 'eas.json';
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const profile = config.build.localVerification;
+          profile.autoIncrement = true;
+          profile.cache = { disabled: true };
+          profile.env = {
+            ...(profile.env || {}),
+            EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+            EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+          };
+          delete profile.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY;
+          delete profile.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY;
+          fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+          NODE
+
+      - name: Build clean signed Cogni 0.4.0 APK locally
+        run: |
+          rm -rf /tmp/eas-local-build /tmp/eas-local-artifacts /tmp/cogni-0.4.0.apk
+          mkdir -p /tmp/eas-local-artifacts
+          npx eas-cli@21.7.1 build \
+            --platform android \
+            --profile localVerification \
+            --local \
+            --non-interactive \
+            --output /tmp/cogni-0.4.0.apk
+          test -s /tmp/cogni-0.4.0.apk
+
+      - name: Inspect exact signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/cogni-0.4.0.apk
+          unzip -t "$APK" >/dev/null
+          unzip -Z1 "$APK" > /tmp/apk-files.txt
+
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)
+
+          "$AAPT" dump badging "$APK" > /tmp/apk-badging.txt
+          "$AAPT" dump permissions "$APK" > /tmp/apk-permissions.txt
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/apk-signature.txt
+          "$ZIPALIGN" -c -P 16 4 "$APK"
+
+          grep -q "package: name='app.gocogni.cogni'" /tmp/apk-badging.txt
+          grep -q "versionName='0.4.0'" /tmp/apk-badging.txt
+          grep -q "application-label:'Cogni'" /tmp/apk-badging.txt
+          grep -q "targetSdkVersion:'36'" /tmp/apk-badging.txt
+          VERSION_CODE=$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/apk-badging.txt | head -1)
+          test "$VERSION_CODE" -gt 36
+
+          grep -q "android.permission.INTERNET" /tmp/apk-permissions.txt
+          grep -q "com.android.vending.BILLING" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.SYSTEM_ALERT_WINDOW" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.READ_EXTERNAL_STORAGE" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" /tmp/apk-permissions.txt
+          ! grep -q "android.permission.RECORD_AUDIO" /tmp/apk-permissions.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apk-signature.txt
+
+          NORMALIZED_SIGNATURE=$(tr -d ':' < /tmp/apk-signature.txt | tr '[:upper:]' '[:lower:]')
+          grep -q "e0bfda379dfa0e11aee798e443ce3b33d006d83b7857062f8f639ca7f7572c7e" <<<"$NORMALIZED_SIGNATURE"
+          grep -q '^lib/x86_64/' /tmp/apk-files.txt
+          grep -q '^lib/arm64-v8a/' /tmp/apk-files.txt
+
+          BUNDLE_PATH=$(awk '/(^|\/)index\.android\.bundle$/{print; exit}' /tmp/apk-files.txt)
+          test -n "$BUNDLE_PATH"
+          unzip -p "$APK" "$BUNDLE_PATH" > /tmp/index.android.bundle
+          strings -a /tmp/index.android.bundle > /tmp/index.android.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/index.android.strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/index.android.strings.txt
+          ! grep -Fq "SUPABASE_SERVICE_ROLE_KEY" /tmp/index.android.strings.txt
+          ! grep -Fq "SUPABASE_SECRET_KEY" /tmp/index.android.strings.txt
+          ! grep -Fq "REVENUECAT_SECRET_API_KEY" /tmp/index.android.strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_HMAC_SECRET" /tmp/index.android.strings.txt
+          ! grep -Fq "REVENUECAT_WEBHOOK_AUTHORIZATION" /tmp/index.android.strings.txt
+
+          SHA256=$(sha256sum "$APK" | awk '{print $1}')
+          mkdir -p /tmp/cogni-0.4.0-artifact
+          cp "$APK" /tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk
+          cp /tmp/apk-badging.txt /tmp/cogni-0.4.0-artifact/
+          cp /tmp/apk-permissions.txt /tmp/cogni-0.4.0-artifact/
+          cp /tmp/apk-signature.txt /tmp/cogni-0.4.0-artifact/
+          printf '{"version":"0.4.0","versionCode":"%s","sha256":"%s","sourceCommit":"%s","revenueCatStoreKeys":"intentionally_absent_for_prestore_gate"}\n' \
+            "$VERSION_CODE" "$SHA256" "$SOURCE_COMMIT" > /tmp/cogni-0.4.0-artifact/metadata.json
+          echo "Built and inspected Cogni 0.4.0 versionCode=$VERSION_CODE sha256=$SHA256 source=$SOURCE_COMMIT"
+
+      - name: Upload exact inspected APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.4.0-prestore-exact-apk
+          path: /tmp/cogni-0.4.0-artifact
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preserve local build evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.4.0-local-build-debug
+          path: /tmp/eas-local-build
+          if-no-files-found: warn
+          retention-days: 7
+
+  android-runtime:
+    needs: build-exact-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      API_LEVEL: "36"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+
+      - name: Download exact inspected APK
+        uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.4.0-prestore-exact-apk
+          path: /tmp/cogni-0.4.0-artifact
+
+      - name: Provision disposable E2E account
+        shell: bash
+        run: |
+          set -euo pipefail
+          EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
+          SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni-0.4.0-exact" | sha256sum | cut -c1-28)
+          PASSWORD="Cg${SECRET}9a"
+          export EMAIL PASSWORD
+          echo "::add-mask::$EMAIL"
+          echo "::add-mask::$PASSWORD"
+          echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD,data:{full_name:"Cogni Route E2E"}}))' > /tmp/signup-body.json
+          SIGNUP_STATUS=$(curl -sS -o /tmp/signup.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/auth/v1/signup" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/signup-body.json)
+          echo "Signup status: $SIGNUP_STATUS"
+
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' > /tmp/signin-body.json
+          SIGNIN_STATUS=$(curl -sS -o /tmp/signin.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/signin-body.json)
+          echo "Sign-in preflight status: $SIGNIN_STATUS"
+          ACCESS_TOKEN=$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("/tmp/signin.json","utf8"));process.stdout.write(j.access_token??"")')
+          test -n "$ACCESS_TOKEN"
+
+      - name: Enable KVM acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Execute exact APK and pre-store critical flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk API_LEVEL=36 bash .github/scripts/verify-cogni-apk-runtime.sh
+            APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" SUPABASE_URL="$SUPABASE_URL" SUPABASE_KEY="$SUPABASE_KEY" API_LEVEL=36 python3 .github/scripts/cogni-auth-route-e2e-fixed.py
+            APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" API_LEVEL=36 python3 .github/scripts/cogni-monetization-prestore-e2e.py
+
+      - name: Delete and verify the disposable account through Cogni API
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          export EMAIL="$E2E_EMAIL" PASSWORD="$E2E_PASSWORD"
+          node -e 'process.stdout.write(JSON.stringify({email:process.env.EMAIL,password:process.env.PASSWORD}))' > /tmp/cleanup-signin-body.json
+          SIGNIN_STATUS=$(curl -sS -o /tmp/cleanup-signin.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/cleanup-signin-body.json)
+          ACCESS_TOKEN=$(node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("/tmp/cleanup-signin.json","utf8"))}catch{};process.stdout.write(j.access_token??"")')
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "Disposable E2E account was already absent (sign-in status $SIGNIN_STATUS)."
+            exit 0
+          fi
+
+          node -e 'process.stdout.write(JSON.stringify({path:"/api/mobile/account",method:"DELETE",body:null,context:{timeZone:"UTC"}}))' > /tmp/cleanup-delete-body.json
+          DELETE_STATUS=$(curl -sS -o /tmp/cleanup-delete.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/functions/v1/mobile-api" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/cleanup-delete-body.json)
+          test "$DELETE_STATUS" = "200"
+
+          VERIFY_STATUS=$(curl -sS -o /tmp/cleanup-verify.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/cleanup-signin-body.json)
+          VERIFY_TOKEN=$(node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("/tmp/cleanup-verify.json","utf8"))}catch{};process.stdout.write(j.access_token??"")')
+          test -z "$VERIFY_TOKEN"
+          echo "Disposable E2E account deletion verified (post-delete sign-in status $VERIFY_STATUS)."
+
+      - name: Preserve Android interaction evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cogni-0.4.0-prestore-runtime-api-36
+          path: |
+            /tmp/cogni-runtime-api-36
+            /tmp/cogni-auth-route-api-36
+            /tmp/cogni-profile-password-api-36
+            /tmp/cogni-copy-feedback-api-36
+            /tmp/cogni-monetization-prestore-api-36
+          if-no-files-found: warn
+          retention-days: 14

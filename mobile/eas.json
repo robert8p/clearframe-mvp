@@ -5,10 +5,12 @@
   },
   "build": {
     "development": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "environment": "development"
     },
     "preview": {
       "distribution": "internal",
+      "environment": "preview",
       "autoIncrement": true,
       "cache": {
         "disabled": true
@@ -24,6 +26,7 @@
     },
     "localVerification": {
       "distribution": "internal",
+      "environment": "preview",
       "credentialsSource": "remote",
       "autoIncrement": false,
       "env": {
@@ -35,6 +38,7 @@
       }
     },
     "production": {
+      "environment": "production",
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://dhklfrqhsmofqrawfdjz.supabase.co",

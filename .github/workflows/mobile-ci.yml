@@ -6,16 +6,20 @@ on:
     paths:
       - "mobile/**"
       - "supabase/functions/mobile-api/**"
+      - "supabase/functions/revenuecat-webhook/**"
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
       - ".github/workflows/eas-android-preview.yml"
+      - ".github/workflows/cogni-0.4.0-exact-apk.yml"
   pull_request:
     paths:
       - "mobile/**"
       - "supabase/functions/mobile-api/**"
+      - "supabase/functions/revenuecat-webhook/**"
       - "supabase/migrations/**"
       - ".github/workflows/mobile-ci.yml"
       - ".github/workflows/eas-android-preview.yml"
+      - ".github/workflows/cogni-0.4.0-exact-apk.yml"
 
 jobs:
   mobile-validation:
@@ -41,24 +45,59 @@ jobs:
         run: npm run lint
       - name: UI quality audit
         run: npm run ui-audit
-      - name: Logic and security audit
+      - name: Logic, privilege, auth and monetisation audits
         run: npm run logic-audit
       - name: TypeScript
         run: npm run typecheck
+      - name: Monetisation client secret boundary
+        working-directory: .
+        run: |
+          if grep -R -n -E 'REVENUECAT_(SECRET_API_KEY|WEBHOOK_HMAC_SECRET|WEBHOOK_AUTHORIZATION)|SUPABASE_(SERVICE_ROLE_KEY|SECRET_KEYS)|sb_secret_' mobile/app mobile/components mobile/lib; then
+            echo 'Server-only secret reference found in executable mobile source.' >&2
+            exit 1
+          fi
+          if grep -R -n -F 'process.env[' mobile/app mobile/components mobile/lib; then
+            echo 'Dynamic Expo environment lookup found in executable mobile source.' >&2
+            exit 1
+          fi
+          grep -Fq 'EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY' mobile/lib/purchases.ts
+          grep -Fq 'EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY' mobile/lib/purchases.ts
       - name: Production Android bundle configuration smoke
         env:
           EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+          EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: goog_ci_public_key
+          EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: appl_ci_public_key
+          REVENUECAT_SECRET_API_KEY: rc_server_secret_SENTINEL_must_never_ship_8f31
+          REVENUECAT_WEBHOOK_HMAC_SECRET: rc_hmac_SENTINEL_must_never_ship_8f31
+          REVENUECAT_WEBHOOK_AUTHORIZATION: Bearer_rc_webhook_SENTINEL_must_never_ship_8f31
+          SUPABASE_SECRET_KEYS: sb_secret_SENTINEL_must_never_ship_8f31
         run: |
           rm -rf /tmp/cogni-export /tmp/cogni-export-strings.txt
           CI=1 npx expo export --platform android --output-dir /tmp/cogni-export --clear
           find /tmp/cogni-export -type f -print0 | xargs -0 strings -a > /tmp/cogni-export-strings.txt
-          grep -Fq "https://dhklfrqhsmofqrawfdjz.supabase.co" /tmp/cogni-export-strings.txt
-          grep -Fq "sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b" /tmp/cogni-export-strings.txt
-          echo "Production Supabase client configuration is embedded in the Android bundle."
-      - name: Supabase Edge typecheck
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-export-strings.txt
+          grep -Fq "$EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY" /tmp/cogni-export-strings.txt
+          for sentinel in "$REVENUECAT_SECRET_API_KEY" "$REVENUECAT_WEBHOOK_HMAC_SECRET" "$REVENUECAT_WEBHOOK_AUTHORIZATION" "$SUPABASE_SECRET_KEYS"; do
+            if grep -Fq "$sentinel" /tmp/cogni-export-strings.txt; then
+              echo 'A server-only sentinel value was embedded in the Android JavaScript bundle.' >&2
+              exit 1
+            fi
+          done
+          echo "Production Supabase and public RevenueCat client configuration are embedded without server secret values."
+      - name: Supabase mobile API typecheck
         working-directory: .
         run: deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
+      - name: RevenueCat webhook typecheck
+        working-directory: .
+        run: deno check --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts
       - name: Context engine behavioral tests
         working-directory: .
         run: deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
+      - name: Server-authoritative monetisation tests
+        working-directory: .
+        run: deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/monetization_test.ts
+      - name: RevenueCat webhook security tests
+        working-directory: .
+        run: deno test --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/logic_test.ts

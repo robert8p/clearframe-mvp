@@ -8,6 +8,16 @@ API_LEVEL="${API_LEVEL:-unknown}"
 OUT="/tmp/cogni-runtime-api-${API_LEVEL}"
 mkdir -p "$OUT"
 
+AAPT="$(find "${ANDROID_HOME:?ANDROID_HOME is required}/build-tools" -type f -name aapt | sort -V | tail -1)"
+test -x "$AAPT"
+"$AAPT" dump permissions "$APK_PATH" > "$OUT/apk-permissions.txt"
+grep -q "android.permission.INTERNET" "$OUT/apk-permissions.txt"
+grep -q "com.android.vending.BILLING" "$OUT/apk-permissions.txt"
+! grep -q "android.permission.RECORD_AUDIO" "$OUT/apk-permissions.txt"
+! grep -q "android.permission.FOREGROUND_SERVICE_MICROPHONE" "$OUT/apk-permissions.txt"
+! grep -q "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" "$OUT/apk-permissions.txt"
+! grep -q "android.permission.POST_NOTIFICATIONS" "$OUT/apk-permissions.txt"
+
 adb wait-for-device
 adb shell settings put global window_animation_scale 0 || true
 adb shell settings put global transition_animation_scale 0 || true
@@ -106,4 +116,4 @@ after_launch_evidence() {
 after_launch_evidence "first-cold-launch" 60
 after_launch_evidence "second-cold-launch" 30
 
-echo "PASS: Cogni installed cleanly, rendered the welcome screen, remained foreground/alive for 60 seconds, and survived a second cold launch on Android API $API_LEVEL."
+echo "PASS: Cogni installed cleanly without microphone/background-audio permissions, rendered the welcome screen, remained foreground/alive for 60 seconds, and survived a second cold launch on Android API $API_LEVEL."

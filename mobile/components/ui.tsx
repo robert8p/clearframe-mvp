@@ -62,26 +62,13 @@ export const Screen = React.forwardRef<ScrollView, ScreenProps>(function Screen(
 });
 
 export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  const reducedMotion = useReducedMotion();
-  const enter = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
-
-  useEffect(() => {
-    if (reducedMotion) {
-      enter.stopAnimation();
-      enter.setValue(1);
-      return;
-    }
-    const animation = Animated.spring(enter, { toValue: 1, damping: 18, stiffness: 110, useNativeDriver: true });
-    animation.start();
-    return () => animation.stop();
-  }, [enter, reducedMotion]);
-
-  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
+  // Learning content must be readable before any animation runs. In particular,
+  // Android with animations disabled must never strand a question at opacity 0.
   return (
-    <Animated.View style={[{ position: "relative", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel, borderRadius: 24, borderCurve: "continuous", padding: 18, gap: 11, overflow: "hidden", boxShadow: "0 10px 34px rgba(0,0,0,0.18)", opacity: enter, transform: [{ translateY }] }, style]}>
+    <View style={[{ position: "relative", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel, borderRadius: 24, borderCurve: "continuous", padding: 18, gap: 11, overflow: "hidden", boxShadow: "0 10px 34px rgba(0,0,0,0.18)" }, style]}>
       <LinearGradient pointerEvents="none" colors={["rgba(48,61,130,0.18)", "rgba(14,20,48,0.04)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
       {children}
-    </Animated.View>
+    </View>
   );
 }
 

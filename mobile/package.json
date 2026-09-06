@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "validate": "npm run lint && npm run ui-audit && npm run logic-audit && npm run typecheck",
     "doctor": "npx expo-doctor",
-    "test:ux": "node --test scripts/ux-behavior.test.mjs",
+    "test:ux": "node --test scripts/*.test.mjs",
     "copy-inventory": "node scripts/copy-inventory.mjs"
   },
   "dependencies": {

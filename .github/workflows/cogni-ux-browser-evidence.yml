@@ -34,9 +34,19 @@ jobs:
       - name: Start production server and verify real browser layouts
         run: |
           set -euo pipefail
+          exec > >(tee /tmp/cogni-browser/actions.txt) 2>&1
           npm run start > /tmp/cogni-browser/server.txt 2>&1 &
           SERVER_PID=$!
-          trap 'agent-browser close || true; kill "$SERVER_PID" || true' EXIT
+          finish() {
+            agent-browser get url > /tmp/cogni-browser/final-url.txt || true
+            agent-browser snapshot -i > /tmp/cogni-browser/final-snapshot.txt || true
+            agent-browser screenshot --full /tmp/cogni-browser/final-page.png || true
+            agent-browser errors > /tmp/cogni-browser/browser-errors.txt || true
+            agent-browser console > /tmp/cogni-browser/browser-console.txt || true
+            agent-browser close || true
+            kill "$SERVER_PID" || true
+          }
+          trap finish EXIT
           for n in $(seq 1 40); do curl --silent --fail http://127.0.0.1:3000/ > /dev/null && break; sleep 1; done
           for width in 320 390 430 1280; do
             agent-browser set viewport "$width" 844
@@ -46,13 +56,13 @@ jobs:
             agent-browser screenshot --full "/tmp/cogni-browser/home-${width}.png"
             agent-browser eval 'if(!document.body.innerText.includes("Cogni") || !document.body.innerText.includes("Get started")) throw new Error("Missing visible welcome content"); if(window.innerWidth>850 && !document.body.innerText.includes("Train your thinking")) throw new Error("Missing desktop headline"); if(document.querySelector("[data-nextjs-dialog],.vite-error-overlay")) throw new Error("Framework error overlay"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Horizontal overflow: "+document.documentElement.scrollWidth+" / "+window.innerWidth); "Home passed"'
             agent-browser click '.cg-public-phone a[href="/signup"]'
-            agent-browser wait --url '**/signup'
+            agent-browser wait --fn 'window.location.pathname === "/signup"'
             agent-browser wait --load networkidle
             agent-browser snapshot -i > "/tmp/cogni-browser/signup-${width}.txt"
             agent-browser screenshot --full "/tmp/cogni-browser/signup-${width}.png"
             agent-browser eval 'if(!document.querySelector("#auth-email") || !document.querySelector("#auth-password")) throw new Error("Signup form missing"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Signup horizontal overflow"); "Signup navigation passed"'
             agent-browser click '.cg-auth-switch a[href="/login"]'
-            agent-browser wait --url '**/login'
+            agent-browser wait --fn 'window.location.pathname === "/login"'
             agent-browser wait --load networkidle
             agent-browser screenshot --full "/tmp/cogni-browser/login-${width}.png"
             agent-browser eval 'if(!document.querySelector("#auth-email") || !document.querySelector("#auth-password")) throw new Error("Login form missing"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Login horizontal overflow"); "Login navigation passed"'

@@ -226,7 +226,7 @@ def main() -> int:
     wait_for("Cogni Route E2E", timeout=45)
 
     wait_for("Sound and touch", scroll=True)
-    wait_for("Brief, gentle cues reinforce selections and results.", scroll=True)
+    wait_for("Short sounds mark answer results and session completion.", scroll=True)
     toggle_switch("Sound effects", True, False, scroll=True)
     toggle_switch("Sound effects", False, True)
     toggle_switch("Haptic feedback", True, False, scroll=True)

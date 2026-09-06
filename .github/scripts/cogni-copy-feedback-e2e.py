@@ -235,6 +235,9 @@ def main() -> int:
     if switch_state("Haptic feedback", scroll=True) is initial_haptics:
         raise AssertionError("Haptic-feedback switch did not change state")
 
+    if initial_sound and initial_haptics:
+        wait_for("Preview feedback", enabled=False, scroll=True)
+
     # Verify the CHANGED preferences survive a real process restart, not just a rerender.
     adb("shell", "am", "force-stop", PACKAGE)
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))
@@ -252,6 +255,8 @@ def main() -> int:
         raise AssertionError("Sound preference was not restored after testing")
     if switch_state("Haptic feedback", scroll=True) is not initial_haptics:
         raise AssertionError("Haptic preference was not restored after testing")
+    wait_for("Preview feedback", enabled=True, scroll=True)
+    tap("Preview feedback", scroll=True)
     capture("feedback-settings")
 
     tap("Train")
@@ -269,6 +274,30 @@ def main() -> int:
     adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
     time.sleep(1.2)
     wait_for_train_landing()
+
+    # Exercise a real answer and the audio/feedback path, not only the landing UI.
+    tap("Start your check", scroll=True)
+    wait_for("Choose one", timeout=45)
+    dump_ui("answer-options")
+    option_tree = ET.fromstring((OUT / "window-answer-options.xml").read_text())
+    options = [element for element in option_tree.iter("node")
+               if element.attrib.get("class") == "android.widget.Button"
+               and element.attrib.get("content-desc")
+               and element.attrib.get("content-desc") != "Submit answer"]
+    if not options:
+        raise AssertionError("No selectable answer in the starting check")
+    tap(options[0].attrib["content-desc"])
+    tap("Submit answer", scroll=True)
+    wait_for("Next question", timeout=60, scroll=True)
+    assert_no_literal_controls("submitted-answer-feedback")
+    capture("submitted-answer-feedback")
+    tap("Next question", scroll=True)
+    wait_for("2 of", timeout=45)
+    capture("second-question")
+    tap("Home")
+    tap("Continue starting check", scroll=True)
+    wait_for("2 of", timeout=45)
+    capture("resumed-second-question")
 
     adb("shell", "am", "force-stop", PACKAGE)
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))

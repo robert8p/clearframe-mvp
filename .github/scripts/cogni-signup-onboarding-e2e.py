@@ -160,7 +160,7 @@ def main() -> int:
     input_text("Password", PASSWORD, scroll=True)
     tap("Create account", scroll=True)
 
-    wait_for("What kind of learning context fits you?", timeout=60)
+    wait_for("Which situations matter to you?", timeout=60)
     tap("Continue to Cogni", scroll=True)
     wait_for("Choose a learning context first.")
     scroll_to_top()

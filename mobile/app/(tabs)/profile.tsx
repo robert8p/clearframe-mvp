@@ -22,6 +22,7 @@ import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from "@/lib/legal";
 import { useProGate } from "@/lib/pro-gate";
 import { supabase } from "@/lib/supabase";
 import { colors, gradients } from "@/lib/theme";
+import appConfig from "../../app.json";
 import type { MobileProfileResponse } from "@/lib/types";
 import { ActionLink, Body, Card, Eyebrow, ErrorState, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
 
@@ -68,7 +69,7 @@ function PreferenceRow({
 export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { isPro, entitlement, billingStatus, managementUrl, restore, openPaywall } = useProGate();
-  const { ready: feedbackReady, soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled } = useFeedback();
+  const { ready: feedbackReady, soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled, playFeedback } = useFeedback();
   const [data, setData] = useState<MobileProfileResponse | null>(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
   const [name, setName] = useState(""); const [functionArea, setFunctionArea] = useState(""); const [industry, setIndustry] = useState(""); const [goal, setGoal] = useState("");
   const [studyStage, setStudyStage] = useState(""); const [responsibilityScope, setResponsibilityScope] = useState(""); const [organisationScale, setOrganisationScale] = useState("");
@@ -183,6 +184,7 @@ export default function ProfileScreen() {
         <View style={{ height: 1, backgroundColor: colors.line }} />
         <PreferenceRow title="Haptic feedback" description="Gentle touch feedback for selections and results." value={hapticsEnabled} disabled={!feedbackReady} onValueChange={setHapticsEnabled} />
       </View>
+      <PrimaryButton label="Preview feedback" secondary disabled={!feedbackReady || (!soundEnabled && !hapticsEnabled)} accessibilityHint="Try your current sound and haptic settings." onPress={() => playFeedback("complete")} />
     </Card>
 
     <Card style={{ borderColor: isPro ? "rgba(0,229,255,.36)" : colors.line }}>
@@ -225,5 +227,6 @@ export default function ProfileScreen() {
       <PrimaryButton label="Sign out" secondary onPress={() => void logout()} />
       <PrimaryButton label={busy ? "Working…" : "Delete account"} secondary disabled={busy} onPress={confirmDeleteAccount} />
     </Card>
+    <Text selectable style={{ color: colors.soft, fontSize: 12, lineHeight: 18, textAlign: "center" }}>Cogni {appConfig.expo.version} · Test preview</Text>
   </Screen>;
 }

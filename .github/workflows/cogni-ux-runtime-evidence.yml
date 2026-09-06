@@ -1,0 +1,148 @@
+name: Cogni UX exact-build runtime evidence
+
+on:
+  push:
+    branches: [fix/cogni-ux-quality-20260906]
+    paths:
+      - '.github/workflows/cogni-ux-runtime-evidence.yml'
+      - '.github/scripts/cogni-copy-feedback-e2e.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cogni-ux-runtime-evidence
+  cancel-in-progress: true
+
+env:
+  APK_SOURCE: 5bef0126bee8b1229f510fc1e9efc279118afbb3
+  APK_SHA256: 8990dcda739b025e91662d26f4fad2fa698291d9a001ad73cb3dc33a2bb5f35a
+  SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+  SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+  API_LEVEL: '36'
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Prove only test tooling changed since the signed build
+        run: |
+          git diff --exit-code "$APK_SOURCE" HEAD -- . ':(exclude).github'
+          python3 -m py_compile .github/scripts/cogni-copy-feedback-e2e.py
+          mkdir -p /tmp/cogni-runtime-retest
+          git rev-parse HEAD > /tmp/cogni-runtime-retest/test-source.txt
+          printf '%s\n' "$APK_SOURCE" > /tmp/cogni-runtime-retest/application-source.txt
+      - name: Download the already signed and inspected APK, without rebuilding
+        uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.4.0-prestore-exact-apk
+          path: /tmp/cogni-0.4.0-artifact
+          run-id: 34057468312
+          github-token: ${{ github.token }}
+      - name: Check exact APK bytes and create disposable test identity
+        run: |
+          printf '%s  %s\n' "$APK_SHA256" /tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk | sha256sum --check
+          EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
+          PASSWORD="Cg$(openssl rand -hex 14)9a"
+          echo "::add-mask::$EMAIL"
+          echo "::add-mask::$PASSWORD"
+          echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+          echo 'APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk' >> "$GITHUB_ENV"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test actual preferences, training navigation, account and paywall flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            python3 -u - <<'PY' 2>&1 | tee /tmp/cogni-runtime-retest/interaction-results.txt
+            import os, pathlib
+            path = pathlib.Path('.github/scripts/cogni-auth-route-e2e-fixed.py').resolve()
+            source = path.read_text()
+            marker = '\nfor suite_path in SUITES:'
+            assert source.count(marker) == 1
+            # Reuse the tested interaction helpers without rerunning the already-passed auth suite.
+            helpers = {'__file__': str(path), '__name__': 'cogni_runtime_helpers'}
+            exec(compile(source.split(marker)[0], str(path), 'exec'), helpers)
+            load, install = helpers['load_suite'], helpers['install_reliable_automation']
+            main = load(path.parent / 'cogni-auth-main-flow.py')
+            status, body = main.http_json(main.SUPABASE_URL + '/auth/v1/signup', 'POST', {'email': main.EMAIL, 'password': main.PASSWORD, 'data': {'full_name': 'Cogni Route E2E'}}, {'apikey': main.SUPABASE_KEY, 'Authorization': 'Bearer ' + main.SUPABASE_KEY})
+            assert status == 200, f'Disposable signup failed: {status}'
+            main.provision_profile()
+            main.adb('uninstall', main.PACKAGE, check=False)
+            print(main.adb('install', main.APK_PATH), flush=True)
+            main.adb('shell', 'pm', 'clear', main.PACKAGE)
+            for name in ['cogni-copy-feedback-e2e.py', 'cogni-profile-password-e2e.py', 'cogni-signup-onboarding-e2e.py']:
+                print('RUNNING: ' + name, flush=True)
+                module = load(path.parent / name)
+                install(module)
+                assert module.main() in (None, 0)
+                print('PASSED: ' + name, flush=True)
+            print('PASS: corrected copy, restart persistence, profile/password and signup/account-deletion suites on exact build 53.', flush=True)
+            PY
+            test "${PIPESTATUS[0]}" -eq 0
+            python3 -u .github/scripts/cogni-monetization-prestore-e2e.py 2>&1 | tee /tmp/cogni-runtime-retest/monetisation-results.txt
+            test "${PIPESTATUS[0]}" -eq 0
+      - name: Delete both disposable accounts and verify sign-in rejection
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          from pathlib import Path
+          url, key = os.environ['SUPABASE_URL'], os.environ['SUPABASE_KEY']
+          def post(path, payload, token=None):
+              req=urllib.request.Request(url+path, data=json.dumps(payload).encode(), headers={'apikey':key,'Authorization':'Bearer '+(token or key),'Content-Type':'application/json'}, method='POST')
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response: return response.status,json.load(response)
+              except urllib.error.HTTPError as error: return error.code,json.load(error)
+          results=[]
+          base=os.environ.get('E2E_EMAIL')
+          if base:
+              for email in [base,base.replace('.route.','.signup.')]:
+                  status,body=post('/auth/v1/token?grant_type=password', {'email':email,'password':os.environ['E2E_PASSWORD']})
+                  token=body.get('access_token')
+                  if token:
+                      status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/account','method':'DELETE','body':None,'context':{'timeZone':'UTC'}},token)
+                      assert status==200, 'Disposable account deletion failed'
+                      status,body=post('/auth/v1/token?grant_type=password',{'email':email,'password':os.environ['E2E_PASSWORD']})
+                      assert not body.get('access_token'), 'Deleted account can still sign in'
+                      results.append('Deleted through Cogni API; sign-in rejected.')
+                  else:
+                      assert status==400, 'Unexpected cleanup sign-in status'
+                      results.append('Sign-in rejected; account was not created or was already deleted by the UI suite.')
+          Path('/tmp/cogni-runtime-retest').mkdir(exist_ok=True)
+          Path('/tmp/cogni-runtime-retest/cleanup.txt').write_text('\n'.join(results))
+          print('\n'.join(results))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-build53-native-ux-retest
+          path: |
+            /tmp/cogni-runtime-retest/
+            /tmp/cogni-auth-route-api-36/
+            /tmp/cogni-copy-feedback-api-36/
+            /tmp/cogni-profile-password-api-36/
+            /tmp/cogni-monetization-prestore-api-36/
+          retention-days: 14

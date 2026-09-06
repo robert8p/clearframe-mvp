@@ -44,8 +44,8 @@ jobs:
             agent-browser wait --load networkidle
             agent-browser snapshot -i > "/tmp/cogni-browser/home-${width}.txt"
             agent-browser screenshot --full "/tmp/cogni-browser/home-${width}.png"
-            agent-browser eval 'if(!document.body.innerText.includes("Train your thinking")) throw new Error("Missing homepage copy"); if(document.querySelector("[data-nextjs-dialog],.vite-error-overlay")) throw new Error("Framework error overlay"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Horizontal overflow: "+document.documentElement.scrollWidth+" / "+window.innerWidth); "Home passed"'
-            agent-browser click '.cg-public-actions a[href="/signup"]'
+            agent-browser eval 'if(!document.body.innerText.includes("Cogni") || !document.body.innerText.includes("Get started")) throw new Error("Missing visible welcome content"); if(window.innerWidth>850 && !document.body.innerText.includes("Train your thinking")) throw new Error("Missing desktop headline"); if(document.querySelector("[data-nextjs-dialog],.vite-error-overlay")) throw new Error("Framework error overlay"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Horizontal overflow: "+document.documentElement.scrollWidth+" / "+window.innerWidth); "Home passed"'
+            agent-browser click '.cg-public-phone a[href="/signup"]'
             agent-browser wait --url '**/signup'
             agent-browser wait --load networkidle
             agent-browser snapshot -i > "/tmp/cogni-browser/signup-${width}.txt"

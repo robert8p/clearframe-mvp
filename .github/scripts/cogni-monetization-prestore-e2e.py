@@ -214,7 +214,7 @@ def main() -> int:
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))
     time.sleep(4)
     scroll_to_top()
-    wait_for("Learn smarter. Think deeper.")
+    wait_for("Train your thinking")
     tap("I already have an account", scroll=True)
     wait_for("Welcome back")
     input_text("Email", EMAIL)
@@ -254,7 +254,7 @@ def main() -> int:
 
     tap("Sign out", scroll=True)
     scroll_to_top()
-    wait_for("Learn smarter. Think deeper.", timeout=45)
+    wait_for("Train your thinking", timeout=45)
     assert_absent("Reset your password")
     assert_no_fatal_crash()
     capture("pass")

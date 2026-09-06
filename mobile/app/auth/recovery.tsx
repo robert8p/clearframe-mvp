@@ -110,7 +110,7 @@ export default function RecoveryScreen() {
             {error}
           </Text>
         ) : null}
-        <PrimaryButton label={busy ? "Saving…" : "Save new password"} disabled={busy} onPress={() => void updatePassword()} />
+        <PrimaryButton label={busy ? "Saving…" : "Save new password"} disabled={busy} loading={busy} onPress={() => void updatePassword()} />
         {fromProfile ? (
           <PrimaryButton label="Back to profile" secondary onPress={() => router.replace("/(tabs)/profile")} />
         ) : null}

@@ -295,7 +295,7 @@ def assert_no_fatal_crash(label: str) -> None:
 
 def assert_welcome() -> None:
     scroll_to_top()
-    wait_for("Learn smarter. Think deeper.", timeout=45)
+    wait_for("Train your thinking", timeout=45)
     wait_for("Get started", enabled=True, scroll=True)
     wait_for("I already have an account", enabled=True, scroll=True)
     assert_absent("Reset your password")
@@ -312,7 +312,7 @@ def test_all_tabs() -> None:
     assert_absent("Something went wrong")
 
     tap("Train")
-    wait_for("Find your best starting point", timeout=45)
+    wait_for("Find your starting point", timeout=45)
     wait_for("Start your check", timeout=45, scroll=True)
     assert_absent("Something went wrong")
 

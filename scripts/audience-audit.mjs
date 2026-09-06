@@ -16,6 +16,7 @@ const audiencePage=read("app/(product)/onboarding/audience/page.tsx");
 const contextPage=read("app/(product)/onboarding/context/page.tsx");
 const mobileAudience=read("mobile/lib/audience.ts");
 const mobileOnboarding=read("mobile/app/onboarding.tsx");
+const mobileContext=read("mobile/lib/context-options.ts");
 const mobileHome=read("mobile/app/(tabs)/home.tsx");
 const mobileProfile=read("mobile/app/(tabs)/profile.tsx");
 const research=read("CASUAL_LEARNER_RESEARCH.md");
@@ -39,7 +40,8 @@ pass(form.includes('audience==="casual"')&&form.includes('"What would you like t
 pass(audiencePage.includes("What kind of learning context fits you?")&&!audiencePage.includes("current stage"),"Web onboarding must not frame casual as a career stage.");
 pass(contextPage.includes("A few optional details"),"Web optional-context copy must work for casual's two-field profile.");
 pass(mobileAudience.includes('slug: "casual"')&&mobileOnboarding.includes("MOBILE_AUDIENCES"),"Mobile must include casual through a shared audience model.");
-pass(mobileOnboarding.includes('audience === "casual"')&&mobileOnboarding.includes('"Interest area"'),"Mobile onboarding must tailor casual fields.");
+pass(mobileOnboarding.includes('selectedAudience === "casual"')&&mobileOnboarding.includes('label={functionLabelForAudience(selectedAudience)}')&&mobileOnboarding.includes('options={functionOptionsForAudience(selectedAudience)}')&&mobileContext.includes('if (audience === "casual") return "Interest area"'),"Mobile onboarding must select casual fields and resolve the Interest area label through its shared context model.");
+pass(mobileOnboarding.includes('isProfessional ? <OptionPicker label="Industry"')&&mobileOnboarding.includes('isCasual ? "What would you like to get better at?"'),"Casual onboarding must tailor the goal and hide professional-only fields.");
 pass(mobileHome.includes("mobileAudienceMeta")&&mobileProfile.includes("mobileAudienceMeta"),"Mobile Home and Profile must use the shared audience model.");
 pass(research.includes("not an ability tier")&&research.includes("Self-Directed Enthusiasts"),"Research record must preserve the definition and evidence behind the casual segment.");
 pass(migrations.includes("8 practical everyday contexts × all 15 Cogni judgement skills"),"Migration set must build the full 120-question casual scenario bank.");

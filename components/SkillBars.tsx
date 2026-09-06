@@ -4,7 +4,7 @@ type Row = { score: number; reliability: number; attempts?: number; skills: Skil
 function skillOf(value: SkillShape) { return Array.isArray(value) ? value[0] : value; }
 
 export function SkillBars({ rows }: { rows: Row[] }) {
-  if (!rows.length) return <section className="cg-card"><p>Complete the diagnostic to build your Cogni profile.</p></section>;
+  if (!rows.length) return <section className="cg-card"><p>Complete your starting check to build your Cogni profile.</p></section>;
 
   return (
     <div className="cg-skill-list">

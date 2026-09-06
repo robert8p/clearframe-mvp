@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cleanDisplayPayload } from "@/lib/display-copy";
 import type { AnswerResult, Challenge } from "@/lib/types";
 
 type Props = { challenges: Challenge[]; mode: "diagnostic" | "training" | "practice"; sessionId?: string; initialAnsweredChallengeIds?: string[]; completionHref?: string; modeLabel?: string };
@@ -10,7 +11,7 @@ type Category = { id: string; label: string };
 const burstParticles = Array.from({ length: 14 }, (_, index) => ({ angle: index * (360 / 14), distance: 46 + (index % 4) * 8, delay: (index % 5) * 22 }));
 const correctMessages = ["Good choice", "Nice reasoning", "Well spotted", "Strong answer"];
 const partialMessages = ["Nearly there", "Some parts are right", "Close — check the details", "Good start"];
-const learningMessages = ["Worth reviewing", "Easy trap to fall into", "Good one to learn from", "Now you’ve seen it"];
+const learningMessages = ["Worth reviewing", "Review the reasoning", "Good one to learn from", "A useful learning moment"];
 
 const formatMeta: Record<string, { label: string; icon: string; instruction: string }> = {
   single_choice: { label: "Choose one", icon: "◎", instruction: "Choose the strongest answer." },
@@ -34,7 +35,8 @@ function asStringMap(value: unknown) { return value && typeof value === "object"
 function difficultyBand(value: number) { if (value < 40) return "Intro"; if (value < 60) return "Standard"; if (value < 75) return "Challenge"; return "Advanced"; }
 function humanPattern(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 
-export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredChallengeIds = [], completionHref, modeLabel }: Props) {
+export function ChallengeRunner({ challenges: rawChallenges, mode, sessionId, initialAnsweredChallengeIds = [], completionHref, modeLabel }: Props) {
+  const challenges = useMemo(() => cleanDisplayPayload(rawChallenges), [rawChallenges]);
   const initiallyAnswered = useMemo(() => new Set(initialAnsweredChallengeIds), [initialAnsweredChallengeIds]);
   const pending = challenges.findIndex((challenge) => !initiallyAnswered.has(challenge.id));
   const [index, setIndex] = useState(Math.max(0, pending));
@@ -72,7 +74,7 @@ export function ChallengeRunner({ challenges, mode, sessionId, initialAnsweredCh
       const response = await fetch("/api/answer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ challengeId: challenge.id, selectedIndex: interactionType === "single_choice" || interactionType === "triage" ? selected : undefined, responsePayload, confidence, responseTimeMs: Date.now() - startedAt, mode, sessionId: runtimeSessionId }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) { setSubmitError(typeof body.error === "string" ? body.error : "Could not submit this answer. Try again."); return; }
-      setResult(body as AnswerResult); setAnswered((current) => new Set([...current, challenge.id])); haptic(Number(body.scoreFraction ?? (body.correct ? 1 : 0)));
+      setResult(cleanDisplayPayload(body as AnswerResult)); setAnswered((current) => new Set([...current, challenge.id])); haptic(Number(body.scoreFraction ?? (body.correct ? 1 : 0)));
       void track("explanation_viewed", { session_id: runtimeSessionId, challenge_id: challenge.id, interaction_type: interactionType });
     } catch { setSubmitError("Connection interrupted. Your selection is still here — try submitting again."); }
     finally { setBusy(false); }

@@ -52,7 +52,7 @@ export default function LoginScreen() {
       </View>
       <Card>
         <Title size={31}>Welcome back</Title>
-        <Body muted>Pick up exactly where you left off across Cogni.</Body>
+        <Body muted>Pick up where you left off.</Body>
         <View style={{ gap: 14 }}>
           <FormField
             ref={emailRef}
@@ -92,7 +92,7 @@ export default function LoginScreen() {
             {error}
           </Text>
         ) : null}
-        <PrimaryButton label={busy ? "Signing in…" : "Sign in"} disabled={busy} onPress={() => void submit()} />
+        <PrimaryButton label={busy ? "Signing in…" : "Sign in"} disabled={busy} loading={busy} onPress={() => void submit()} />
         <View style={{ alignItems: "center" }}>
           <ActionLink label="Forgot password?" hint="Send a secure password recovery email" onPress={() => router.push("/forgot-password")} />
         </View>

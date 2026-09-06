@@ -40,7 +40,7 @@ export default function SupportScreen() {
     } finally { setBusy(false); }
   }
 
-  if (submittedId) return <Screen><Card style={{ borderColor: "rgba(0,229,255,.34)" }}><Eyebrow>Request received</Eyebrow><Title size={27}>Cogni support has your message.</Title><Body muted>Your reference is {submittedId}. Your request is stored privately with your Cogni account details so it can be investigated.</Body><PrimaryButton label="Back to Profile" onPress={() => router.replace("/(tabs)/profile")} /><PrimaryButton secondary label="Send another request" onPress={() => setSubmittedId(null)} /></Card></Screen>;
+  if (submittedId) return <Screen><Card style={{ borderColor: "rgba(0,229,255,.34)" }}><Eyebrow>Request received</Eyebrow><Title size={27}>Cogni support has your message.</Title><Body muted>Your reference is {submittedId}. Your message is linked securely to your account so we can look into it.</Body><PrimaryButton label="Back to Profile" onPress={() => router.replace("/(tabs)/profile")} /><PrimaryButton secondary label="Send another request" onPress={() => setSubmittedId(null)} /></Card></Screen>;
 
   return <Screen>
     <View style={{ gap: 6 }}><Eyebrow>Private support</Eyebrow><Title>How can we help?</Title><Body muted>Your message goes to Cogni&apos;s private support queue. Do not include card numbers, passwords or other payment credentials.</Body></View>

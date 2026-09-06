@@ -10,10 +10,12 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "ui-audit": "node scripts/ui-audit.mjs",
-    "logic-audit": "node scripts/logic-audit.mjs && node scripts/backend-privilege-audit.mjs && node scripts/auth-route-audit.mjs && node scripts/monetization-audit.mjs && node scripts/copy-feedback-audit.mjs",
+    "logic-audit": "node scripts/logic-audit.mjs && node scripts/backend-privilege-audit.mjs && node scripts/auth-route-audit.mjs && node scripts/monetization-audit.mjs && node scripts/copy-feedback-audit.mjs && npm run test:ux && npm run copy-inventory",
     "typecheck": "tsc --noEmit",
     "validate": "npm run lint && npm run ui-audit && npm run logic-audit && npm run typecheck",
-    "doctor": "npx expo-doctor"
+    "doctor": "npx expo-doctor",
+    "test:ux": "node --test scripts/*.test.mjs",
+    "copy-inventory": "node scripts/copy-inventory.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.8",

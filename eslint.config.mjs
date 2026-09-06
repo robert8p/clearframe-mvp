@@ -7,21 +7,19 @@ export default defineConfig([
   ...nextTs,
   {
     rules: {
-      // Supabase nested relation payloads are partially dynamic until generated DB types
-      // are introduced across the legacy app. Keep this visible as lint debt without
-      // making otherwise-safe releases fail solely on existing data-shape casts.
+      // Existing partially dynamic relation casts remain visible as warnings.
       "@typescript-eslint/no-explicit-any": "warn",
     },
   },
   {
     files: ["app/**/page.tsx"],
     rules: {
-      // These are async Server Components. Current time is intentionally read on the
-      // server to create query windows/cohorts and is not client-render state.
+      // Server Components intentionally read time to establish query windows.
       "react-hooks/purity": "off",
     },
   },
-  // The Expo app has its own TypeScript/tooling lifecycle under /mobile. Do not make
-  // the Next.js/Vercel pipeline parse React Native source with the web ESLint config.
-  globalIgnores([".next/**", "node_modules/**", "mobile/**"]),
+  // Separate runtimes: Expo is checked by mobile/validate; Supabase Edge Functions
+  // use Deno's npm:/jsr: resolver and are typechecked/tested in mobile-ci.yml and
+  // cogni-0.4.0-exact-apk.yml. Neither is a Next.js/browser source tree.
+  globalIgnores([".next/**", "node_modules/**", "mobile/**", "supabase/functions/**"]),
 ]);

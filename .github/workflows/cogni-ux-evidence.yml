@@ -1,0 +1,95 @@
+name: Cogni UX evidence
+
+on:
+  push:
+    branches: [fix/cogni-ux-quality-20260906]
+    paths:
+      - 'mobile/**'
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - '*.json'
+      - '*.mjs'
+      - '.github/workflows/cogni-ux-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cogni-ux-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Capture exact tracked source
+        run: |
+          mkdir -p /tmp/cogni-evidence
+          git archive --format=tar --output=/tmp/cogni-evidence/source.tar HEAD
+          git rev-parse HEAD > /tmp/cogni-evidence/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-ux-source-${{ github.sha }}
+          path: /tmp/cogni-evidence/
+          retention-days: 14
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install exact dependencies
+        working-directory: mobile
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Validate mobile UX and security boundaries
+        working-directory: mobile
+        run: |
+          set -o pipefail
+          npm run validate 2>&1 | tee /tmp/cogni-evidence/validation.txt
+          node scripts/copy-inventory.mjs --json > /tmp/cogni-evidence/copy-inventory.json
+      - name: Compile iOS JavaScript without enabling billing
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+        run: |
+          set -o pipefail
+          CI=1 npx expo export --platform ios --output-dir /tmp/cogni-ios-export 2>&1 | tee /tmp/cogni-evidence/ios-export.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-ux-validation-${{ github.sha }}
+          path: |
+            /tmp/cogni-evidence/validation.txt
+            /tmp/cogni-evidence/copy-inventory.json
+            /tmp/cogni-evidence/ios-export.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install web dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Web audience regression, lint, types and production build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/cogni-web-validation.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-web-validation-${{ github.sha }}
+          path: /tmp/cogni-web-validation.txt
+          if-no-files-found: ignore
+          retention-days: 14

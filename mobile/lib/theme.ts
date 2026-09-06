@@ -22,7 +22,7 @@ export const colors = {
 } as const;
 
 export const gradients = {
-  primary: ["#00b8ff", colors.violet, "#c12dff"] as const,
+  primary: ["#3256c8", "#5842d8", "#8732b5"] as const,
   orb: [colors.cyan, "#3567ff", colors.purple, colors.magenta] as const,
   card: ["rgba(27,38,80,0.96)", "rgba(12,18,43,0.98)"] as const,
   cardBright: ["rgba(38,46,100,0.98)", "rgba(16,22,56,0.98)"] as const,

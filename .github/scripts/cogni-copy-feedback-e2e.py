@@ -184,6 +184,12 @@ def assert_equal_navigation_destinations() -> None:
         raise AssertionError(f"Train is not aligned with its peer destinations: {centers}")
 
 
+def wait_for_train_landing() -> None:
+    """Use stable user-facing copy rather than a heading that the screen does not render."""
+    wait_for("Find your best starting point", timeout=45)
+    wait_for("Start your check", timeout=45, enabled=True, scroll=True)
+
+
 def assert_no_fatal_crash() -> None:
     logs = adb("logcat", "-d", "-v", "threadtime", check=False)
     (OUT / "logcat-complete.txt").write_text(logs, encoding="utf-8")
@@ -230,21 +236,20 @@ def main() -> int:
     capture("feedback-settings")
 
     tap("Train")
-    wait_for("Training", timeout=45)
+    wait_for_train_landing()
     assert_equal_navigation_destinations()
     assert_no_literal_controls("training-copy")
     capture("train-equal-navigation-clean-copy")
 
     # Open the live first question rather than validating only the Train landing
     # page. This reproduces the surface where escaped “\\n\\n” copy was reported.
-    wait_for("Start your check", timeout=45, scroll=True)
     tap("Start your check", scroll=True)
     wait_for("Starting check", timeout=45)
     assert_no_literal_controls("training-question-copy")
     capture("training-question-clean-copy")
     adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
     time.sleep(1.2)
-    wait_for("Training", timeout=45)
+    wait_for_train_landing()
 
     adb("shell", "am", "force-stop", PACKAGE)
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))

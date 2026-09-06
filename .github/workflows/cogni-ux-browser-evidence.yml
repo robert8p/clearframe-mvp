@@ -1,0 +1,66 @@
+name: Cogni UX browser evidence
+
+on:
+  push:
+    branches: [preview/cogni-ux-20260906]
+    paths: ['.github/workflows/cogni-ux-browser-evidence.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      SOURCE_COMMIT: 5bef0126bee8b1229f510fc1e9efc279118afbb3
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install browser and build the exact verified web source
+        run: |
+          mkdir -p /tmp/cogni-browser
+          npm install --no-package-lock --no-audit --no-fund
+          npm run build > /tmp/cogni-browser/build.txt 2>&1
+          npm install --global agent-browser
+          agent-browser --version > /tmp/cogni-browser/browser-version.txt
+          agent-browser install --with-deps
+          printf '%s\n' "$SOURCE_COMMIT" > /tmp/cogni-browser/source-sha.txt
+      - name: Start production server and verify real browser layouts
+        run: |
+          set -euo pipefail
+          npm run start > /tmp/cogni-browser/server.txt 2>&1 &
+          SERVER_PID=$!
+          trap 'agent-browser close || true; kill "$SERVER_PID" || true' EXIT
+          for n in $(seq 1 40); do curl --silent --fail http://127.0.0.1:3000/ > /dev/null && break; sleep 1; done
+          for width in 320 390 430 1280; do
+            agent-browser set viewport "$width" 844
+            agent-browser open http://127.0.0.1:3000/
+            agent-browser wait --load networkidle
+            agent-browser snapshot -i > "/tmp/cogni-browser/home-${width}.txt"
+            agent-browser screenshot --full "/tmp/cogni-browser/home-${width}.png"
+            agent-browser eval 'if(!document.body.innerText.includes("Train your thinking")) throw new Error("Missing homepage copy"); if(document.querySelector("[data-nextjs-dialog],.vite-error-overlay")) throw new Error("Framework error overlay"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Horizontal overflow: "+document.documentElement.scrollWidth+" / "+window.innerWidth); "Home passed"'
+            agent-browser click '.cg-public-actions a[href="/signup"]'
+            agent-browser wait --url '**/signup'
+            agent-browser wait --load networkidle
+            agent-browser snapshot -i > "/tmp/cogni-browser/signup-${width}.txt"
+            agent-browser screenshot --full "/tmp/cogni-browser/signup-${width}.png"
+            agent-browser eval 'if(!document.querySelector("#auth-email") || !document.querySelector("#auth-password")) throw new Error("Signup form missing"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Signup horizontal overflow"); "Signup navigation passed"'
+            agent-browser click '.cg-auth-switch a[href="/login"]'
+            agent-browser wait --url '**/login'
+            agent-browser wait --load networkidle
+            agent-browser screenshot --full "/tmp/cogni-browser/login-${width}.png"
+            agent-browser eval 'if(!document.querySelector("#auth-email") || !document.querySelector("#auth-password")) throw new Error("Login form missing"); if(document.documentElement.scrollWidth > window.innerWidth+1) throw new Error("Login horizontal overflow"); "Login navigation passed"'
+          done
+          echo 'PASS: 320/390/430/1280px rendered public pages and working signup/sign-in navigation; no accounts created.' > /tmp/cogni-browser/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-ux-browser-evidence
+          path: /tmp/cogni-browser/
+          retention-days: 14

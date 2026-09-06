@@ -1,0 +1,27 @@
+name: Cogni 0.4.1 browser verification
+on:
+  push:
+    branches: [preview/cogni-041-testing]
+    paths: ['.github/workflows/cogni-041-browser.yml', '.github/scripts/verify-web-release.sh']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      SOURCE_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Build and exercise responsive web pages
+        run: bash .github/scripts/verify-web-release.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-041-browser-evidence
+          path: /tmp/cogni-browser/
+          retention-days: 30

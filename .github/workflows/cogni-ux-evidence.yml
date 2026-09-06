@@ -9,6 +9,8 @@ on:
       - 'components/**'
       - 'lib/**'
       - 'scripts/**'
+      - '*.json'
+      - '*.mjs'
       - '.github/workflows/cogni-ux-evidence.yml'
   workflow_dispatch:
 
@@ -49,6 +51,14 @@ jobs:
           set -o pipefail
           npm run validate 2>&1 | tee /tmp/cogni-evidence/validation.txt
           node scripts/copy-inventory.mjs --json > /tmp/cogni-evidence/copy-inventory.json
+      - name: Compile iOS JavaScript without enabling billing
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+        run: |
+          set -o pipefail
+          CI=1 npx expo export --platform ios --output-dir /tmp/cogni-ios-export 2>&1 | tee /tmp/cogni-evidence/ios-export.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -56,6 +66,7 @@ jobs:
           path: |
             /tmp/cogni-evidence/validation.txt
             /tmp/cogni-evidence/copy-inventory.json
+            /tmp/cogni-evidence/ios-export.txt
           if-no-files-found: ignore
           retention-days: 14
 

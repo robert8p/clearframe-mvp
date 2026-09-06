@@ -55,6 +55,34 @@ jobs:
           echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
           echo "E2E_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
           echo 'APK_PATH=/tmp/cogni-0.4.0-artifact/Cogni-0.4.0-prestore.apk' >> "$GITHUB_ENV"
+      - name: Prepare exact-APK interaction runner
+        run: |
+          cat > /tmp/cogni-runtime-retest/run-suites.py <<'PY'
+          import pathlib
+          path = pathlib.Path('.github/scripts/cogni-auth-route-e2e-fixed.py').resolve()
+          source = path.read_text()
+          marker = '\nfor suite_path in SUITES:'
+          assert source.count(marker) == 1
+          # Reuse interaction helpers without rerunning the already-passed auth suite.
+          helpers = {'__file__': str(path), '__name__': 'cogni_runtime_helpers'}
+          exec(compile(source.split(marker)[0], str(path), 'exec'), helpers)
+          load, install = helpers['load_suite'], helpers['install_reliable_automation']
+          main = load(path.parent / 'cogni-auth-main-flow.py')
+          status, body = main.http_json(main.SUPABASE_URL + '/auth/v1/signup', 'POST', {'email': main.EMAIL, 'password': main.PASSWORD, 'data': {'full_name': 'Cogni Route E2E'}}, {'apikey': main.SUPABASE_KEY, 'Authorization': 'Bearer ' + main.SUPABASE_KEY})
+          assert status == 200, f'Disposable signup failed: {status}'
+          main.provision_profile()
+          main.adb('uninstall', main.PACKAGE, check=False)
+          print(main.adb('install', main.APK_PATH), flush=True)
+          main.adb('shell', 'pm', 'clear', main.PACKAGE)
+          for name in ['cogni-copy-feedback-e2e.py', 'cogni-profile-password-e2e.py', 'cogni-signup-onboarding-e2e.py']:
+              print('RUNNING: ' + name, flush=True)
+              module = load(path.parent / name)
+              install(module)
+              assert module.main() in (None, 0)
+              print('PASSED: ' + name, flush=True)
+          print('PASS: corrected copy, restart persistence, profile/password and signup/account-deletion suites on exact build 53.', flush=True)
+          PY
+          python3 -m py_compile /tmp/cogni-runtime-retest/run-suites.py
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -76,34 +104,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            python3 -u - <<'PY' 2>&1 | tee /tmp/cogni-runtime-retest/interaction-results.txt
-            import os, pathlib
-            path = pathlib.Path('.github/scripts/cogni-auth-route-e2e-fixed.py').resolve()
-            source = path.read_text()
-            marker = '\nfor suite_path in SUITES:'
-            assert source.count(marker) == 1
-            # Reuse the tested interaction helpers without rerunning the already-passed auth suite.
-            helpers = {'__file__': str(path), '__name__': 'cogni_runtime_helpers'}
-            exec(compile(source.split(marker)[0], str(path), 'exec'), helpers)
-            load, install = helpers['load_suite'], helpers['install_reliable_automation']
-            main = load(path.parent / 'cogni-auth-main-flow.py')
-            status, body = main.http_json(main.SUPABASE_URL + '/auth/v1/signup', 'POST', {'email': main.EMAIL, 'password': main.PASSWORD, 'data': {'full_name': 'Cogni Route E2E'}}, {'apikey': main.SUPABASE_KEY, 'Authorization': 'Bearer ' + main.SUPABASE_KEY})
-            assert status == 200, f'Disposable signup failed: {status}'
-            main.provision_profile()
-            main.adb('uninstall', main.PACKAGE, check=False)
-            print(main.adb('install', main.APK_PATH), flush=True)
-            main.adb('shell', 'pm', 'clear', main.PACKAGE)
-            for name in ['cogni-copy-feedback-e2e.py', 'cogni-profile-password-e2e.py', 'cogni-signup-onboarding-e2e.py']:
-                print('RUNNING: ' + name, flush=True)
-                module = load(path.parent / name)
-                install(module)
-                assert module.main() in (None, 0)
-                print('PASSED: ' + name, flush=True)
-            print('PASS: corrected copy, restart persistence, profile/password and signup/account-deletion suites on exact build 53.', flush=True)
-            PY
-            test "${PIPESTATUS[0]}" -eq 0
-            python3 -u .github/scripts/cogni-monetization-prestore-e2e.py 2>&1 | tee /tmp/cogni-runtime-retest/monetisation-results.txt
-            test "${PIPESTATUS[0]}" -eq 0
+            bash -o pipefail -c 'python3 -u /tmp/cogni-runtime-retest/run-suites.py 2>&1 | tee /tmp/cogni-runtime-retest/interaction-results.txt'
+            bash -o pipefail -c 'python3 -u .github/scripts/cogni-monetization-prestore-e2e.py 2>&1 | tee /tmp/cogni-runtime-retest/monetisation-results.txt'
       - name: Delete both disposable accounts and verify sign-in rejection
         if: always()
         run: |

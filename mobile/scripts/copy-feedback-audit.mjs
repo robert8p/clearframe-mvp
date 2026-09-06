@@ -66,7 +66,7 @@ for (const [needle, message] of [
 ]) requireText(copy, needle, message);
 
 const api = readMobile("lib/api.ts");
-requireText(api, 'import { cleanDisplayPayload } from "@/lib/copy"', "The mobile API must use the display-copy safety net.");
+requireText(api, 'import { cleanDisplayPayload, cleanDisplayCopy } from "@/lib/copy"', "The mobile API must use the display-copy safety net.");
 requireText(api, "const payload = cleanDisplayPayload(result.payload as T)", "Successful API responses must be cleaned before rendering or caching.");
 requireText(api, "cleanDisplayPayload(parsed.data)", "Cached display data must also be cleaned.");
 
@@ -94,7 +94,7 @@ for (const [needle, message] of [
   ["Haptics.performAndroidHapticsAsync", "Android should use the platform haptics engine."],
   ["Haptics.selectionAsync()", "iOS selection feedback must use the semantic selection haptic."],
 ]) requireText(feedback, needle, message);
-const toneBlock = feedback.slice(feedback.indexOf("const TONES"), feedback.indexOf("const FeedbackContext"));
+const toneBlock = readMobile("lib/feedback-sounds.ts");
 forbidText(toneBlock, "selection:", "Selection should not have an audible tone.");
 
 const rootLayout = readMobile("app/_layout.tsx");
@@ -114,7 +114,7 @@ const profile = readMobile("app/(tabs)/profile.tsx");
 for (const [needle, message] of [
   ['title="Sound effects"', "Profile must expose a sound-effects preference."],
   ['title="Haptic feedback"', "Profile must expose a haptic-feedback preference."],
-  ["Sounds respect silent mode", "Profile must explain silent-mode behaviour."],
+  ["On iPhone, sounds respect Silent mode", "Profile must explain platform-specific audio behaviour."],
   ["disabled={!feedbackReady}", "Feedback settings must wait for their persisted values."],
 ]) requireText(profile, needle, message);
 
@@ -135,9 +135,9 @@ if (failures.length) {
 
 console.log("Cogni copy, navigation and feedback audit passed.");
 console.log("✓ Expo SDK 54 native modules remain on one compatible ABI");
-console.log("✓ Escaped display controls repaired at source and at the API boundary");
-console.log("✓ Six affected learning prompts rewritten and protected by a database constraint");
+console.log("✓ Escaped display-control repair and source migration are present");
+console.log("✓ Migration covers six learning prompts and a database constraint (deployment not asserted)");
 console.log("✓ Train is an equal, clearly selected top-level destination rather than a floating action");
 console.log("✓ Outcome sounds are brief, optional, silent-mode aware and non-blocking");
 console.log("✓ Selection feedback is haptic-only and all feedback can be disabled independently");
-console.log("✓ Audio is playback-only, background audio is disabled and direct players are released correctly");
+console.log("✓ Playback-only configuration and resource-cleanup implementation are present");

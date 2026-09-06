@@ -58,7 +58,7 @@ export default function ForgotPasswordScreen() {
       </View>
       <Card>
         <Title size={30}>Reset your password</Title>
-        <Body muted>Enter your Cogni email. The recovery link will reopen this app so you can choose a new password.</Body>
+        <Body muted>Enter the email address you use for Cogni. The recovery link will reopen this app so you can choose a new password.</Body>
         {!sent ? (
           <>
             <FormField

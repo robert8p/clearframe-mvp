@@ -10,19 +10,17 @@ const literalTab = /\\t/g;
  * whitespace around line breaks and limits blank space to one empty line.
  */
 export function cleanDisplayCopy(value: string) {
-  const normalised = value
-    .replace(/\r\n?/g, "\n")
-    .replace(literalCrLf, "\n")
-    .replace(literalLineBreak, "\n")
-    .replace(literalTab, " ")
-    .replace(/\u00a0/g, " ");
-
-  return normalised
-    .split("\n")
-    .map((line) => line.replace(/^[ \t]+|[ \t]+$/g, ""))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  // Literal escapes are meaningful in code examples. Preserve fenced/inline code.
+  return value.split(/(```[\s\S]*?```|`[^`\n]*`)/g).map((part, index) => {
+    if (index % 2) return part;
+    return part.replace(/\r\n?/g, "\n")
+      .replace(literalCrLf, "\n")
+      .replace(literalLineBreak, "\n")
+      .replace(literalTab, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]*\n[ \t]*/g, "\n")
+      .replace(/\n{3,}/g, "\n\n");
+  }).join("").trim();
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -31,18 +29,19 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-/**
- * API responses are JSON-shaped. Repair every display string as a final safety
- * net so one malformed content import cannot expose `\\n`, `\\r` or `\\t` in
- * any screen while the source record is being corrected.
- */
+/** Explicit display fields only: IDs, tokens, URLs and answer keys stay byte-for-byte intact. */
+const DISPLAY_FIELDS = new Set([
+  "title", "subtitle", "prompt", "options", "scenario_context", "description", "name",
+  "label", "modeLabel", "situationLabel", "message", "explanation", "thinkingPrinciple",
+  "application", "story", "twist", "principle", "try_it", "reveal", "ai_age", "instructions",
+]);
+
 export function cleanDisplayPayload<T>(value: T): T {
-  if (typeof value === "string") return cleanDisplayCopy(value) as T;
-  if (Array.isArray(value)) return value.map((item) => cleanDisplayPayload(item)) as T;
-  if (isPlainRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cleanDisplayPayload(item)]),
-    ) as T;
+  function visit(item: unknown, display = false): unknown {
+    if (typeof item === "string") return display ? cleanDisplayCopy(item) : item;
+    if (Array.isArray(item)) return item.map((child) => visit(child, display));
+    if (isPlainRecord(item)) return Object.fromEntries(Object.entries(item).map(([key, child]) => [key, visit(child, DISPLAY_FIELDS.has(key))]));
+    return item;
   }
-  return value;
+  return visit(value) as T;
 }

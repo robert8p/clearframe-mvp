@@ -15,7 +15,7 @@ export default async function AchievementsPage() {
     <div className="cg-mobile-page">
       <div className="cg-kicker">Achievements</div>
       <h1 className="cg-screen-title">Your milestones</h1>
-      <p className="cg-page-intro">Milestones reward consistent learning. They do not change your skill scores. XP are points you earn by completing lessons and practice.</p>
+      <p className="cg-page-intro">Milestones reward consistent learning. They do not change your skill scores. XP means experience points, earned by completing lessons and practice.</p>
       <div className="cg-achievement-list">
         {items.map((item) => {
           const done = item.value >= item.target;

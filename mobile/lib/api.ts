@@ -1,4 +1,4 @@
-import { cleanDisplayPayload } from "@/lib/copy";
+import { cleanDisplayPayload, cleanDisplayCopy } from "@/lib/copy";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
 
 const FUNCTION_URL = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/mobile-api`;
@@ -89,10 +89,10 @@ async function invoke<T>(path: string, method: string, body: unknown, accessToke
 function errorFromPayload(payload: unknown, status: number) {
   const record = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
   const raw = record.error;
-  if (typeof raw === "string") return new ApiError(cleanDisplayPayload(raw), status);
+  if (typeof raw === "string") return new ApiError(cleanDisplayCopy(raw), status);
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     const error = raw as Record<string, unknown>;
-    const message = typeof error.message === "string" ? cleanDisplayPayload(error.message) : "Cogni couldn't complete that request.";
+    const message = typeof error.message === "string" ? cleanDisplayCopy(error.message) : "Cogni couldn't complete that request.";
     const code = typeof error.code === "string" ? error.code : null;
     const details = error.details && typeof error.details === "object" && !Array.isArray(error.details) ? cleanDisplayPayload(error.details as Record<string, unknown>) : null;
     return new ApiError(message, status, code, details);

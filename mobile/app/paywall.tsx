@@ -135,7 +135,7 @@ export default function PaywallScreen() {
         <Card>
           <Eyebrow>Already active</Eyebrow>
           <Title size={25}>You have Cogni Pro.</Title>
-          <Body muted>Your server-verified entitlement is active.</Body>
+          <Body muted>Your Cogni Pro subscription is active.</Body>
           <PrimaryButton label="Continue" onPress={() => router.back()} />
         </Card>
       ) : (

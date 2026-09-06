@@ -56,7 +56,7 @@ export function SessionCelebration({ xp, streak, title }: { xp: number; streak: 
       <div className="cg-kicker">Session complete</div>
       <h1 className="cg-results-title">{title}</h1>
       <div className="cg-xp">+{shownXp} XP</div>
-      {streak > 0 && <div className="cg-streak-pop">🔥 {streak} day streak</div>}
+      {streak > 0 && <div className="cg-streak-pop">🔥 {streak}-day streak</div>}
     </div>
   );
 }

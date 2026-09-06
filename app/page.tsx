@@ -8,9 +8,9 @@ export default function LandingPage() {
         <section className="cg-public-copy">
           <CogniMark />
           <div className="cg-kicker" style={{ marginTop: 30 }}>Daily practice for sharper thinking</div>
-          <h1>Learn smarter. Think deeper. Decide better.</h1>
+          <h1>Train your thinking</h1>
           <p className="cg-public-lead">
-            Cogni gives you short daily practice in critical thinking, checking evidence and checking AI answers.
+            Build clearer thinking through short daily practice. Weigh evidence, question assumptions and check AI answers.
           </p>
           <div className="cg-public-actions">
             <Link className="cg-button" href="/signup">Start learning</Link>

@@ -109,7 +109,7 @@ export default function OnboardingScreen() {
       </View>
       <LinearGradient colors={["rgba(30,40,96,.95)", "rgba(13,19,48,.98)"]} style={{ borderRadius: 26, borderWidth: 1, borderColor: colors.line, padding: 18, gap: 7 }}>
         <Eyebrow>Make Cogni relevant to you</Eyebrow>
-        <Title size={29}>What kind of learning context fits you?</Title>
+        <Title size={29}>Which situations matter to you?</Title>
         <Body muted>Choose the situations and goals that feel most relevant now. This is about context—not ability—and you can change it later without losing progress.</Body>
       </LinearGradient>
 
@@ -159,7 +159,7 @@ export default function OnboardingScreen() {
         <Card style={{ borderColor: "rgba(0,229,255,.28)" }}>
           <Eyebrow>What happens next</Eyebrow>
           <Title size={23}>A short starting check, not a pass/fail test</Title>
-          <Body muted>Plan for about 4–6 minutes. Cogni uses those answers to choose a useful starting focus. Early scores deliberately carry limited evidence until you have answered more.</Body>
+          <Body muted>Plan for about 4–6 minutes. Cogni uses those answers to choose a useful starting focus. Your early scores will become more reliable as you practise.</Body>
           <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Your learning context changes which situations feel relevant; it does not raise or lower your assumed ability.</Body>
         </Card>
       ) : null}

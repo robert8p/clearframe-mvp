@@ -186,7 +186,7 @@ def assert_equal_navigation_destinations() -> None:
 
 def wait_for_train_landing() -> None:
     """Use stable user-facing copy rather than a heading that the screen does not render."""
-    wait_for("Find your best starting point", timeout=45)
+    wait_for("Find your starting point", timeout=45)
     wait_for("Start your check", timeout=45, enabled=True, scroll=True)
 
 
@@ -206,7 +206,7 @@ def main() -> int:
     time.sleep(4)
     scroll_to_top()
 
-    wait_for("Learn smarter. Think deeper.")
+    wait_for("Train your thinking")
     tap("I already have an account", scroll=True)
     wait_for("Welcome back")
     input_text("Email", EMAIL)
@@ -214,25 +214,41 @@ def main() -> int:
     tap("Sign in", scroll=True)
     wait_for("Home", timeout=60)
 
+    # Home must enter the first unanswered question without an intermediate landing tap.
+    tap("Home")
+    tap("Start your check", scroll=True)
+    wait_for("Starting check", timeout=45)
+    assert_no_literal_controls("home-direct-training-question")
+    capture("home-direct-training-action")
     tap("Profile")
     wait_for("Sound and touch", timeout=45, scroll=True)
     initial_sound = switch_state("Sound effects")
-    tap("Sound effects", scroll=True)
-    time.sleep(0.5)
-    if switch_state("Sound effects") is initial_sound:
-        raise AssertionError("Sound-effects switch did not change state")
-    tap("Sound effects", scroll=True)
-    if switch_state("Sound effects") is not initial_sound:
-        raise AssertionError("Sound-effects switch did not return to its original state")
-
     initial_haptics = switch_state("Haptic feedback", scroll=True)
+    tap("Sound effects", scroll=True)
     tap("Haptic feedback", scroll=True)
-    time.sleep(0.5)
+    time.sleep(0.8)
+    if switch_state("Sound effects", scroll=True) is initial_sound:
+        raise AssertionError("Sound-effects switch did not change state")
     if switch_state("Haptic feedback", scroll=True) is initial_haptics:
         raise AssertionError("Haptic-feedback switch did not change state")
+
+    # Verify the CHANGED preferences survive a real process restart, not just a rerender.
+    adb("shell", "am", "force-stop", PACKAGE)
+    print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))
+    time.sleep(4)
+    wait_for("Home", timeout=45)
+    tap("Profile")
+    wait_for("Sound and touch", timeout=45, scroll=True)
+    if switch_state("Sound effects", scroll=True) is initial_sound:
+        raise AssertionError("Sound preference did not persist across process restart")
+    if switch_state("Haptic feedback", scroll=True) is initial_haptics:
+        raise AssertionError("Haptic preference did not persist across process restart")
+    tap("Sound effects", scroll=True)
     tap("Haptic feedback", scroll=True)
+    if switch_state("Sound effects", scroll=True) is not initial_sound:
+        raise AssertionError("Sound preference was not restored after testing")
     if switch_state("Haptic feedback", scroll=True) is not initial_haptics:
-        raise AssertionError("Haptic-feedback switch did not return to its original state")
+        raise AssertionError("Haptic preference was not restored after testing")
     capture("feedback-settings")
 
     tap("Train")
@@ -264,7 +280,7 @@ def main() -> int:
     wait_for("Cogni Route E2E", timeout=45)
     tap("Sign out", scroll=True)
     scroll_to_top()
-    wait_for("Learn smarter. Think deeper.", timeout=45)
+    wait_for("Train your thinking", timeout=45)
 
     assert_no_fatal_crash()
     capture("pass")

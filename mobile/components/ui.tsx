@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, Text, View, type ScrollViewProps, type StyleProp, type ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { CogniMark } from "@/components/brand";
@@ -102,24 +102,32 @@ export function Pill({ children, accent = false }: { children: React.ReactNode; 
   return <View style={{ alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(21,30,63,.9)" }}><Text style={{ color: colors.muted, fontSize: 13.5, fontWeight: "800" }}>{children}</Text></View>;
 }
 
-export function PrimaryButton({ label, onPress, disabled = false, secondary = false }: { label: string; onPress: () => void; disabled?: boolean; secondary?: boolean }) {
+export function PrimaryButton({ label, onPress, disabled = false, secondary = false, loading = false, accessibilityHint, trailingArrow = false, testID }: {
+  label: string; onPress: () => void; disabled?: boolean; secondary?: boolean;
+  loading?: boolean; accessibilityHint?: string; trailingArrow?: boolean; testID?: string;
+}) {
   const reducedMotion = useReducedMotion();
   const scale = useRef(new Animated.Value(1)).current;
-  const pressIn = () => {
-    if (!reducedMotion) Animated.spring(scale, { toValue: 0.975, damping: 18, stiffness: 260, useNativeDriver: true }).start();
+  const [focused, setFocused] = useState(false);
+  const blocked = disabled || loading;
+  useEffect(() => {
+    if (reducedMotion || blocked) { scale.stopAnimation(); scale.setValue(1); }
+    return () => scale.stopAnimation();
+  }, [blocked, reducedMotion, scale]);
+  const animate = (value: number) => {
+    if (reducedMotion || blocked) { scale.setValue(1); return; }
+    Animated.spring(scale, { toValue: value, damping: 20, stiffness: 280, useNativeDriver: true }).start();
   };
-  const pressOut = () => {
-    if (reducedMotion) scale.setValue(1);
-    else Animated.spring(scale, { toValue: 1, damping: 16, stiffness: 220, useNativeDriver: true }).start();
-  };
-
-  return (
-    <Animated.View style={{ transform: [{ scale }], boxShadow: secondary ? undefined : "0 8px 26px rgba(107,92,255,0.22)" }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} onPressIn={pressIn} onPressOut={pressOut} style={({ pressed }) => ({ opacity: disabled ? 0.48 : pressed ? 0.90 : 1, minHeight: 56, borderRadius: 17, overflow: "hidden", borderCurve: "continuous", borderWidth: secondary ? 1 : 0, borderColor: colors.lineStrong })}>
-        {secondary ? <View style={{ minHeight: 56, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(17,24,55,.94)", paddingHorizontal: 18 }}><Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>{label}</Text></View> : <LinearGradient colors={[...gradients.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ minHeight: 56, justifyContent: "center", alignItems: "center", paddingHorizontal: 18 }}><View pointerEvents="none" style={{ position: "absolute", top: -30, left: "34%", width: 64, height: 115, transform: [{ rotate: "28deg" }], backgroundColor: "rgba(255,255,255,.08)" }} /><Text style={{ color: colors.white, fontSize: 16, fontWeight: "900", letterSpacing: 0.1 }}>{label}</Text></LinearGradient>}
-      </Pressable>
-    </Animated.View>
-  );
+  const content = <View pointerEvents="none" style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 56, paddingHorizontal: 18, paddingVertical: 14 }}>
+    {loading ? <ActivityIndicator accessible={false} color={colors.white} size="small" /> : null}
+    <Text style={{ flexShrink: 1, textAlign: "center", color: secondary ? colors.text : colors.white, fontSize: 16, lineHeight: 23, fontWeight: "800" }}>{label}</Text>
+    {trailingArrow && !loading ? <Text accessible={false} style={{ color: colors.white, fontSize: 21, lineHeight: 25, fontWeight: "700" }}>→</Text> : null}
+  </View>;
+  return <Animated.View style={{ transform: [{ scale }], borderRadius: 19, borderWidth: 2, borderColor: focused ? colors.cyan : "transparent", padding: 2, boxShadow: secondary ? undefined : "0 8px 26px rgba(107,92,255,0.22)" }}>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={accessibilityHint} accessibilityState={{ disabled: blocked, busy: loading }} disabled={blocked} onPress={onPress} onPressIn={() => animate(0.985)} onPressOut={() => animate(1)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={({ pressed }) => ({ opacity: disabled && !loading ? 0.48 : pressed ? 0.90 : 1, minHeight: 56, borderRadius: 15, overflow: "hidden", borderCurve: "continuous", borderWidth: secondary ? 1 : 0, borderColor: colors.lineStrong })}>
+      {secondary ? <View style={{ backgroundColor: "rgba(17,24,55,.94)" }}>{content}</View> : <LinearGradient colors={[...gradients.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>{content}</LinearGradient>}
+    </Pressable>
+  </Animated.View>;
 }
 
 export function ActionLink({ label, onPress, hint }: { label: string; onPress: () => void; hint?: string }) {

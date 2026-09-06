@@ -8,8 +8,8 @@ export default function NotFound() {
         <CogniMark />
         <div className="cg-state-icon">404</div>
         <div className="cg-kicker">Page not found</div>
-        <h1>That path doesn’t exist.</h1>
-        <p>Use one of the routes below to get back into Cogni.</p>
+        <h1>We couldn’t find that page.</h1>
+        <p>Return to Cogni or sign in to continue.</p>
         <Link href="/" className="cg-button cg-full">Go to Cogni</Link>
         <Link href="/login" className="cg-button secondary cg-full">Sign in</Link>
       </section>

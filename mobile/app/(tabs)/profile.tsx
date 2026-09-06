@@ -176,8 +176,9 @@ export default function ProfileScreen() {
     <Card>
       <Eyebrow>Feedback</Eyebrow>
       <Title size={23}>Sound and touch</Title>
-      <Body muted>Brief, gentle cues reinforce selections and results. Sounds respect silent mode and never replace the on-screen feedback.</Body>
+      <Body muted>Short sounds mark answer results and session completion. Spoken feedback takes priority when a screen reader is on.</Body>
       <View style={{ borderTopWidth: 1, borderTopColor: colors.line, marginTop: 2 }}>
+        <Body muted style={{ fontSize: 14, lineHeight: 21 }}>On iPhone, sounds respect Silent mode. On Android, they follow media volume. Turn sounds off here for quiet practice.</Body>
         <PreferenceRow title="Sound effects" description="Subtle tones for answers and session completion." value={soundEnabled} disabled={!feedbackReady} onValueChange={setSoundEnabled} />
         <View style={{ height: 1, backgroundColor: colors.line }} />
         <PreferenceRow title="Haptic feedback" description="Gentle touch feedback for selections and results." value={hapticsEnabled} disabled={!feedbackReady} onValueChange={setHapticsEnabled} />
@@ -195,14 +196,14 @@ export default function ProfileScreen() {
     </Card>
 
     {audience ? <Card>
-      <Eyebrow>Personalisation</Eyebrow><Body muted>{isCasual ? "Keep your interests and learning goal current so Cogni can favour useful everyday situations." : "These structured choices connect directly to Cogni's scenario tags, so personalisation actually changes what you see."}</Body>
+      <Eyebrow>Personalisation</Eyebrow><Body muted>{isCasual ? "Keep your interests and learning goal current so Cogni can favour useful everyday situations." : "Your choices help Cogni find relevant situations to practise."}</Body>
       <View style={{ gap: 18 }}>
         <FormField label="Name" value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor={colors.soft} />
         <OptionPicker label={functionLabelForAudience(audience)} value={functionArea} options={functionOptionsForAudience(audience)} onChange={setFunctionArea} />
         {isStudent ? <OptionPicker label="Study stage" value={studyStage} options={STUDY_STAGE_OPTIONS} onChange={setStudyStage} /> : null}
         {isProfessional ? <OptionPicker label="Industry" value={industry} options={INDUSTRY_OPTIONS} onChange={setIndustry} /> : null}
-        {isProfessional ? <OptionPicker label="Responsibility scope" value={responsibilityScope} options={RESPONSIBILITY_OPTIONS} onChange={setResponsibilityScope} /> : null}
-        {isProfessional ? <OptionPicker label="Organisation scale" value={organisationScale} options={ORGANISATION_SCALE_OPTIONS} onChange={setOrganisationScale} /> : null}
+        {isProfessional ? <OptionPicker label="Your responsibilities" value={responsibilityScope} options={RESPONSIBILITY_OPTIONS} onChange={setResponsibilityScope} /> : null}
+        {isProfessional ? <OptionPicker label="Organisation size" value={organisationScale} options={ORGANISATION_SCALE_OPTIONS} onChange={setOrganisationScale} /> : null}
         <OptionPicker label={isCasual ? "What would you like to get better at?" : "Primary goal"} value={goal} options={goalOptionsForAudience(audience)} onChange={setGoal} />
       </View>
       {saved ? <Text accessibilityLiveRegion="polite" style={{ color: colors.green, fontWeight: "800", lineHeight: 22 }}>{saved}</Text> : null}
@@ -212,8 +213,8 @@ export default function ProfileScreen() {
 
     <Card style={{ borderColor: "rgba(0,229,255,.24)" }}>
       <Eyebrow>Privacy & trust</Eyebrow><Title size={23}>Built to support learning, not label you</Title>
-      <Body muted>Sensitive grading and score updates happen on Cogni&apos;s server; answer keys are not stored in the app. Your sign-in session is stored securely on this device, and profile access is scoped to your account.</Body>
-      <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Development Scores are learning indicators with separate evidence strength. They are not population percentiles or formal psychometric grades. You can delete your account and learning history at any time.</Body>
+      <Body muted>Cogni checks your answers securely and keeps your learning history linked to your account. Your sign-in session is stored securely on this device.</Body>
+      <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Your Development Scores describe your learning so far. The evidence level shows how much practice supports each score. They are not a ranking against other people or a formal assessment. You can delete your account and learning history at any time.</Body>
       <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: 4 }}><ActionLink label="Privacy policy" onPress={() => void Linking.openURL(PRIVACY_URL)} /><ActionLink label="Terms" onPress={() => void Linking.openURL(TERMS_URL)} /><ActionLink label="Support" onPress={() => void Linking.openURL(SUPPORT_URL)} /></View>
     </Card>
 

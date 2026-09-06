@@ -145,7 +145,7 @@ def main() -> int:
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))
     time.sleep(4)
     scroll_to_top()
-    wait_for("Learn smarter. Think deeper.")
+    wait_for("Train your thinking")
     tap("I already have an account", scroll=True)
     wait_for("Welcome back")
     input_text("Email", EMAIL)
@@ -166,7 +166,7 @@ def main() -> int:
 
     tap("Sign out", scroll=True)
     scroll_to_top()
-    wait_for("Learn smarter. Think deeper.", timeout=45)
+    wait_for("Train your thinking", timeout=45)
     capture("pass")
     print("PASS: profile password-change navigation, empty-form validation, back navigation and sign-out all worked.")
     return 0

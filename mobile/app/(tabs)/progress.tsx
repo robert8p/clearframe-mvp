@@ -105,7 +105,7 @@ export default function ProgressScreen() {
     <View style={{ gap: 5 }}>
       <Eyebrow>Your progress</Eyebrow>
       <Title>See what’s changing</Title>
-      <Body muted>Cogni updates your skill profile from the evidence you create. Treat the score and the evidence level together rather than as a fixed grade.</Body>
+      <Body muted>Your answers help Cogni build your skill profile. Read each score alongside its evidence level, rather than as a fixed grade.</Body>
     </View>
 
     <LinearGradient colors={["rgba(30,43,99,.97)", "rgba(12,18,45,.98)"]} style={{ borderRadius: 26, borderWidth: 1, borderColor: colors.line, padding: 18, flexDirection: "row", alignItems: "center", gap: 16 }}>
@@ -179,7 +179,7 @@ export default function ProgressScreen() {
       </View>
       {measured.length
         ? [...measured].sort((a, b) => Number(a.score) - Number(b.score)).map((row) => <SkillBar key={row.skill_id} label={relation(row.skills)?.name ?? "Skill"} score={Number(row.score)} reliability={Number(row.reliability)} />)
-        : <Body muted>Complete your starting check to begin tracking skill movement.</Body>}
+        : <Body muted>Complete your starting check to begin tracking your skill progress.</Body>}
     </Card>
   </Screen>;
 }

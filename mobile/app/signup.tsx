@@ -119,7 +119,7 @@ export default function SignupScreen() {
             {message}
           </Text>
         ) : null}
-        <PrimaryButton label={busy ? "Creating account…" : "Create account"} disabled={busy} onPress={() => void submit()} />
+        <PrimaryButton label={busy ? "Creating account…" : "Create account"} disabled={busy} loading={busy} onPress={() => void submit()} />
         <PrimaryButton label="Back to sign in" secondary onPress={() => router.replace("/login")} />
       </Card>
     </Screen>

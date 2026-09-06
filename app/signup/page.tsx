@@ -9,8 +9,8 @@ export default function Page() {
         <section className="cg-auth-visual">
           <CogniMark />
           <div className="cg-brain-orb small"><span>◌</span></div>
-          <h1>Build your judgement profile.</h1>
-          <p>Start with a short diagnostic, then get a personalised learning pathway.</p>
+          <h1>Start training your thinking.</h1>
+          <p>Start with a short starting check, then follow practice tailored to you.</p>
           <div className="cg-auth-benefits">
             <span>Critical thinking</span><span>AI verification</span><span>Decision quality</span>
           </div>

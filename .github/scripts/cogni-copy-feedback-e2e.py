@@ -199,6 +199,31 @@ def assert_no_fatal_crash() -> None:
         raise AssertionError("React Native failure during copy/feedback flow")
 
 
+def training_action_dimensions(label: str) -> tuple[int, int]:
+    """Measure a fully visible control, so viewport clipping cannot fake its height."""
+    for _ in range(10):
+        candidates = [node for node in dump_ui("training-action-size")
+                      if node.description == label and node.clickable]
+        if candidates:
+            left, top, right, bottom = candidates[0].bounds
+            if top >= 250 and bottom <= 1800:
+                return right - left, bottom - top
+            if bottom > 1800:
+                adb("shell", "input", "swipe", "540", "1700", "540", "1200", "400")
+            else:
+                adb("shell", "input", "swipe", "540", "700", "540", "1200", "400")
+            time.sleep(0.8)
+        else:
+            swipe_up()
+    raise AssertionError("Could not position the complete training action for measurement")
+
+
+def assert_same_dimensions(before: tuple[int, int], after: tuple[int, int], label: str) -> None:
+    print(f"TEXT LAYOUT {label}: before={before}, after={after}")
+    if any(abs(first - second) > 4 for first, second in zip(before, after)):
+        raise AssertionError(f"{label}: text control dimensions changed at the same font scale: {before} vs {after}")
+
+
 def main() -> int:
     adb("shell", "am", "force-stop", PACKAGE)
     adb("logcat", "-c")
@@ -310,6 +335,7 @@ def main() -> int:
     time.sleep(4)
     wait_for("Home", timeout=45)
     assert_no_literal_controls("relaunch-copy")
+    normal_action_size = training_action_dimensions("Continue starting check")
 
     # Verify the redesigned primary surfaces remain reachable at 160% system text.
     try:
@@ -320,6 +346,7 @@ def main() -> int:
         wait_for("Hello, Cogni", timeout=45, scroll=True)
         capture("home-large-text")
         wait_for("Continue starting check", timeout=45, scroll=True)
+        live_large_action_size = training_action_dimensions("Continue starting check")
         capture("home-large-text-primary-action")
         tap("Skills")
         wait_for("Find your focus", timeout=45, scroll=True)
@@ -337,10 +364,17 @@ def main() -> int:
         wait_for("Hello, Cogni", timeout=45)
         capture("home-large-text-cold-launch")
         wait_for("Continue starting check", timeout=45, scroll=True)
+        cold_large_action_size = training_action_dimensions("Continue starting check")
         capture("home-large-text-cold-primary-action")
+        assert_same_dimensions(live_large_action_size, cold_large_action_size, "live vs cold 160%")
     finally:
         adb("shell", "settings", "put", "system", "font_scale", "1.0")
         time.sleep(2)
+
+    tap("Home")
+    restored_action_size = training_action_dimensions("Continue starting check")
+    assert_same_dimensions(normal_action_size, restored_action_size, "100% restored after 160%")
+    capture("home-text-size-restored")
 
     # Every suite in the combined exact-artifact runner owns its authentication
     # state. Leave the app signed out so the following profile/password suite

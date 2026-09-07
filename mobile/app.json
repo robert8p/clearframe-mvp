@@ -53,7 +53,8 @@
           "enableBackgroundRecording": false
         }
       ],
-      "./plugins/withRevenueCatAndroidLaunchMode"
+      "./plugins/withRevenueCatAndroidLaunchMode",
+      "./plugins/withAndroidFontScaleLayout"
     ],
     "experiments": {
       "typedRoutes": true

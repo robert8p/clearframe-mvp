@@ -14,6 +14,6 @@ The existing redesigned Home, Train navigation, skill search, calmer visual syst
 
 ## Verification scope
 
-The release workflow publishes this APK only after the exact source passes mobile and server checks, the signed APK passes identity/permission/checksum checks, Android upgrade and interaction suites pass, disposable test accounts are cleaned up, and the website and iOS JavaScript compile. The release's metadata and linked workflow identify the compiled commit and exact APK checksum.
+The release workflow prepares this APK as a draft only after the exact source passes mobile and server checks, the signed APK passes identity/permission/checksum checks, Android upgrade and interaction suites pass, disposable test accounts are cleaned up, and the website and iOS JavaScript compile. Native screenshots are reviewed before the draft becomes a public download. The release's metadata and linked workflow identify the compiled commit and exact APK checksum.
 
 This is an Android test preview. Paid subscriptions remain disabled. It is not a signed iPhone/TestFlight build. Real Apple/Google billing, physical sound/haptic quality, TalkBack/VoiceOver behaviour and recovery-email delivery/token redemption still need dedicated verification. The app provides curated thinking practice; arbitrary-topic live AI-generated learning is not implemented by this release.

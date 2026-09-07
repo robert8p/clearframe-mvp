@@ -50,6 +50,25 @@ jobs:
           test -s .github/scripts/cogni-upgrade-e2e.py
           echo "sha=$EXPECTED_SOURCE" >> "$GITHUB_OUTPUT"
           git show --stat --oneline HEAD
+  withdraw-intermediate-preview:
+    needs: source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Retain the intermediate build as a draft after its visual check failed
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/releases/384091583" > /tmp/intermediate-release.json
+          python3 - <<'PY'
+          import json
+          release=json.load(open('/tmp/intermediate-release.json'))
+          assert release['tag_name']=='v0.4.3-preview.1'
+          assert release['target_commitish']=='2be97e37859b74a67cdffdde6fcff8ca689e1f37'
+          PY
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/384091583" -F draft=true >/dev/null
   build-exact-apk:
     needs: source
     outputs:
@@ -353,7 +372,7 @@ jobs:
           name: cogni-0.4.3-source-validation-${{ github.run_attempt }}
           path: /tmp/cogni-source-validation/
           retention-days: 30
-  publish-tested-preview:
+  prepare-tested-preview:
     needs: [source, build-exact-apk, android-runtime, web-and-ios-validation]
     runs-on: ubuntu-latest
     permissions:
@@ -370,7 +389,7 @@ jobs:
         with:
           name: ${{ needs.build-exact-apk.outputs.artifact_name }}
           path: /tmp/cogni-release
-      - name: Publish only APK bytes that passed all required jobs
+      - name: Prepare a draft of the exact tested APK for final screenshot review
         shell: bash
         run: |
           set -euo pipefail
@@ -385,7 +404,7 @@ jobs:
           assert hashlib.sha256(apk.read_bytes()).hexdigest()==meta['sha256']
           (root/'SHA256SUMS.txt').write_text(meta['sha256']+'  Cogni-0.4.3-preview.apk\n')
           PY
-          TAG=v0.4.3-preview.1
+          TAG=v0.4.3-preview.2
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo 'Release already exists; refusing to replace immutable test evidence.' >&2
             exit 1
@@ -394,4 +413,4 @@ jobs:
           cp COGNI_0.4.3_STAKEHOLDER_REVIEW.md /tmp/cogni-release/STAKEHOLDER_REVIEW.md
           cp COGNI_0.4.3_TESTING.md /tmp/cogni-release-notes.md
           printf '\nVerified source: `%s`\n\nAutomated build and Android interaction evidence: https://github.com/%s/actions/runs/%s\n' "$SOURCE_COMMIT" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> /tmp/cogni-release-notes.md
-          gh release create "$TAG" --target "$SOURCE_COMMIT" --prerelease --title 'Cogni 0.4.3 — stakeholder-review Android preview' --notes-file /tmp/cogni-release-notes.md /tmp/cogni-release/Cogni-0.4.3-preview.apk /tmp/cogni-release/metadata.json /tmp/cogni-release/SHA256SUMS.txt /tmp/cogni-release/TESTING.md /tmp/cogni-release/STAKEHOLDER_REVIEW.md
+          gh release create "$TAG" --target "$SOURCE_COMMIT" --draft --prerelease --title 'Cogni 0.4.3 — stakeholder-review Android preview' --notes-file /tmp/cogni-release-notes.md /tmp/cogni-release/Cogni-0.4.3-preview.apk /tmp/cogni-release/metadata.json /tmp/cogni-release/SHA256SUMS.txt /tmp/cogni-release/TESTING.md /tmp/cogni-release/STAKEHOLDER_REVIEW.md

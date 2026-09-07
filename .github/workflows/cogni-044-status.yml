@@ -1,0 +1,50 @@
+name: Cogni 0.4.4 Expo status
+'on':
+  push:
+    branches: [release/cogni-0.4.4]
+    paths: [.github/workflows/cogni-044-status.yml]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 360c87533e776c6304888ce4e5fbfbb7335debd6
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --include=dev --no-audit --no-fund
+      - name: Read Expo status without starting or changing a build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx eas-cli@21.7.1 build:view 75cb1db3-3c31-4236-9d19-3d6a82fb6e1f --json > /tmp/expo.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          b=json.loads(Path('/tmp/expo.json').read_text())
+          assert b['id']=='75cb1db3-3c31-4236-9d19-3d6a82fb6e1f'
+          assert b['gitCommitHash']=='360c87533e776c6304888ce4e5fbfbb7335debd6'
+          fields=['id','status','platform','appVersion','appBuildVersion','gitCommitHash','createdAt','updatedAt','completedAt','error','priority','queuePosition']
+          result={k:b[k] for k in fields if k in b}
+          result['downloadUrl']=(b.get('artifacts') or {}).get('buildUrl')
+          Path('/tmp/cogni-044-status.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-044-status-${{ github.run_attempt }}
+          path: /tmp/cogni-044-status.json
+          retention-days: 14
+          if-no-files-found: error

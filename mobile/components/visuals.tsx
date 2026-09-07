@@ -39,7 +39,7 @@ export function MountainScene({ height = 182 }: { height?: number }) {
 }
 export function WelcomeArtwork() {
   return <View {...decorative} style={{position:"absolute",top:0,left:0,right:0,height:310,overflow:"hidden"}}>
-    <Image source={require("../assets/approved-dreamscape.webp")} resizeMode="cover" fadeDuration={0} style={{width:"100%",height:310}} />
+    <Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:"100%",height:310}} />
     <LinearGradient colors={["rgba(7,12,32,.02)","rgba(7,12,32,.02)","#070c20"]} locations={[0,.55,1]} style={{position:"absolute",inset:0}} />
     <LinearGradient colors={["#070c20","transparent","transparent","#070c20"]} locations={[0,.04,.96,1]} start={{x:0,y:0}} end={{x:1,y:0}} style={{position:"absolute",inset:0}} />
   </View>;

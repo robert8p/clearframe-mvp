@@ -310,8 +310,8 @@ def test_all_tabs() -> None:
     wait_for("Find your focus", timeout=45)
     wait_for("Search skills", timeout=45, scroll=True)
     capture_evidence("skills-search-and-filters")
+    # The shared input helper already dismisses the keyboard; a second Back leaves Skills.
     input_text("Search skills", "zzzcogninomatch", scroll=True)
-    adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
     wait_for("No skills match yet", timeout=30, scroll=True)
     tap("Reset filters", scroll=True)
     scroll_to_top()

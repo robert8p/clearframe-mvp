@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Redirect, Tabs } from "expo-router";
-import { Animated, View } from "react-native";
+import { Animated, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CogniLogo } from "@/components/brand";
@@ -97,6 +97,7 @@ function TabIcon({ name, active }: { name: TabGlyphName; active: boolean }) {
 export default function TabLayout() {
   const { session, loading } = useAuth();
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
   if (loading) return <LoadingState />;
   if (!session) return <Redirect href="/login" />;
 
@@ -113,16 +114,19 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.cyan,
         tabBarInactiveTintColor: colors.soft,
         tabBarHideOnKeyboard: true,
+        // Keep all five destination names readable within their fixed columns.
+        // Learning content remains fully scalable; tab labels grow up to 120%.
+        tabBarAllowFontScaling: false,
         tabBarItemStyle: { flex: 1, paddingTop: 3 },
         tabBarStyle: {
           backgroundColor: "rgba(8,12,30,.985)",
           borderTopColor: "rgba(83,105,165,.48)",
-          height: 70 + bottomInset,
+          height: 70 + bottomInset + (fontScale > 1 ? 6 : 0),
           paddingTop: 6,
           paddingBottom: bottomInset,
           boxShadow: "0 -8px 28px rgba(0,0,0,.18)",
         },
-        tabBarLabelStyle: { fontSize: 11.5, lineHeight: 15, fontWeight: "800", paddingTop: 1 },
+        tabBarLabelStyle: { fontSize: 11.5 * Math.min(fontScale, 1.2), lineHeight: 15 * Math.min(fontScale, 1.2), fontWeight: "800", paddingTop: 1 },
       }}
     >
       <Tabs.Screen name="home" options={{ title: "Home", tabBarAccessibilityLabel: "Home tab", tabBarIcon: ({ focused }) => <TabIcon name="home" active={focused} /> }} />

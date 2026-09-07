@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: cogni-043-preview
-  cancel-in-progress: false
+  cancel-in-progress: true
 env:
   SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
   SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b

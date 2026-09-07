@@ -327,6 +327,17 @@ def main() -> int:
         tap("Progress")
         wait_for("See what’s changing", timeout=45, scroll=True)
         capture("progress-large-text")
+        # Check a cold launch at the same scale as well as the live font change.
+        # Earlier heading-only checks missed clipped Home text in screenshots.
+        adb("shell", "am", "force-stop", PACKAGE)
+        adb("shell", "am", "start", "-W", "-n", ACTIVITY)
+        time.sleep(4)
+        tap("Home")
+        scroll_to_top()
+        wait_for("Hello, Cogni", timeout=45)
+        capture("home-large-text-cold-launch")
+        wait_for("Continue starting check", timeout=45, scroll=True)
+        capture("home-large-text-cold-primary-action")
     finally:
         adb("shell", "settings", "put", "system", "font_scale", "1.0")
         time.sleep(2)

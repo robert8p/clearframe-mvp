@@ -13,12 +13,15 @@ function AmbientBackground() {
 }
 
 export const Screen = React.forwardRef<ScrollView, ScreenProps>(function Screen({ children, refreshing, onRefresh, contentStyle, style, ...props }, ref) {
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AmbientBackground />
+      {/* Recreate cached native text measurements after a live Android font-size change.
+          Form and learning state live in the parent screen, above this scroll content. */}
       <ScrollView
+        key={`text-scale-${fontScale}`}
         ref={ref}
         contentInsetAdjustmentBehavior="automatic"
         automaticallyAdjustKeyboardInsets

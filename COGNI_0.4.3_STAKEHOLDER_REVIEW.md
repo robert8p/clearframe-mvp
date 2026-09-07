@@ -28,6 +28,8 @@ The requested baseline is 0.4.1, source `3abd8bd6ab1889f8a198814531984a135e46910
 
 ## Release contract
 
+Visual readback found a further gap in 0.4.2's large-text evidence: Home copy, its CTA, the wordmark and tab labels clipped after a live font-scale change even though heading reachability assertions passed. The shared scroll content now remounts native text measurements when font scale changes, preserving the parent screen's learning/form state. Decorative wordmark text stays at its intended graphic size; five constrained tab labels grow to 120% with added vertical space, while learning content scales fully. Installed tests capture both a live change and cold launch at 160%; screenshots must be inspected rather than equating a found accessibility label with visible readable text.
+
 `release/cogni-0.4.3` builds from the complete checked-in source. The workflow performs no repository-source mutations. All jobs check out the triggering commit. APK metadata records the same commit; publication verifies the checksum again and depends on source/server tests, native build/signature/permissions, Android upgrade and interactions, account cleanup, iOS JavaScript export and production web compilation.
 
 Only disposable accounts are used for mutation/deletion tests. The password test restores its original credential in `finally`; workflow cleanup can authenticate either known test credential, and blocks release if the provisioned account cannot be accounted for. Recovery mail is not sent to an invented real inbox.

@@ -59,7 +59,7 @@ export function CogniMark({ size = 38, animated = true }: { size?: number; anima
         </View>
       </LinearGradient>
       <View style={{ position: "absolute", left: size * 0.14, bottom: size * 0.07, width: size * 0.16, height: size * 0.16, transform: [{ rotate: "45deg" }], backgroundColor: colors.violet, borderBottomRightRadius: 3 }} />
-      <Animated.Text accessible={false} style={{ position: "absolute", right: 0, top: 0, color: colors.cyan, fontSize: Math.max(8, size * 0.23), opacity: sparkleOpacity }}>✦</Animated.Text>
+      <Animated.Text accessible={false} allowFontScaling={false} style={{ position: "absolute", right: 0, top: 0, color: colors.cyan, fontSize: Math.max(8, size * 0.23), opacity: sparkleOpacity }}>✦</Animated.Text>
     </Animated.View>
   );
 }
@@ -70,8 +70,8 @@ export function CogniLogo({ compact = false, centered = false, animated = true }
     <View accessibilityLabel="Cogni" accessible style={{ flexDirection: "row", alignItems: "center", justifyContent: centered ? "center" : "flex-start", gap: compact ? 8 : 12 }}>
       <CogniMark size={compact ? 30 : 52} animated={animated} />
       <View accessible={false} importantForAccessibility="no-hide-descendants" style={{ flexDirection: "row", alignItems: "baseline" }}>
-        <Text style={{ color: colors.text, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>Cog</Text>
-        <Text style={{ color: colors.purple, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>ni</Text>
+        <Text allowFontScaling={false} style={{ color: colors.text, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>Cog</Text>
+        <Text allowFontScaling={false} style={{ color: colors.purple, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>ni</Text>
       </View>
     </View>
   );

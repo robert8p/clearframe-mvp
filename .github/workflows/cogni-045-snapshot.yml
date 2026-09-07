@@ -1,0 +1,91 @@
+name: Cogni 0.4.5 bounded native snapshot
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Retrieve exact signed Expo APK
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cogni-045-snapshot
+          curl --fail --location --retry 3 --max-time 180 https://expo.dev/artifacts/eas/I3gSpUZYogOTT-XRAGsNHZOF7NjL6tbVkoXODgFFM38.apk --output /tmp/cogni-045.apk
+          echo 'b427f68cea176cd8fb0e062307dba86f5983bbfc28f311eeedd884a5bd716bf2  /tmp/cogni-045.apk' | sha256sum --check --strict
+      - name: Prepare bounded native inspection
+        run: |
+          cat > /tmp/snapshot.py <<'PY'
+          import subprocess,time,json,re,xml.etree.ElementTree as ET
+          from pathlib import Path
+          out=Path('/tmp/cogni-045-snapshot');results={'physicalDeviceTested':False}
+          def adb(*args,timeout=30,check=True):
+              p=subprocess.run(['adb',*args],capture_output=True,timeout=timeout)
+              if check and p.returncode:raise RuntimeError(p.stderr.decode(errors='replace'))
+              return p.stdout
+          def capture(label):
+              (out/(label+'.png')).write_bytes(adb('exec-out','screencap','-p'))
+              (out/(label+'-logcat.txt')).write_bytes(adb('logcat','-d','-t','300','-v','threadtime'))
+          def nodes():
+              adb('shell','uiautomator','dump','--compressed','/sdcard/cogni-bounded.xml',timeout=25)
+              raw=adb('shell','cat','/sdcard/cogni-bounded.xml');(out/'hierarchy.xml').write_bytes(raw)
+              return list(ET.fromstring(raw).iter('node'))
+          def tap(label):
+              for attempt in range(7):
+                  available=nodes()
+                  for n in available:
+                      if label in [n.attrib.get('content-desc'),n.attrib.get('text')] and n.attrib.get('enabled')=='true':
+                          bounds=list(map(int,re.findall(r'\d+',n.attrib['bounds'])))
+                          adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2));time.sleep(2);return
+                  adb('shell','input','swipe','540','1950','540','700','400');time.sleep(.5)
+              raise RuntimeError('No visible action: '+label)
+          try:
+              adb('install','-r','/tmp/cogni-045.apk',timeout=180)
+              adb('logcat','-c')
+              adb('shell','am','start','-W','-n','app.gocogni.cogni/.MainActivity',timeout=45)
+              time.sleep(8);capture('welcome-native')
+              (out/'package.txt').write_bytes(adb('shell','dumpsys','package','app.gocogni.cogni'))
+              assert adb('shell','pidof','app.gocogni.cogni').strip()
+              tree=nodes();assert any('Sharpen how you think.' in n.attrib.get('text','') for n in tree)
+              results['welcome']='passed'
+              tap('Try a sample decision');capture('sample-native')
+              tap('Check an original source supports the claim');capture('sample-selected-native')
+              tap('See the reasoning');capture('sample-feedback-native')
+              results['sample']='passed';results['status']='passed'
+          except Exception as error:
+              results['error']=str(error);results['status']='failed'
+              try:capture('failure-native')
+              except Exception:pass
+              raise
+          finally:(out/'result.json').write_text(json.dumps(results,indent=2))
+          PY
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 15
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: python3 -u /tmp/snapshot.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-045-bounded-native-${{ github.run_attempt }}
+          path: /tmp/cogni-045-snapshot/
+          retention-days: 30
+          if-no-files-found: warn

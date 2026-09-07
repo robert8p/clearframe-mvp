@@ -1,0 +1,120 @@
+name: Cogni 0.4.4 native visual check
+'on':
+  push:
+    branches: [release/cogni-0.4.4]
+    paths: [.github/workflows/cogni-044-visual.yml]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  actions: read
+jobs:
+  exact-apk-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      E2E_EMAIL: unused-visual-fixture@example.com
+      E2E_PASSWORD: unused-no-account-created
+      API_LEVEL: '36'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 360c87533e776c6304888ce4e5fbfbb7335debd6
+          persist-credentials: false
+      - name: Locate only the exact completed APK evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            gh api repos/robert8p/clearframe-mvp/actions/runs/34144896078/artifacts > /tmp/artifacts.json
+            ID=$(python3 - <<'PY'
+          import json
+          matches=[a for a in json.load(open('/tmp/artifacts.json'))['artifacts'] if a['name']=='cogni-044-expo-apk-1' and not a['expired']]
+          assert len(matches)<=1
+          if matches:
+              a=matches[0]
+              assert a['workflow_run']['head_sha']=='360c87533e776c6304888ce4e5fbfbb7335debd6'
+              print(a['id'])
+          PY
+            )
+            if [ -n "$ID" ]; then break; fi
+            sleep 30
+          done
+          test -n "$ID"
+          gh api "repos/robert8p/clearframe-mvp/actions/artifacts/$ID/zip" > /tmp/exact-apk.zip
+          python3 - <<'PY'
+          import json,hashlib
+          from zipfile import ZipFile
+          from pathlib import Path
+          root=Path('/tmp/cogni-044-visual');root.mkdir(exist_ok=True)
+          with ZipFile('/tmp/exact-apk.zip') as z:
+              meta=json.loads(z.read('metadata.json'))
+              assert meta['sourceCommit']=='360c87533e776c6304888ce4e5fbfbb7335debd6'
+              assert meta['id']=='75cb1db3-3c31-4236-9d19-3d6a82fb6e1f' and meta['version']=='0.4.4'
+              apk=z.read('Cogni-0.4.4-preview.apk')
+              assert hashlib.sha256(apk).hexdigest()==meta['sha256']
+              (root/'Cogni-0.4.4-preview.apk').write_bytes(apk)
+              (root/'metadata.json').write_text(json.dumps(meta,indent=2))
+          PY
+      - name: Prepare no-account visual interactions
+        run: |
+          cat > /tmp/cogni-044-visual.py <<'PY'
+          import importlib.util,os,json,time
+          from pathlib import Path
+          spec=importlib.util.spec_from_file_location('runner',Path.cwd()/'.github/scripts/cogni-auth-route-e2e-fixed.py')
+          runner=importlib.util.module_from_spec(spec);spec.loader.exec_module(runner)
+          ui=runner.load_suite(Path.cwd()/'.github/scripts/cogni-copy-feedback-e2e.py');runner.install_reliable_automation(ui)
+          ui.OUT=Path('/tmp/cogni-044-visual/screens');ui.OUT.mkdir(parents=True,exist_ok=True)
+          ui.adb('install','/tmp/cogni-044-visual/Cogni-0.4.4-preview.apk')
+          ui.adb('logcat','-c');ui.adb('shell','am','start','-W','-n',ui.ACTIVITY);time.sleep(5)
+          results={}
+          try:
+              ui.scroll_to_top();ui.wait_for('Make room for a clearer perspective.');ui.capture('welcome-top')
+              ui.wait_for('Try a sample decision',scroll=True);ui.capture('welcome-sample-action');ui.tap('Try a sample decision',scroll=True)
+              ui.wait_for('A decision worth a pause.');ui.capture('sample-top')
+              ui.tap('Check an original source supports the claim',scroll=True);ui.capture('sample-selected')
+              ui.tap('See the reasoning',scroll=True);ui.wait_for('Confidence is not evidence.',scroll=True);ui.capture('sample-reasoning')
+              ui.tap('Back to welcome',scroll=True);ui.scroll_to_top();ui.wait_for('Make room for a clearer perspective.')
+              results['normal']='passed'
+              ui.adb('shell','settings','put','system','font_scale','1.6');time.sleep(3);ui.scroll_to_top()
+              ui.wait_for('Make room for a clearer perspective.');ui.capture('welcome-large-top')
+              ui.tap('Try a sample decision',scroll=True);ui.scroll_to_top();ui.wait_for('A decision worth a pause.');ui.capture('sample-large-top')
+              ui.tap('Check an original source supports the claim',scroll=True);ui.capture('sample-large-choice')
+              ui.tap('See the reasoning',scroll=True);ui.wait_for('Confidence is not evidence.',scroll=True);ui.capture('sample-large-reasoning')
+              ui.tap('Back to welcome',scroll=True);ui.wait_for('Make room for a clearer perspective.',scroll=True)
+              results['largeText']='passed'
+              ui.assert_no_fatal_crash();results['status']='passed'
+          except Exception as e:
+              results['status']='failed';results['error']=str(e);ui.capture('failure');raise
+          finally:
+              ui.adb('shell','settings','put','system','font_scale','1.0',check=False)
+              (ui.OUT/'result.json').write_text(json.dumps(results,indent=2))
+          PY
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: python3 -u /tmp/cogni-044-visual.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-044-native-visual-${{ github.run_attempt }}
+          path: |
+            /tmp/cogni-044-visual/screens/
+            /tmp/cogni-044-visual/metadata.json
+          retention-days: 30
+          if-no-files-found: warn

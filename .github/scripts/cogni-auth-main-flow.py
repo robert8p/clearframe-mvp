@@ -295,7 +295,7 @@ def assert_no_fatal_crash(label: str) -> None:
 
 def assert_welcome() -> None:
     scroll_to_top()
-    wait_for("Train your thinking", timeout=45)
+    wait_for("Sharpen how you think.", timeout=45)
     wait_for("Get started", enabled=True, scroll=True)
     wait_for("I already have an account", enabled=True, scroll=True)
     assert_absent("Reset your password")
@@ -303,7 +303,7 @@ def assert_welcome() -> None:
 
 def test_all_tabs() -> None:
     tap("Home")
-    wait_for("Hello, Cogni", timeout=45, scroll=True)
+    wait_for("A brighter day, Cogni", timeout=45, scroll=True)
     assert_absent("Something went wrong")
 
     tap("Skills")

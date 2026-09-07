@@ -1,0 +1,30 @@
+{
+  "manifestDigest": "353c9f6ca319f6df91a2fb18fd6299ba280ae5edc49541996f4af33e51d70228",
+  "baseline": "308eb6fef139f61cd633f96a89ebb4ab408dc096",
+  "files": [
+    "mobile/app.json",
+    "mobile/app/index.tsx",
+    "mobile/components/ui.tsx",
+    "mobile/lib/theme.ts",
+    "mobile/app/(tabs)/_layout.tsx",
+    "mobile/app/(tabs)/home.tsx",
+    "mobile/app/(tabs)/progress.tsx",
+    "mobile/app/demo.tsx",
+    "mobile/app/toolkit.tsx",
+    "mobile/components/brand.tsx",
+    "mobile/components/learning-surfaces.tsx",
+    "mobile/components/practice-tools.tsx",
+    "mobile/components/question-runner.tsx",
+    ".github/scripts/cogni-044-tools-e2e.py",
+    ".github/scripts/cogni-auth-main-flow.py",
+    ".github/scripts/cogni-auth-route-e2e-fixed.py",
+    ".github/scripts/cogni-copy-feedback-e2e.py",
+    ".github/scripts/cogni-monetization-prestore-e2e.py",
+    ".github/scripts/cogni-profile-password-e2e.py",
+    ".github/scripts/cogni-signup-onboarding-e2e.py",
+    ".github/scripts/cogni-upgrade-e2e.py",
+    ".github/scripts/verify-cogni-apk-runtime.sh",
+    "mobile/scripts/monetization-audit.mjs",
+    "mobile/scripts/release-contract.test.mjs"
+  ]
+}

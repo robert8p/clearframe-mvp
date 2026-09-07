@@ -100,7 +100,7 @@ after_launch_evidence() {
   fi
 
   local welcome_hits=0
-  for text in "Train your thinking" "Get started" "I already have an account"; do
+  for text in "Sharpen how you think." "Get started" "I already have an account"; do
     if grep -Fq "$text" "$xml_local"; then
       welcome_hits=$((welcome_hits + 1))
     fi

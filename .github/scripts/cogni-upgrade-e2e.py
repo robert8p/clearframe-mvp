@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parent
 PACKAGE = "app.gocogni.cogni"
 ACTIVITY = f"{PACKAGE}/.MainActivity"
 OUT = Path(f"/tmp/cogni-upgrade-api-{os.environ.get('API_LEVEL', '36')}")
-EXPECTED_PREVIOUS_VERSION = "0.4.2"
-EXPECTED_VERSION = "0.4.3"
+EXPECTED_PREVIOUS_VERSION = "0.4.4"
+EXPECTED_VERSION = "0.4.5"
 
 
 def load_automation() -> ModuleType:
@@ -179,7 +179,7 @@ def main() -> int:
         ui.adb("logcat", "-c")
         launch(ui, "previous")
         ui.scroll_to_top()
-        ui.wait_for("Train your thinking")
+        ui.wait_for("Make room for a clearer perspective.")
         ui.tap("I already have an account", scroll=True)
         ui.wait_for("Welcome back")
         ui.input_text("Email", email)
@@ -231,11 +231,11 @@ def main() -> int:
         # Leave the account and password intact for the independent full suites.
         ui.tap("Sign out", scroll=True)
         ui.scroll_to_top()
-        ui.wait_for("Train your thinking", timeout=45)
+        ui.wait_for("Sharpen how you think.", timeout=45)
         assert_healthy(ui, "signed-out")
         ui.capture("pass")
         result.update({"status": "passed", "signedOutAtEnd": True, "signingCompatibility": "Android accepted adb install -r", "completedAtUtc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
-        print("PASS: Cogni 0.4.2 upgraded in place to 0.4.3; package, Android UID, original installation, authenticated account, sound preference and haptic preference survived without a crash. Signed out for the following suites.")
+        print("PASS: Cogni 0.4.4 upgraded in place to 0.4.5; package, Android UID, original installation, authenticated account, sound preference and haptic preference survived without a crash. Signed out for the following suites.")
         return 0
     except Exception as error:
         result.update({"status": "failed", "error": str(error)})

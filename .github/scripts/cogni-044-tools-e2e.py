@@ -31,7 +31,7 @@ def sign_in(email):
 def sign_out():
     ui.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK', check=False); time.sleep(1)
     ui.tap('Profile'); ui.scroll_to_top(); ui.tap('Sign out', scroll=True)
-    ui.scroll_to_top(); ui.wait_for('Make room for a clearer perspective.')
+    ui.scroll_to_top(); ui.wait_for('Sharpen how you think.')
 def restart():
     ui.adb('shell', 'am', 'force-stop', ui.PACKAGE); ui.adb('shell', 'am', 'start', '-W', '-n', ui.ACTIVITY); time.sleep(5)
 def toolkit():
@@ -44,7 +44,7 @@ def main():
     result = {'status': 'running', 'physicalDeviceTested': False}; other_token = None
     print('::add-mask::'+OTHER)
     try:
-        restart(); ui.scroll_to_top(); ui.wait_for('Make room for a clearer perspective.'); ui.capture('welcome')
+        restart(); ui.scroll_to_top(); ui.wait_for('Sharpen how you think.'); ui.capture('welcome')
         ui.tap('Try a sample decision',scroll=True); ui.wait_for('A decision worth a pause.'); ui.capture('sample-first-question')
         cases=[('Check an original source supports the claim','Confidence is not evidence.','Try another decision'),('Find outcomes for people with a similar starting point','A memorable example is not a base rate.','Try another decision'),('Try a small, reversible test with a clear success measure','Use small tests to reduce uncertainty.','Finish the sample')]
         for i,(answer,principle,next_label) in enumerate(cases):
@@ -52,7 +52,7 @@ def main():
             ui.wait_for(principle,scroll=True); ui.capture(f'sample-reasoning-{i+1}'); ui.tap(next_label,scroll=True)
         ui.wait_for('Less guessing. More questioning.'); ui.capture('sample-complete'); ui.tap('Back to welcome',scroll=True)
         result['sampleThreeDecisions'] = 'passed'
-        sign_in(EMAIL); ui.wait_for('Hello, Cogni',timeout=45); ui.capture('home')
+        sign_in(EMAIL); ui.wait_for('A brighter day, Cogni',timeout=45); ui.capture('home')
         # This suite owns a separate fresh identity. Submit a real UI answer so
         # the local practice-day record is exercised, not seeded or mocked.
         ui.tap('Train'); ui.wait_for_train_landing()
@@ -72,7 +72,7 @@ def main():
             ui.tap('60 percent confident',scroll=True)
         ui.tap('Submit answer',scroll=True)
         ui.wait_for('Next question',timeout=60,scroll=True); ui.capture('live-answer-before-saving')
-        ui.tap('Home'); ui.wait_for('Hello, Cogni',timeout=45); ui.scroll_to_top()
+        ui.tap('Home'); ui.wait_for('A brighter day, Cogni',timeout=45); ui.scroll_to_top()
         ui.tap('Save key idea',scroll=True); ui.wait_for('Key idea saved',timeout=25)
         ui.scroll_to_top(); ui.tap('Open saved ideas',scroll=True); ui.wait_for('Your thinking toolkit')
         ui.tap('3 days a week',scroll=True); ui.scroll_to_top(); ui.wait_for('1 of 3 practice days',scroll=True)
@@ -94,7 +94,7 @@ def main():
         ui.tap('Reveal idea',scroll=True); ui.wait_for('Hide idea',scroll=True); ui.capture('saved-idea-large-text')
         ui.adb('shell','settings','put','system','font_scale','1.0'); time.sleep(2)
         result['largeTextToolkit'] = 'passed'
-        sign_out(); ui.adb('shell','am','start','-W','-a','android.intent.action.VIEW','-d','cogni://toolkit',ui.PACKAGE); time.sleep(3); ui.scroll_to_top(); ui.wait_for('Make room for a clearer perspective.',timeout=45); absent('Reveal idea')
+        sign_out(); ui.adb('shell','am','start','-W','-a','android.intent.action.VIEW','-d','cogni://toolkit',ui.PACKAGE); time.sleep(3); ui.scroll_to_top(); ui.wait_for('Sharpen how you think.',timeout=45); absent('Reveal idea')
         # Provision a second disposable account through the public auth and app API.
         status, body = post('/auth/v1/signup', {'email':OTHER,'password':PASSWORD,'data':{'full_name':'Cogni Tools E2E'}})
         status, body = post('/auth/v1/token?grant_type=password', {'email':OTHER,'password':PASSWORD})

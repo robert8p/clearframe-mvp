@@ -6,6 +6,7 @@ import { Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { apiFetch } from "@/lib/api";
 import { useProGate } from "@/lib/pro-gate";
+import { ToolkitShortcut } from "@/components/practice-tools";
 import { colors } from "@/lib/theme";
 import type { MobileProfileResponse } from "@/lib/types";
 import { Body, Card, Eyebrow, ErrorState, LoadingState, MetricCard, PrimaryButton, ProgressRing, Screen, SkillBar, Title } from "@/components/ui";
@@ -40,11 +41,11 @@ export default function ProgressScreen() {
     {error ? <RefreshNotice message={error} onRetry={() => void reload()} /> : null}
     <View style={{ gap: 5 }}>
       <Eyebrow>Your progress</Eyebrow>
-      <Title>See what’s changing</Title>
+      <Title>Your progress, in perspective</Title>
       <Body muted>Your answers help Cogni build your skill profile. Read each score alongside its evidence level, rather than as a fixed grade.</Body>
     </View>
 
-    <LinearGradient colors={["rgba(30,43,99,.97)", "rgba(12,18,45,.98)"]} style={{ borderRadius: 26, borderWidth: 1, borderColor: colors.line, padding: 18, flexDirection: fontScale>1.25 || width<360 ? "column" : "row", alignItems: "center", gap: 16 }}>
+    <LinearGradient colors={["#243c72", "#25214d"]} style={{ borderRadius: 26, borderWidth: 1, borderColor: colors.line, padding: 18, flexDirection: fontScale>1.25 || width<360 ? "column" : "row", alignItems: "center", gap: 16 }}>
       <ProgressRing value={average} label="recent" />
       <View style={{ flex: 1, gap: 6 }}>
         <Eyebrow>Recent performance</Eyebrow>
@@ -80,6 +81,7 @@ export default function ProgressScreen() {
         ? [...measured].sort((a, b) => Number(a.score) - Number(b.score)).map((row) => <SkillBar key={row.skill_id} label={relation(row.skills)?.name ?? "Skill"} score={Number(row.score)} reliability={Number(row.reliability)} />)
         : <Body muted>Complete your starting check to begin tracking your skill progress.</Body>}
     </Card>
+    <ToolkitShortcut />
     <ScoreExplainer />
   </Screen>;
 }

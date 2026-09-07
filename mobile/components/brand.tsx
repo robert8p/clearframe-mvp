@@ -71,7 +71,7 @@ export function CogniLogo({ compact = false, centered = false, animated = true }
       <CogniMark size={compact ? 30 : 52} animated={animated} />
       <View accessible={false} importantForAccessibility="no-hide-descendants" style={{ flexDirection: "row", alignItems: "baseline" }}>
         <Text allowFontScaling={false} style={{ color: colors.text, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>Cog</Text>
-        <Text allowFontScaling={false} style={{ color: colors.purple, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>ni</Text>
+        <Text allowFontScaling={false} style={{ color: colors.text, fontSize, lineHeight: fontSize * 1.08, fontWeight: "900", letterSpacing: -1.3 }}>ni</Text>
       </View>
     </View>
   );

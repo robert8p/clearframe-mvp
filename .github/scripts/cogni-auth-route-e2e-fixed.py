@@ -15,7 +15,7 @@ SUITES = [
     ROOT / "cogni-signup-onboarding-e2e.py",
     ROOT / "cogni-monetization-prestore-e2e.py",
 ]
-TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "Hello, Cogni", "Find your focus", "See what’s changing", "Find your starting point"}
+TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "A brighter day, Cogni", "Find your focus", "See what’s changing", "Find your starting point"}
 
 def load_suite(path: Path) -> ModuleType:
     module_name = path.stem.replace("-", "_")

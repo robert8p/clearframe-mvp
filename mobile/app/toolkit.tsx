@@ -5,6 +5,7 @@ import { Body, Card, Eyebrow, PrimaryButton, Screen, Title } from "@/components/
 import { DeviceToolsNotice, PracticeRhythm } from "@/components/practice-tools";
 import { useNotebook } from "@/lib/notebook";
 import { MAX_IDEAS, type SavedIdea } from "@/lib/notebook-store";
+import { SkillMotif, motifForSkill } from "@/components/visuals";
 import { colors } from "@/lib/theme";
 
 function SavedIdeaCard({ idea }: { idea: SavedIdea }) {
@@ -16,7 +17,7 @@ function SavedIdeaCard({ idea }: { idea: SavedIdea }) {
     catch { setShareError("Could not open sharing. Try again."); }
     finally { setSharing(false); }
   }
-  return <Card><Eyebrow>Saved {idea.savedOn}</Eyebrow><Title size={24}>{idea.title}</Title>
+  return <Card><View style={{flexDirection:"row",gap:12,alignItems:"center"}}><SkillMotif kind={motifForSkill(idea.title)} size={48} /><View style={{flex:1}}><Eyebrow>Saved {idea.savedOn}</Eyebrow></View></View><Title size={24}>{idea.title}</Title>
     {open ? <><Body>{idea.principle}</Body>{idea.application ? <Body muted>{idea.application}</Body> : null}<PrimaryButton secondary label="Hide idea" onPress={() => setOpen(false)} /><Body muted style={{ fontSize: 12, lineHeight: 18 }}>Sharing includes only the displayed idea—not your account, scores or practice history.</Body><PrimaryButton secondary label="Share idea" loading={sharing} onPress={() => void share()} />{shareError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{shareError}</Text> : null}<PrimaryButton secondary label="Remove saved idea" disabled={tools.busy} onPress={remove} /></> : <><Body muted>Before revealing it, try recalling the idea and one situation where you could use it.</Body><PrimaryButton secondary label="Reveal idea" onPress={() => setOpen(true)} /></>}
   </Card>;
 }

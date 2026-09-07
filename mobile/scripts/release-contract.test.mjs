@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
 const read = (name) => fs.readFileSync(new URL(name, import.meta.url), "utf8");
-test("0.4.4 preview retains application and EAS identity", () => {
+test("0.4.5 preview retains application and EAS identity", () => {
   const { expo } = JSON.parse(read("../app.json"));
-  assert.equal(expo.version, "0.4.4");
+  assert.equal(expo.version, "0.4.5");
   assert.equal(expo.android.package, "app.gocogni.cogni");
   assert.equal(expo.ios.bundleIdentifier, "app.gocogni.cogni");
   assert.equal(expo.extra.eas.projectId, "24fc0fea-5e66-4365-a82c-ac668aded7d0");

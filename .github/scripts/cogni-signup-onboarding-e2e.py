@@ -146,7 +146,7 @@ def main() -> int:
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))
     time.sleep(4)
     scroll_to_top()
-    wait_for("Train your thinking")
+    wait_for("Sharpen how you think.")
     tap("Get started", scroll=True)
     wait_for("Create your Cogni account")
 
@@ -178,7 +178,7 @@ def main() -> int:
     wait_for("Delete Cogni account?", timeout=20)
     tap("Delete account")
     scroll_to_top()
-    wait_for("Train your thinking", timeout=60)
+    wait_for("Sharpen how you think.", timeout=60)
     assert_absent("Reset your password")
 
     capture("pass")

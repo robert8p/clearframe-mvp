@@ -148,7 +148,7 @@ def main() -> int:
     print(adb("shell", "am", "start", "-W", "-n", ACTIVITY))
     time.sleep(4)
     scroll_to_top()
-    wait_for("Train your thinking")
+    wait_for("Sharpen how you think.")
     tap("I already have an account", scroll=True)
     wait_for("Welcome back")
     input_text("Email", EMAIL)
@@ -188,7 +188,7 @@ def main() -> int:
         assert_absent("Reset your password")
         tap("Sign out", scroll=True)
         scroll_to_top()
-        wait_for("Train your thinking", timeout=45)
+        wait_for("Sharpen how you think.", timeout=45)
         status, old_result = auth_request("/auth/v1/token?grant_type=password", {"email": EMAIL, "password": PASSWORD})
         assert status == 400 and not old_result.get("access_token"), "Old password still authenticates"
         tap("I already have an account", scroll=True)
@@ -202,7 +202,7 @@ def main() -> int:
         capture("new-password-sign-in")
         tap("Sign out", scroll=True)
         scroll_to_top()
-        wait_for("Train your thinking", timeout=45)
+        wait_for("Sharpen how you think.", timeout=45)
     finally:
         # Restore the original disposable credential even if a later UI assertion fails.
         status, result = auth_request("/auth/v1/token?grant_type=password", {"email": EMAIL, "password": changed_password})

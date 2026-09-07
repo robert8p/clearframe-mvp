@@ -78,7 +78,7 @@ function TabIcon({ name, active }: { name: TabGlyphName; active: boolean }) {
     >
       {active ? (
         <LinearGradient
-          colors={["#354675", "#3c3a73"]}
+          colors={["#1d586f", "#3e3f83"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ width: 44, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "rgba(207,243,255,.46)", alignItems: "center", justifyContent: "center" }}
@@ -119,8 +119,8 @@ export default function TabLayout() {
         tabBarAllowFontScaling: false,
         tabBarItemStyle: { flex: 1, paddingTop: 3 },
         tabBarStyle: {
-          backgroundColor: "rgba(8,12,30,.985)",
-          borderTopColor: "rgba(83,105,165,.48)",
+          backgroundColor: "#0c1730",
+          borderTopColor: "#425986",
           height: 70 + bottomInset + (fontScale > 1 ? 6 : 0),
           paddingTop: 6,
           paddingBottom: bottomInset,

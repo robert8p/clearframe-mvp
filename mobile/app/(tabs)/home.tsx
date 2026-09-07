@@ -2,7 +2,7 @@ import React from "react";
 import { Redirect, router } from "expo-router";
 import { Text, View } from "react-native";
 import { ActionLink, Body, Card, Eyebrow, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
-import { RefreshNotice, SkillTile, TrainingCard } from "@/components/learning-surfaces";
+import { RefreshNotice, SkillTile, SkillShelf, TrainingCard } from "@/components/learning-surfaces";
 import { DailyLens, DeviceToolsNotice, PracticeRhythm, ToolkitShortcut } from "@/components/practice-tools";
 import { apiFetch } from "@/lib/api";
 import { mobileAudienceMeta } from "@/lib/audience";
@@ -29,9 +29,10 @@ export default function HomeScreen() {
   const next = selectSkills(profile.skillScores, "", "practised").slice(0, 2);
   const average = profile.summary.averageScore;
   return <Screen refreshing={refreshing} onRefresh={() => void reload()}>
-    <View style={{ gap: 6 }}><Eyebrow>{meta?.shortLabel ?? "Your daily practice"}</Eyebrow><Title size={29}>Hello, {firstName}</Title><Body muted style={{ fontSize: 15, lineHeight: 22 }}>One useful idea for your next real decision.</Body></View>
+    <View style={{ gap: 6 }}><Eyebrow>{meta?.shortLabel ?? "Your daily practice"}</Eyebrow><Title size={29}>A brighter day, {firstName}</Title><Body muted style={{ fontSize: 15, lineHeight: 22 }}>Small practice. A fresh perspective.</Body></View>
     {error ? <RefreshNotice message={error} onRetry={() => void reload()} /> : null}
     <TrainingCard today={today} busy={refreshing} onPress={() => action.href ? router.navigate(action.href) : void reload()} />
+    <SkillShelf rows={profile.skillScores} pro={needsProForFocusedPractice} onOpen={slug=>openFocusedPractice(slug,"home_skill_shelf")} />
     <DeviceToolsNotice />
     <ToolkitShortcut />
     <DailyLens audience={profile.profile.audience_segment} />

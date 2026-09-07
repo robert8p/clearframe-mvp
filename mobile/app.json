@@ -3,13 +3,13 @@
     "name": "Cogni",
     "slug": "cogni",
     "owner": "cogniapp",
-    "version": "0.4.4",
+    "version": "0.4.5",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#070b19",
+    "backgroundColor": "#070c20",
     "scheme": "cogni",
     "splash": {
-      "backgroundColor": "#070b19"
+      "backgroundColor": "#070c20"
     },
     "ios": {
       "supportsTablet": false,

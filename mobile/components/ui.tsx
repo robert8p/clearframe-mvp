@@ -9,7 +9,7 @@ import { colors, gradients, glow } from "@/lib/theme";
 type ScreenProps = ScrollViewProps & { refreshing?: boolean; onRefresh?: () => void; contentStyle?: StyleProp<ViewStyle> };
 
 function AmbientBackground() {
-  return <LinearGradient pointerEvents="none" accessible={false} colors={["rgba(120,104,239,.08)", "transparent"]} style={{ position:"absolute",top:0,right:0,left:0,height:280 }} />;
+  return <LinearGradient pointerEvents="none" accessible={false} colors={["rgba(78,85,181,.19)", "rgba(31,110,161,.055)", "transparent"]} style={{ position:"absolute",top:0,right:0,left:0,height:440 }} />;
 }
 
 export const Screen = React.forwardRef<ScrollView, ScreenProps>(function Screen({ children, refreshing, onRefresh, contentStyle, style, ...props }, ref) {
@@ -43,18 +43,19 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
   // Learning content must be readable before any animation runs. In particular,
   // Android with animations disabled must never strand a question at opacity 0.
   return (
-    <View style={[{ position: "relative", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel, borderRadius: 20, borderCurve: "continuous", padding: 18, gap: 11, overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" }, style]}>
+    <View style={[{ position: "relative", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel, borderRadius: 24, borderCurve: "continuous", padding: 19, gap: 12, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.18)" }, style]}>
+      <LinearGradient pointerEvents="none" accessible={false} colors={["rgba(111,135,226,.08)", "transparent"]} style={{position:"absolute",inset:0}} />
       {children}
     </View>
   );
 }
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <Text style={{ color: colors.cyan, fontSize: 12.5, lineHeight: 18, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" }}>{children}</Text>;
+  return <Text style={{ color: colors.cyan, fontSize: 11.5, lineHeight: 18, fontWeight: "700", letterSpacing: 1.7, textTransform: "uppercase" }}>{children}</Text>;
 }
 
 export function Title({ children, size = 32 }: { children: React.ReactNode; size?: number }) {
-  return <Text accessibilityRole="header" selectable style={{ color: colors.text, fontSize: size, lineHeight: Math.round(size * 1.22), fontWeight: "800", letterSpacing: -0.6 }}>{children}</Text>;
+  return <Text accessibilityRole="header" selectable style={{ color: colors.text, fontSize: size, lineHeight: Math.round(size * 1.22), fontWeight: "700", letterSpacing: -0.85 }}>{children}</Text>;
 }
 
 export function Body({ children, muted = false, style }: { children: React.ReactNode; muted?: boolean; style?: object }) {
@@ -87,9 +88,9 @@ export function PrimaryButton({ label, onPress, disabled = false, secondary = fa
     <Text style={{ flexShrink: 1, textAlign: "center", color: secondary ? colors.text : colors.white, fontSize: 16, lineHeight: 23, fontWeight: "800" }}>{label}</Text>
     {trailingArrow && !loading ? <Text accessible={false} style={{ color: colors.white, fontSize: 21, lineHeight: 25, fontWeight: "700" }}>→</Text> : null}
   </View>;
-  return <Animated.View style={{ transform: [{ scale }], borderRadius: 19, borderWidth: 2, borderColor: focused ? colors.cyan : "transparent", padding: 2, boxShadow: secondary ? undefined : "0 6px 18px rgba(80,69,187,0.16)" }}>
-    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={accessibilityHint} accessibilityState={{ disabled: blocked, busy: loading }} disabled={blocked} onPress={onPress} onPressIn={() => animate(0.985)} onPressOut={() => animate(1)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={({ pressed }) => ({ opacity: disabled && !loading ? 0.48 : pressed ? 0.90 : 1, minHeight: 56, borderRadius: 15, overflow: "hidden", borderCurve: "continuous", borderWidth: secondary ? 1 : 0, borderColor: colors.lineStrong })}>
-      {secondary ? <View style={{ backgroundColor: "rgba(17,24,55,.94)" }}>{content}</View> : <LinearGradient colors={[...gradients.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>{content}</LinearGradient>}
+  return <Animated.View style={{ transform: [{ scale }], borderRadius: 26, borderWidth: 2, borderColor: focused ? colors.white : "transparent", padding: 2, boxShadow: secondary || blocked ? undefined : "0 3px 22px rgba(80,130,255,0.36)" }}>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={accessibilityHint} accessibilityState={{ disabled: blocked, busy: loading }} disabled={blocked} onPress={onPress} onPressIn={() => animate(0.985)} onPressOut={() => animate(1)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={({ pressed }) => ({ opacity: disabled && !loading ? 0.48 : pressed ? 0.90 : 1, minHeight: 56, borderRadius: 22, overflow: "hidden", borderCurve: "continuous", borderWidth: 1, borderColor: secondary ? colors.lineStrong : "#85cfff" })}>
+      {secondary ? <LinearGradient colors={["#253456", "#18243e"]} start={{x:0,y:0}} end={{x:1,y:1}}>{content}</LinearGradient> : <LinearGradient colors={[...gradients.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>{content}</LinearGradient>}
     </Pressable>
   </Animated.View>;
 }
@@ -119,41 +120,22 @@ export function ProgressBar({ value }: { value: number }) {
 }
 
 export function ProgressRing({ value, label }: { value: number | null; label?: string }) {
-  const reducedMotion = useReducedMotion();
-  const percent = Number.isFinite(value) ? Math.max(0, Math.min(100, Number(value))) : 0;
-  const scale = useRef(new Animated.Value(reducedMotion ? 1 : 0.92)).current;
   const { fontScale } = useWindowDimensions();
   const hasValue = value !== null && Number.isFinite(value);
-  const segmentCount = 20;
-  const activeCount = Math.round(percent / 100 * segmentCount);
-  const center = 46;
-  const radius = 39;
-
-  useEffect(() => {
-    if (reducedMotion) {
-      scale.setValue(1);
-      return;
-    }
-    const animation = Animated.spring(scale, { toValue: 1, damping: 16, stiffness: 115, useNativeDriver: true });
-    animation.start();
-    return () => animation.stop();
-  }, [reducedMotion, scale]);
-
-  if (!hasValue || fontScale > 1.25) return <View accessible accessibilityLabel={hasValue ? `${Math.round(percent)} percent ${label ?? "score"}` : "No score yet"} style={{ alignItems:"center",justifyContent:"center",minWidth:78,padding:12,gap:4 }}><Text style={{ color:colors.text,fontSize:26,fontWeight:"800" }}>{hasValue ? `${Math.round(percent)}%` : "—"}</Text><Text style={{ color:colors.muted,fontSize:13 }}>{hasValue ? label : "No score yet"}</Text></View>;
-  return (
-    <Animated.View accessibilityRole="progressbar" accessibilityLabel={label ? `${label} score` : "Score"} accessibilityValue={{ min: 0, max: 100, now: Math.round(percent), text: `${Math.round(percent)} percent` }} style={{ width: 92, height: 92, borderRadius: 46, transform: [{ scale }], backgroundColor: "rgba(11,16,35,.82)", borderWidth: 1, borderColor: colors.line, boxShadow: glow.cyan, alignItems: "center", justifyContent: "center" }}>
-      {Array.from({ length: segmentCount }, (_, index) => {
-        const angle = -Math.PI / 2 + index / segmentCount * Math.PI * 2;
-        const left = center + Math.cos(angle) * radius - 3;
-        const top = center + Math.sin(angle) * radius - 3;
-        const active = index < activeCount;
-        const activeColor = index < 7 ? colors.cyan : index < 14 ? colors.violet : colors.magenta;
-        return <View key={index} accessible={false} style={{ position: "absolute", left, top, width: 6, height: 6, borderRadius: 3, backgroundColor: active ? activeColor : colors.line }} />;
-      })}
-      <Text style={{ color: colors.text, fontSize: 22, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{Math.round(percent)}%</Text>
-      {label ? <Text style={{ color: colors.soft, fontSize: 11.5, lineHeight: 15, fontWeight: "800" }}>{label}</Text> : null}
-    </Animated.View>
-  );
+  const percent = hasValue ? Math.max(0, Math.min(100, Number(value))) : 0;
+  if (!hasValue || fontScale > 1.25) return <View accessible accessibilityLabel={hasValue ? `${Math.round(percent)} percent ${label ?? "score"}` : "No score yet"} style={{alignItems:"center",justifyContent:"center",minWidth:78,padding:12,gap:4}}><Text style={{color:colors.text,fontSize:30,fontWeight:"700"}}>{hasValue ? `${Math.round(percent)}%` : "—"}</Text><Text style={{color:colors.muted,fontSize:13}}>{hasValue ? label : "No score yet"}</Text></View>;
+  const segments = 100, radius = 56, center = 66;
+  const stops = [[110,234,255],[95,153,255],[157,118,255]];
+  return <View accessibilityRole="progressbar" accessibilityLabel={label ?? "Recent score"} accessibilityValue={{min:0,max:100,now:Math.round(percent),text:`${Math.round(percent)} percent`}} style={{width:132,height:132,borderRadius:66,alignItems:"center",justifyContent:"center",backgroundColor:"#111d39",boxShadow:glow.cyan}}>
+    <View accessible={false} style={{position:"absolute",inset:6,borderRadius:60,borderWidth:9,borderColor:"#29395d"}} />
+    {Array.from({length:Math.round(percent/100*segments)},(_,i)=>{
+      const angle=-Math.PI/2+i/segments*Math.PI*2, t=i/(segments-1)*2, low=Math.min(1,Math.floor(t));
+      const rgb=stops[low].map((v,c)=>Math.round(v+(stops[low+1][c]-v)*(t-low)));
+      return <View key={i} accessible={false} style={{position:"absolute",left:center+Math.cos(angle)*radius-4.5,top:center+Math.sin(angle)*radius-4.5,width:9,height:9,borderRadius:4.5,backgroundColor:`rgb(${rgb.join(",")})`}} />;
+    })}
+    <Text style={{color:colors.text,fontSize:30,fontWeight:"700",fontVariant:["tabular-nums"]}}>{Math.round(percent)}%</Text>
+    {label ? <Text style={{color:colors.muted,fontSize:12,lineHeight:18}}>{label}</Text> : null}
+  </View>;
 }
 
 export function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {

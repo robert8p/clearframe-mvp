@@ -1,0 +1,73 @@
+name: Cogni precomposed native artwork repair
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-compose-art.yml]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - run: python3 -m pip install --disable-pip-version-check Pillow==12.3.0
+      - name: Commit exact static fades and remove problematic native overlays
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from PIL import Image,ImageOps
+          from pathlib import Path
+          import hashlib,subprocess,os,json
+          asset=Path('mobile/assets/approved-dreamscape.png')
+          assert hashlib.sha256(asset.read_bytes()).hexdigest()=='1513309ddcf44c68db249f36eff762bf05cdb7ced71c7d385ede91f2edbd5f3f'
+          image=ImageOps.fit(Image.open(asset).convert('RGB'),(269,235),method=Image.Resampling.LANCZOS)
+          px=image.load();w,h=image.size
+          for y in range(h):
+              fy=y/(h-1);bottom=min(1,max(0,(fy-.42)/.48));top=max(0,1-fy/.09)
+              for x in range(w):
+                  fx=x/(w-1);side=max(0,1-min(fx,1-fx)/.075)
+                  alpha=1-(1-bottom)*(1-top)*(1-side)
+                  px[x,y]=tuple(round(v*(1-alpha)+bg*alpha) for v,bg in zip(px[x,y],(7,12,32)))
+          image.save(asset,compress_level=9)
+          digest=hashlib.sha256(asset.read_bytes()).hexdigest()
+          assert digest=='2ea4004cf994b9f82bba4b5179d71efe020464bb59bf6a2b0e5c47be08386ea9'
+          assert asset.stat().st_size<100000
+          p=Path('mobile/components/visuals.tsx');s=p.read_text()
+          a=s.index('export function WelcomeArtwork()');b=s.index('export type MotifKind',a)
+          part=s[a:b];assert part.count('<LinearGradient ')==2
+          part='\n'.join(line for line in part.split('\n') if '<LinearGradient ' not in line)
+          s=s[:a]+part+s[b:]
+          s=s.replace('Standard PNG preserves the approved pixels without an optional WebP decoder.','Precomposed PNG keeps the approved portrait and fades without overlapping native gradients.')
+          assert 'locations={[0,.45,.72,1]}' in s and 'locations={[.1,1]}' in s
+          s=s.replace(' locations={[0,.45,.72,1]}','').replace(' locations={[.1,1]}','')
+          assert 'locations=' not in s
+          p.write_text(s)
+          p=Path('mobile/scripts/nightfall.test.mjs');s=p.read_text()
+          old='1513309ddcf44c68db249f36eff762bf05cdb7ced71c7d385ede91f2edbd5f3f';assert s.count(old)==1
+          s=s.replace(old,digest)
+          s+='\ntest("Welcome artwork uses the installed-verified image-only presentation",()=>{\n  const art=read("components/visuals.tsx");\n  const welcome=art.split("export function WelcomeArtwork()")[1].split("export type MotifKind")[0];\n  assert(welcome.includes("<Image source="));\n  assert(!welcome.includes("<LinearGradient"));\n  assert(!art.includes("locations="));\n});\n'
+          p.write_text(s)
+          files=['mobile/assets/approved-dreamscape.png','mobile/components/visuals.tsx','mobile/scripts/nightfall.test.mjs']
+          subprocess.run(['git','add','--',*files],check=True)
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          subprocess.run(['git','commit','-m','fix(android): precompose portrait fades and use verified image-only native rendering'],check=True)
+          current=subprocess.check_output(['git','ls-remote','origin','refs/heads/release/cogni-0.4.5'],text=True).split()[0]
+          assert current==os.environ['GITHUB_SHA'],'Newer branch changes exist; refusing to overwrite'
+          subprocess.run(['git','push','origin','HEAD:refs/heads/release/cogni-0.4.5'],check=True)
+          sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          result={'sourceCommit':sha,'artworkSha256':digest,'artworkBytes':asset.stat().st_size,'nativePresentation':'PNG image only; fades precomposed','exactReleaseVerification':'pending new build'}
+          Path('/tmp/cogni-artwork-repair.json').write_text(json.dumps(result,indent=2));print(json.dumps(result,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-precomposed-artwork
+          path: |
+            mobile/assets/approved-dreamscape.png
+            /tmp/cogni-artwork-repair.json
+          retention-days: 7
+          if-no-files-found: error

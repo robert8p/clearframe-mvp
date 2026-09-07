@@ -1,0 +1,38 @@
+name: Cogni 0.4.2 source verification
+on:
+  push:
+    branches: [release/cogni-0.4.2]
+    paths: ['mobile/**', 'app/**', 'components/**', 'lib/**', 'scripts/**', '.github/workflows/cogni-042-source.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Capture exact source
+        run: |
+          mkdir -p /tmp/cogni-source
+          git archive HEAD > /tmp/cogni-source/source.tar
+          git rev-parse HEAD > /tmp/cogni-source/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-042-source
+          path: /tmp/cogni-source/
+          retention-days: 30
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Mobile validation
+        working-directory: mobile
+        run: |
+          set -o pipefail
+          npm ci --include=dev --no-audit --no-fund
+          npm run validate 2>&1 | tee /tmp/mobile-validation.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-042-validation
+          path: /tmp/mobile-validation.txt
+          retention-days: 30

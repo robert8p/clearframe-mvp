@@ -1,0 +1,24 @@
+name: Cogni visual release workspace
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 308eb6fef139f61cd633f96a89ebb4ab408dc096
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: git archive --format=zip --output=/tmp/cogni-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-044-source-baseline
+          path: /tmp/cogni-source.zip
+          retention-days: 7
+          if-no-files-found: error

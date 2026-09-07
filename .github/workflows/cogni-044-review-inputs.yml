@@ -1,0 +1,65 @@
+name: Cogni 0.4.4 review inputs
+on:
+  push:
+    branches: [release/cogni-0.4.4]
+    paths: [.github/workflows/cogni-044-review-inputs.yml]
+permissions:
+  contents: read
+jobs:
+  review-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Archive tracked source without credentials
+        run: |
+          mkdir -p /tmp/cogni-review
+          git rev-parse HEAD > /tmp/cogni-review/source-commit.txt
+          git archive --format=tar HEAD | gzip > /tmp/cogni-review/source.tar.gz
+      - name: Install locked dependencies for isolated source verification
+        working-directory: mobile
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          tar -czf /tmp/cogni-review/mobile-dependencies.tar.gz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-044-review-source
+          path: /tmp/cogni-review/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - name: Inspect previous Expo build and expose only non-secret diagnostic fields
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npx --yes eas-cli@21.7.1 build:view f49ef649-48eb-49ef-aed1-a1b59a3c62b8 --json > /tmp/build.json
+          python3 - <<'PY'
+          import json, pathlib, urllib.request
+          b=json.load(open('/tmp/build.json'))
+          result={k:b.get(k) for k in ['id','status','platform','appVersion','appBuildVersion','gitCommitHash','error']}
+          result['artifact']=(b.get('artifacts') or {}).get('buildUrl')
+          print(json.dumps(result,indent=2))
+          pathlib.Path('/tmp/cogni-expo-diagnostic.json').write_text(json.dumps(result,indent=2))
+          # Build logs are build output only. Never print tokens or credential stores.
+          logs=[]
+          for u in b.get('logFiles',[]):
+            try:
+              with urllib.request.urlopen(u,timeout=30) as r: logs.append(r.read().decode())
+            except Exception as e: logs.append(str(type(e).__name__))
+          pathlib.Path('/tmp/cogni-expo-diagnostic-logs.txt').write_text('\n'.join(logs))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-043-cloud-diagnostic
+          path: /tmp/cogni-expo-diagnostic*
+          retention-days: 7
+          if-no-files-found: warn

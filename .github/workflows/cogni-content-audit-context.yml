@@ -1,0 +1,39 @@
+name: Cogni content review context
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-content-audit-context.yml]
+permissions:
+  contents: read
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: 01f65ecd1aa372149c46a688a66e66877f58aace
+        persist-credentials: false
+    - name: Archive tracked source only
+      run: |
+        mkdir -p /tmp/cogni-editorial-context
+        git archive --format=tar.gz HEAD > /tmp/cogni-editorial-context/source.tar.gz
+        git rev-parse HEAD > /tmp/cogni-editorial-context/source-commit.txt
+    - name: Check whether the existing editorial integrations are configured
+      env:
+        EDITORIAL_MODEL_KEY: ${{ secrets.OPENAI_API_KEY }}
+        CONTENT_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      run: |
+        python3 - <<'PY'
+        import json,os
+        from pathlib import Path
+        status={'existingModelIntegrationConfigured':bool(os.environ.get('EDITORIAL_MODEL_KEY')),'existingContentServiceIntegrationConfigured':bool(os.environ.get('CONTENT_SERVICE_KEY'))}
+        Path('/tmp/cogni-editorial-context/integrations.json').write_text(json.dumps(status,indent=2))
+        print(json.dumps(status))
+        PY
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cogni-editorial-context
+        path: /tmp/cogni-editorial-context/
+        retention-days: 7
+        if-no-files-found: error

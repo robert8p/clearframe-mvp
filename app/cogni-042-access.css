@@ -1,0 +1,6 @@
+/* Undo the legacy fixed-height mobile welcome screen for the scrolling editorial page. */
+.cg-public-shell.cg-editorial-landing{height:auto;min-height:100svh;max-height:none;overflow:visible;display:block;overflow-wrap:anywhere}
+.cg-editorial-landing .cg-public-grid{height:auto;min-height:0;max-height:none;overflow:visible}
+.cg-editorial-landing .cg-public-phone{height:auto;max-height:none;display:block}
+.cg-editorial-landing .cg-public-phone>.cg-button{margin-top:12px}
+.cg-editorial-landing .cg-landing-header{flex-wrap:wrap}

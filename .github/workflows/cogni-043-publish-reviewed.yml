@@ -1,0 +1,167 @@
+name: Publish visually reviewed Cogni 0.4.3 preview
+on:
+  push:
+    branches: [release/cogni-0.4.3]
+    paths: ['.github/workflows/cogni-043-publish-reviewed.yml']
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: cogni-043-reviewed-publication
+  cancel-in-progress: false
+jobs:
+  publish-reviewed-preview:
+    if: github.ref == 'refs/heads/release/cogni-0.4.3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_RUN_ID: '34125663682'
+      EXPECTED_SOURCE: '155aa5be400412a043dfb37947bb6ff1f24da4fd'
+      EXPECTED_SHA256: '2fc4cb666900b8e4d5dc01f5dd9e292cc5552dfec242cec17ed30b68e4253ef2'
+      EXPECTED_WORKFLOW: '.github/workflows/cogni-043-preview.yml'
+      RELEASE_TAG: 'v0.4.3-preview.2'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the completed review and unchanged compiled application
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, subprocess
+          from pathlib import Path
+          source = os.environ['EXPECTED_SOURCE']
+          checksum = os.environ['EXPECTED_SHA256']
+          assert re.fullmatch(r'[0-9a-f]{40}', source), 'Expected source is not a commit SHA'
+          assert re.fullmatch(r'[0-9a-f]{64}', checksum), 'Fill the reviewed APK checksum before publishing'
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == os.environ['GITHUB_SHA']
+          subprocess.run(['git', 'merge-base', '--is-ancestor', source, 'HEAD'], check=True)
+          subprocess.run(['git', 'diff', '--exit-code', source, 'HEAD', '--', 'mobile', 'supabase'], check=True)
+          changed = subprocess.check_output(['git', 'diff', '--name-only', '-z', source, 'HEAD']).decode().split('\0')
+          allowed_workflow = '.github/workflows/cogni-043-publish-reviewed.yml'
+          for name in filter(None, changed):
+              allowed_report = re.fullmatch(r'COGNI_0\.4\.3_[A-Z0-9_]+\.md', name)
+              assert name == allowed_workflow or allowed_report, f'Unreviewed non-report change after compilation: {name}'
+          report = Path('COGNI_0.4.3_VERIFIED_RELEASE.md')
+          assert report.is_file() and report.stat().st_size > 0, 'Completed visual verification report is required'
+          review = report.read_text()
+          assert source in review and checksum in review, 'Review must identify the exact compiled source and APK checksum'
+          assert os.environ['EXPECTED_RUN_ID'] in review, 'Review must identify the verified build/test run'
+          assert Path('COGNI_0.4.3_TESTING.md').is_file(), 'Testing instructions are missing'
+          PY
+      - name: Validate the exact successful build and every required release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          REVIEW_DIR="$RUNNER_TEMP/cogni-reviewed-release"
+          mkdir -p "$REVIEW_DIR"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$EXPECTED_RUN_ID" > "$REVIEW_DIR/run.json"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$EXPECTED_RUN_ID/jobs?filter=latest&per_page=100" > "$REVIEW_DIR/jobs.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'cogni-reviewed-release'
+          run = json.loads((root / 'run.json').read_text())
+          assert str(run['id']) == os.environ['EXPECTED_RUN_ID']
+          assert run['repository']['full_name'] == os.environ['GITHUB_REPOSITORY']
+          assert run['head_sha'] == os.environ['EXPECTED_SOURCE']
+          assert run['head_branch'] == 'release/cogni-0.4.3'
+          assert run['path'] == os.environ['EXPECTED_WORKFLOW']
+          assert run['status'] == 'completed' and run['conclusion'] == 'success', 'Build/test run is not successfully complete'
+          jobs = [job for page in json.loads((root / 'jobs.json').read_text()) for job in page['jobs']]
+          required = ['source', 'build-exact-apk', 'android-runtime', 'web-and-ios-validation', 'prepare-tested-preview']
+          for name in required:
+              matching = [job for job in jobs if job['name'] == name]
+              assert len(matching) == 1, f'Missing or ambiguous required release gate: {name}'
+              job = matching[0]
+              assert job['head_sha'] == os.environ['EXPECTED_SOURCE'], f'Wrong source in release gate: {name}'
+              assert job['status'] == 'completed' and job['conclusion'] == 'success', f'Release gate did not pass: {name}'
+          PY
+      - name: Download and verify the existing draft without changing any asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          REVIEW_DIR="$RUNNER_TEMP/cogni-reviewed-release"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$REVIEW_DIR/releases.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'cogni-reviewed-release'
+          pages = json.loads((root / 'releases.json').read_text())
+          matches = [release for page in pages for release in page if release['tag_name'] == os.environ['RELEASE_TAG']]
+          assert len(matches) == 1, 'Expected exactly one release with the reviewed preview tag'
+          draft = matches[0]
+          assert type(draft['id']) is int and draft['id'] > 0, 'Invalid draft release ID'
+          (root / 'draft.json').write_text(json.dumps(draft))
+          with open(os.environ['GITHUB_ENV'], 'a') as environment:
+              environment.write('DRAFT_RELEASE_ID=' + str(draft['id']) + '\n')
+          assert draft['tag_name'] == os.environ['RELEASE_TAG']
+          assert draft['draft'] is True and draft['prerelease'] is True, 'Expected an unpublished preview draft'
+          assert draft['target_commitish'] == os.environ['EXPECTED_SOURCE'], 'Draft points at a different compiled source'
+          for name in ['Cogni-0.4.3-preview.apk', 'metadata.json', 'SHA256SUMS.txt', 'TESTING.md']:
+              assets = [asset for asset in draft['assets'] if asset['name'] == name]
+              assert len(assets) == 1 and assets[0]['state'] == 'uploaded' and assets[0]['size'] > 0, f'Missing or invalid draft asset: {name}'
+          PY
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$REVIEW_DIR" \
+            --pattern 'Cogni-0.4.3-preview.apk' --pattern 'metadata.json' --pattern 'SHA256SUMS.txt' --pattern 'TESTING.md'
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'cogni-reviewed-release'
+          meta = json.loads((root / 'metadata.json').read_text())
+          assert meta['version'] == '0.4.3' and int(meta['versionCode']) > 57
+          assert meta['sourceCommit'] == os.environ['EXPECTED_SOURCE']
+          assert meta['revenueCatStoreKeys'] == 'intentionally_absent_for_prestore_gate'
+          checksum = hashlib.sha256((root / 'Cogni-0.4.3-preview.apk').read_bytes()).hexdigest()
+          assert checksum == meta['sha256'] == os.environ['EXPECTED_SHA256'], 'APK bytes differ from the reviewed artifact'
+          assert (root / 'SHA256SUMS.txt').read_text().strip() == checksum + '  Cogni-0.4.3-preview.apk'
+          draft = json.loads((root / 'draft.json').read_text())
+          testing = (root / 'TESTING.md').read_text().strip()
+          assert testing and draft['body'].startswith(testing), 'Existing TESTING.md instructions must be preserved in release notes'
+          review = Path('COGNI_0.4.3_VERIFIED_RELEASE.md').read_text().strip()
+          # Preserve all original TESTING.md notes and the original build evidence link.
+          # Only the public release body is extended; no draft asset is replaced.
+          notes = draft['body'].rstrip() + '\n\n' + review + '\n'
+          (root / 'release-notes.md').write_text(notes)
+          PY
+      - name: Recheck draft identity and publish only the reviewed preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          REVIEW_DIR="$RUNNER_TEMP/cogni-reviewed-release"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_RELEASE_ID" > "$REVIEW_DIR/draft-current.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'cogni-reviewed-release'
+          original = json.loads((root / 'draft.json').read_text())
+          current = json.loads((root / 'draft-current.json').read_text())
+          for field in ['id', 'tag_name', 'target_commitish', 'body']:
+              assert current[field] == original[field], f'Draft changed during verification: {field}'
+          assert current['draft'] is True and current['prerelease'] is True
+          def assets(release):
+              return sorted((asset['id'], asset['name'], asset['size'], asset['updated_at'], asset.get('digest')) for asset in release['assets'])
+          assert assets(current) == assets(original), 'Draft assets changed during verification'
+          PY
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false \
+            --notes-file "$REVIEW_DIR/release-notes.md"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_RELEASE_ID" > "$REVIEW_DIR/published.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'cogni-reviewed-release'
+          original = json.loads((root / 'draft.json').read_text())
+          published = json.loads((root / 'published.json').read_text())
+          assert published['id'] == original['id']
+          assert published['tag_name'] == os.environ['RELEASE_TAG']
+          assert published['target_commitish'] == os.environ['EXPECTED_SOURCE']
+          assert published['draft'] is False and published['prerelease'] is True
+          assert published['body'].rstrip() == (root / 'release-notes.md').read_text().rstrip()
+          assert sorted((a['id'], a['name'], a['size']) for a in published['assets']) == sorted((a['id'], a['name'], a['size']) for a in original['assets'])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Published the exact reviewed Cogni 0.4.3 Android preview: ' + published['html_url'] + '\n')
+          PY

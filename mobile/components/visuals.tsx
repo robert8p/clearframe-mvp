@@ -14,7 +14,7 @@ export function MountainScene({ height = 182 }: { height?: number }) {
   const [width,setWidth]=useState(360);
   const horizon=height*.78;
   return <View {...decorative} onLayout={e=>setWidth(e.nativeEvent.layout.width)} style={{height,width:"100%",overflow:"hidden",backgroundColor:"#1b2858"}}>
-    <LinearGradient colors={["#111d49","#4b4388","#c798b2","#527ea2"]} locations={[0,.45,.72,1]} style={{position:"absolute",inset:0}} />
+    <LinearGradient colors={["#111d49","#4b4388","#c798b2","#527ea2"]} style={{position:"absolute",inset:0}} />
     <View style={{position:"absolute",right:width*.12,top:height*.15,width:48,height:48,borderRadius:24,backgroundColor:"#ccdfff",boxShadow:"0 0 32px rgba(159,202,255,.45)"}} />
     <View style={{position:"absolute",right:width*.12-6,top:height*.15-5,width:46,height:46,borderRadius:24,backgroundColor:"#414478"}} />
     {stars.map(([x,y],i)=><View key={i} style={{position:"absolute",left:width*x,top:height*y,width:i%3?1.5:2.5,height:i%3?1.5:2.5,borderRadius:2,backgroundColor:i%2?"#c7d6ff":"#f6e3ff"}} />)}
@@ -34,15 +34,13 @@ export function MountainScene({ height = 182 }: { height?: number }) {
         <View style={{position:"absolute",left:treeW*.46,top:treeH*.65,width:2,height:treeH*.45,backgroundColor:"#0d263c"}} />
       </View>;
     })}
-    <LinearGradient colors={["transparent","#0e1a35"]} locations={[.1,1]} style={{position:"absolute",left:0,right:0,bottom:0,height:height*.35}} />
+    <LinearGradient colors={["transparent","#0e1a35"]} style={{position:"absolute",left:0,right:0,bottom:0,height:height*.35}} />
   </View>;
 }
-/** Standard PNG preserves the approved pixels without an optional WebP decoder. */
+/** Precomposed PNG keeps the approved portrait and fades without overlapping native gradients. */
 export function WelcomeArtwork() {
   return <View {...decorative} style={{position:"absolute",top:0,left:0,right:0,height:310,overflow:"hidden"}}>
     <Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:"100%",height:310}} />
-    <LinearGradient colors={["rgba(7,12,32,.02)","rgba(7,12,32,.02)","#070c20"]} locations={[0,.55,1]} style={{position:"absolute",inset:0}} />
-    <LinearGradient colors={["#070c20","transparent","transparent","#070c20"]} locations={[0,.04,.96,1]} start={{x:0,y:0}} end={{x:1,y:0}} style={{position:"absolute",inset:0}} />
   </View>;
 }
 export type MotifKind = "perspective" | "reasoning" | "decisions" | "growth";

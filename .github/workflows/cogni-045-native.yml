@@ -1,0 +1,192 @@
+name: Cogni 0.4.5 exact Expo APK installed verification
+'on':
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-native.yml]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cogni-045-native
+  cancel-in-progress: false
+env:
+  SOURCE_COMMIT: df97ce58b85e9a2060a8aa95ea02c9e2166e2534
+  BUILD_RUN_ID: '34151558176'
+  EXPO_BUILD_ID: f432c37f-f24e-42a5-932a-77ea68094a01
+  APK_PATH: /tmp/cogni-045-expo/Cogni-0.4.5-preview.apk
+  PREVIOUS_APK_PATH: /tmp/Cogni-0.4.4-preview.apk
+  API_LEVEL: '36'
+  SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+  SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+  TZ: Europe/London
+jobs:
+  installed:
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [upgrade, regression, tools, visual]
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    env:
+      LANE: ${{ matrix.lane }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: release/cogni-0.4.5
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove application unchanged and align only obsolete test copy
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
+          git diff --exit-code "$SOURCE_COMMIT" HEAD -- mobile/app mobile/assets mobile/components mobile/lib mobile/plugins mobile/app.json mobile/eas.json mobile/package.json mobile/package-lock.json supabase
+          git rev-parse HEAD > /tmp/cogni-045-test-source.txt
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          root=Path('.github/scripts')
+          for name in ['cogni-auth-route-e2e-fixed.py','cogni-auth-main-flow.py','cogni-copy-feedback-e2e.py']:
+              p=root/name;s=p.read_text();assert s.count('See what’s changing')==1
+              p.write_text(s.replace('See what’s changing','Your progress, in perspective'))
+          p=root/'verify-cogni-apk-runtime.sh';s=p.read_text()
+          old='for text in "Sharpen how you think." "Get started" "I already have an account"; do'
+          assert old in s
+          p.write_text(s.replace(old,'for text in "Sharpen how you think." "Try a sample decision" "Get started" "I already have an account"; do'))
+          for p in root.glob('*.py'):ast.parse(p.read_text(),filename=str(p))
+          print('Only changed UI copy and primary welcome marker updated in test fixtures; all assertions retained.')
+          PY
+      - name: Retrieve only the exact completed Expo APK evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,time,hashlib
+          from pathlib import Path
+          from zipfile import ZipFile
+          repo=os.environ['GITHUB_REPOSITORY'];run=os.environ['BUILD_RUN_ID']
+          def get(path):return json.loads(subprocess.check_output(['gh','api',path],text=True))
+          for attempt in range(180):
+              artifacts=get(f'repos/{repo}/actions/runs/{run}/artifacts')['artifacts']
+              matches=[a for a in artifacts if a['name']=='cogni-045-expo-apk-1' and not a['expired']]
+              assert len(matches)<=1
+              if matches:break
+              state=get(f'repos/{repo}/actions/runs/{run}')
+              assert state['head_sha']==os.environ['SOURCE_COMMIT']
+              if state['status']=='completed':raise RuntimeError('Build run finished without the required APK evidence')
+              print('Exact Expo APK is not ready for installed tests.',flush=True);time.sleep(30)
+          else:raise TimeoutError('Build evidence is not ready')
+          artifact=matches[0];assert artifact['workflow_run']['head_sha']==os.environ['SOURCE_COMMIT']
+          with open('/tmp/cogni-045-exact.zip','wb') as target:subprocess.run(['gh','api',f"repos/{repo}/actions/artifacts/{artifact['id']}/zip"],stdout=target,check=True)
+          root=Path('/tmp/cogni-045-expo');root.mkdir(exist_ok=True)
+          with ZipFile('/tmp/cogni-045-exact.zip') as z:
+              meta=json.loads(z.read('metadata.json'));apk=z.read('Cogni-0.4.5-preview.apk')
+              assert meta['sourceCommit']==os.environ['SOURCE_COMMIT']
+              assert meta['id']==os.environ['EXPO_BUILD_ID'] and meta['version']=='0.4.5'
+              assert meta['status']=='FINISHED' and meta['apkIdentityAndSigning']=='passed'
+              assert meta['versionCode']>63 and hashlib.sha256(apk).hexdigest()==meta['sha256']
+              (root/'Cogni-0.4.5-preview.apk').write_bytes(apk);(root/'metadata.json').write_text(json.dumps(meta,indent=2))
+          print('Exact finished Expo APK verified; no new build requested.')
+          PY
+          if [ "$LANE" = upgrade ]; then
+            curl --fail --location --retry 4 --max-time 300 https://expo.dev/artifacts/eas/wa9VtnIxV6A2AavEjVI0AjXX6HF--BOWTh7Ge4UrnrQ.apk --output "$PREVIOUS_APK_PATH"
+            echo "fd389171211ded80358a8f8488dff67065d9cf4e990b65d71b44ffb64acd0407  $PREVIOUS_APK_PATH" | sha256sum --check --strict
+          fi
+      - name: Create only this lane's disposable learning account
+        run: |
+          python3 - <<'PY'
+          import json,os,secrets,urllib.request,urllib.error
+          def post(path,payload,token=None):
+              headers={'apikey':os.environ['SUPABASE_KEY'],'Content-Type':'application/json'}
+              if token:headers['Authorization']='Bearer '+token
+              request=urllib.request.Request(os.environ['SUPABASE_URL']+path,data=json.dumps(payload).encode(),headers=headers,method='POST')
+              try:
+                  with urllib.request.urlopen(request,timeout=30) as response:return response.status,json.load(response)
+              except urllib.error.HTTPError as error:return error.code,json.load(error)
+          email=f"cogni.e2e.route.{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}.{os.environ['LANE']}@example.com"
+          password='Cg'+secrets.token_hex(18)+'9a'
+          print('::add-mask::'+email);print('::add-mask::'+password)
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('E2E_EMAIL='+email+'\nE2E_PASSWORD='+password+'\n')
+          credentials={'email':email,'password':password}
+          status,_=post('/auth/v1/signup',{**credentials,'data':{'full_name':'Cogni Route E2E'}});assert status==200
+          status,body=post('/auth/v1/token?grant_type=password',credentials);assert status==200 and body.get('access_token')
+          status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/profile','method':'POST','body':{'fullName':'Cogni Route E2E','audienceSegment':'casual','functionArea':'everyday_decisions','primaryGoal':'think_more_clearly'},'context':{'timeZone':'Europe/London'}},body['access_token']);assert status==200
+          print('Fresh isolated account and learning context ready.')
+          PY
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise installed upgrade, regressions, private tools and visual screens
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            if [ "$LANE" = upgrade ]; then bash -o pipefail -c 'python3 -u .github/scripts/cogni-upgrade-e2e.py 2>&1 | tee /tmp/cogni-045-upgrade.txt'; else bash .github/scripts/verify-cogni-apk-runtime.sh; fi
+            if [ "$LANE" = regression ]; then bash -o pipefail -c 'python3 -u .github/scripts/cogni-auth-route-e2e-fixed.py 2>&1 | tee /tmp/cogni-045-regression.txt'; fi
+            if [ "$LANE" = tools ]; then bash -o pipefail -c 'python3 -u .github/scripts/cogni-044-tools-e2e.py 2>&1 | tee /tmp/cogni-045-tools.txt'; fi
+            if [ "$LANE" = visual ]; then bash -o pipefail -c 'python3 -u .github/scripts/cogni-045-visual-e2e.py 2>&1 | tee /tmp/cogni-045-visual.txt'; fi
+      - name: Remove this lane's disposable accounts and reject their credentials
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          from pathlib import Path
+          def post(path,payload,token=None):
+              headers={'apikey':os.environ['SUPABASE_KEY'],'Content-Type':'application/json'}
+              if token:headers['Authorization']='Bearer '+token
+              request=urllib.request.Request(os.environ['SUPABASE_URL']+path,data=json.dumps(payload).encode(),headers=headers,method='POST')
+              try:
+                  with urllib.request.urlopen(request,timeout=30) as response:return response.status,json.load(response)
+              except urllib.error.HTTPError as error:return error.code,json.load(error)
+          base=os.environ.get('E2E_EMAIL');results=[]
+          if base:
+              expected=f"cogni.e2e.route.{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}.{os.environ['LANE']}@example.com"
+              assert base==expected,'Refusing unrelated account cleanup'
+              for email in [base,base.replace('.route.','.signup.'),base.replace('.route.','.tools.')]:
+                  passwords=[os.environ['E2E_PASSWORD'],os.environ['E2E_PASSWORD']+'B2'];token=None
+                  for password in passwords:
+                      status,body=post('/auth/v1/token?grant_type=password',{'email':email,'password':password});token=body.get('access_token')
+                      if token:break
+                      assert status==400
+                  if token:
+                      status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/account','method':'DELETE','body':None,'context':{'timeZone':'UTC'}},token);assert status==200
+                      for password in passwords:
+                          status,body=post('/auth/v1/token?grant_type=password',{'email':email,'password':password});assert status==400 and not body.get('access_token')
+                      results.append('Disposable account deleted; all test credentials rejected.')
+                  else:
+                      assert email!=base,'Primary test identity cleanup unverified'
+                      results.append('Secondary identity not created or already deleted; credentials rejected.')
+          Path('/tmp/cogni-045-cleanup.json').write_text(json.dumps(results,indent=2));print('\n'.join(results))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-045-installed-${{ matrix.lane }}-${{ github.run_attempt }}
+          path: |
+            /tmp/cogni-045-*.txt
+            /tmp/cogni-045-cleanup.json
+            /tmp/cogni-045-expo/metadata.json
+            /tmp/cogni-045-visual/
+            /tmp/cogni-044-tools/
+            /tmp/cogni-upgrade-api-36/
+            /tmp/cogni-runtime-api-36/
+            /tmp/cogni-auth-route-api-36/
+            /tmp/cogni-copy-feedback-api-36/
+            /tmp/cogni-profile-password-api-36/
+            /tmp/cogni-signup-onboarding-api-36/
+            /tmp/cogni-monetization-prestore-api-36/
+          if-no-files-found: warn
+          retention-days: 30

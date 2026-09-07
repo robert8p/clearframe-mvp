@@ -1,0 +1,127 @@
+name: Cogni Nightfall final native visual smoke
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-release-smoke.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: db9d9b3e81248cac0e5784222a044fc5f8249eaa
+          persist-credentials: false
+      - name: Download and verify the exact completed release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,time,hashlib
+          from pathlib import Path
+          from zipfile import ZipFile
+          repo=os.environ['GITHUB_REPOSITORY'];assert repo=='robert8p/clearframe-mvp'
+          expected='db9d9b3e81248cac0e5784222a044fc5f8249eaa';run='34156644046'
+          def get(path):return json.loads(subprocess.check_output(['gh','api',path],text=True,timeout=40))
+          for attempt in range(90):
+              matches=[a for a in get(f'repos/{repo}/actions/runs/{run}/artifacts')['artifacts'] if a['name']=='cogni-045-expo-apk-1' and not a['expired']]
+              assert len(matches)<=1
+              if matches:break
+              r=get(f'repos/{repo}/actions/runs/{run}');assert r['head_sha']==expected
+              if r['status']=='completed':raise RuntimeError('Release artifact was not produced')
+              print('Waiting for the exact finished Expo binary.',flush=True);time.sleep(20)
+          else:raise TimeoutError('Expo artifact not finished')
+          artifact=matches[0];assert artifact['workflow_run']['head_sha']==expected
+          with open('/tmp/release.zip','wb') as f:subprocess.run(['gh','api',f"repos/{repo}/actions/artifacts/{artifact['id']}/zip"],stdout=f,check=True,timeout=180)
+          out=Path('/tmp/cogni-final');out.mkdir(exist_ok=True)
+          with ZipFile('/tmp/release.zip') as z:
+              m=json.loads(z.read('metadata.json'));apk=z.read('Cogni-0.4.5-preview.apk')
+              assert m['sourceCommit']==expected and m['version']=='0.4.5' and m['versionCode']>65
+              assert m['status']=='FINISHED' and m['apkIdentityAndSigning']=='passed'
+              assert hashlib.sha256(apk).hexdigest()==m['sha256']
+              (out/'metadata.json').write_text(json.dumps(m,indent=2));Path('/tmp/cogni.apk').write_bytes(apk)
+          print('Exact release:',m['id'],m['versionCode'],m['sha256'])
+          PY
+      - name: Prepare account-free bounded visual checks
+        run: |
+          cat > /tmp/native-smoke.py <<'PY'
+          import subprocess,time,json,re,xml.etree.ElementTree as ET
+          from pathlib import Path
+          out=Path('/tmp/cogni-final');result={'physicalDeviceTested':False,'accountMutations':False}
+          def adb(*args,timeout=35):
+              p=subprocess.run(['adb',*args],capture_output=True,timeout=timeout)
+              if p.returncode:raise RuntimeError(p.stderr.decode(errors='replace'))
+              return p.stdout
+          def capture(label):
+              (out/(label+'.png')).write_bytes(adb('exec-out','screencap','-p'))
+          def nodes():
+              adb('shell','uiautomator','dump','--compressed','/sdcard/cogni-check.xml')
+              raw=adb('shell','cat','/sdcard/cogni-check.xml');(out/'hierarchy.xml').write_bytes(raw)
+              return list(ET.fromstring(raw).iter('node'))
+          def labels():return [n.attrib.get('text','') for n in nodes()]+[n.attrib.get('content-desc','') for n in nodes()]
+          def top():
+              for _ in range(5):adb('shell','input','swipe','540','700','540','1900','250')
+          def tap(label):
+              for _ in range(9):
+                  for n in nodes():
+                      if label in [n.attrib.get('content-desc'),n.attrib.get('text')] and n.attrib.get('enabled')=='true':
+                          b=list(map(int,re.findall(r'\d+',n.attrib['bounds'])))
+                          if b[2]<=b[0] or b[3]<=b[1]:continue
+                          adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));time.sleep(1.5);return
+                  adb('shell','input','swipe','540','1900','540','700','350')
+              raise RuntimeError('Action not reachable: '+label)
+          log=(out/'device-logcat.txt').open('wb');logger=subprocess.Popen(['adb','logcat','-v','threadtime'],stdout=log,stderr=subprocess.STDOUT)
+          try:
+              adb('install','-r','/tmp/cogni.apk',timeout=180)
+              adb('shell','am','start','-W','-n','app.gocogni.cogni/.MainActivity',timeout=45);time.sleep(12)
+              assert adb('shell','pidof','app.gocogni.cogni').strip()
+              for scale,name in [('1.0','normal'),('1.6','large')]:
+                  adb('shell','settings','put','system','font_scale',scale);time.sleep(3);top();capture('welcome-'+name)
+                  assert 'Sharpen how you think.' in labels()
+                  tap('Try a sample decision');top();capture('sample-'+name)
+                  tap('Check an original source supports the claim');capture('answer-selected-'+name)
+                  tap('See the reasoning');capture('feedback-'+name)
+                  assert 'Confidence is not evidence.' in labels()
+                  tap('Back to welcome');top();result[name]='welcome, sample selection, explanation and return passed'
+              adb('shell','settings','put','system','font_scale','1.0');time.sleep(2);top()
+              tap('Get started');capture('signup')
+              assert 'Create account' in labels() or 'Create your account' in labels()
+              adb('shell','input','keyevent','KEYCODE_BACK');time.sleep(2);top()
+              tap('I already have an account');capture('login');assert 'Welcome back' in labels()
+              result['status']='passed';print(json.dumps(result,indent=2))
+          except Exception as error:
+              result['status']='failed';result['error']=str(error)
+              try:capture('failure')
+              except Exception:pass
+              raise
+          finally:
+              logger.terminate();log.close();(out/'result.json').write_text(json.dumps(result,indent=2))
+          PY
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 18
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu software -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
+          script: python3 -u /tmp/native-smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-045-final-native-${{ github.run_attempt }}
+          path: /tmp/cogni-final/
+          retention-days: 30
+          if-no-files-found: warn

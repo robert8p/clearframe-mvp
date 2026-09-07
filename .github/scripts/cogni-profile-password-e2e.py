@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import os
+import json
+import urllib.request
+import urllib.error
 import re
 import subprocess
 import time
@@ -160,15 +163,56 @@ def main() -> int:
     wait_for("Save new password", enabled=True, scroll=True)
     tap("Save new password", scroll=True)
     wait_for("Use at least 8 characters.")
-    tap("Back to profile", scroll=True)
-    wait_for("Cogni Route E2E", timeout=45)
-    assert_absent("Reset your password")
+    changed_password = PASSWORD + "B2"
+    print("::add-mask::" + changed_password)
+    def auth_request(path: str, payload: dict, method: str = "POST", token: str | None = None):
+        headers = {"apikey": os.environ["SUPABASE_KEY"], "Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = "Bearer " + token
+        request = urllib.request.Request(os.environ["SUPABASE_URL"].rstrip("/") + path,
+            data=json.dumps(payload).encode(), headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return response.status, json.load(response)
+        except urllib.error.HTTPError as error:
+            return error.code, json.load(error)
 
-    tap("Sign out", scroll=True)
-    scroll_to_top()
-    wait_for("Train your thinking", timeout=45)
+    try:
+        input_text("New password", changed_password, scroll=True)
+        input_text("Confirm password", changed_password, scroll=True)
+        tap("Save new password", scroll=True)
+        wait_for("Password updated", timeout=45)
+        capture("password-updated-confirmation")
+        tap("Back to profile", scroll=True)
+        wait_for("Cogni Route E2E", timeout=45)
+        assert_absent("Reset your password")
+        tap("Sign out", scroll=True)
+        scroll_to_top()
+        wait_for("Train your thinking", timeout=45)
+        status, old_result = auth_request("/auth/v1/token?grant_type=password", {"email": EMAIL, "password": PASSWORD})
+        assert status == 400 and not old_result.get("access_token"), "Old password still authenticates"
+        tap("I already have an account", scroll=True)
+        wait_for("Welcome back")
+        input_text("Email", EMAIL)
+        input_text("Password", changed_password, scroll=True)
+        tap("Sign in", scroll=True)
+        wait_for("Home", timeout=60)
+        tap("Profile")
+        wait_for("Cogni Route E2E", timeout=45)
+        capture("new-password-sign-in")
+        tap("Sign out", scroll=True)
+        scroll_to_top()
+        wait_for("Train your thinking", timeout=45)
+    finally:
+        # Restore the original disposable credential even if a later UI assertion fails.
+        status, result = auth_request("/auth/v1/token?grant_type=password", {"email": EMAIL, "password": changed_password})
+        if status == 200 and result.get("access_token"):
+            status, _ = auth_request("/auth/v1/user", {"password": PASSWORD}, "PUT", result["access_token"])
+            assert status == 200, "Could not restore disposable account password"
+        status, result = auth_request("/auth/v1/token?grant_type=password", {"email": EMAIL, "password": PASSWORD})
+        assert status == 200 and result.get("access_token"), "Original disposable credential not restored"
     capture("pass")
-    print("PASS: profile password-change navigation, empty-form validation, back navigation and sign-out all worked.")
+    print("PASS: password-change validation, successful update confirmation, old password rejection, new password UI sign-in, sign-out, and credential restoration.")
     return 0
 
 

@@ -281,12 +281,18 @@ def main() -> int:
     dump_ui("answer-options")
     option_tree = ET.fromstring((OUT / "window-answer-options.xml").read_text())
     options = [element for element in option_tree.iter("node")
-               if element.attrib.get("class") == "android.widget.Button"
+               if element.attrib.get("class") in ("android.widget.Button", "android.widget.RadioButton")
                and element.attrib.get("content-desc")
-               and element.attrib.get("content-desc") != "Submit answer"]
+               and element.attrib.get("content-desc") != "Submit answer"
+               and "percent confident" not in element.attrib.get("content-desc", "")]
     if not options:
         raise AssertionError("No selectable answer in the starting check")
     tap(options[0].attrib["content-desc"])
+    # Confidence is now an explicit learner choice rather than an assumed 60%.
+    wait_for("Submit answer", scroll=True)
+    if any("percent confident" in node.description for node in dump_ui("confidence-choice")):
+        wait_for("Submit answer", enabled=False)
+        tap("60 percent confident", scroll=True)
     tap("Submit answer", scroll=True)
     wait_for("Next question", timeout=60, scroll=True)
     assert_no_literal_controls("submitted-answer-feedback")

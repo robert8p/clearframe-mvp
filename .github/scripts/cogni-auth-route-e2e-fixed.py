@@ -100,10 +100,6 @@ def install_reliable_automation(module: ModuleType) -> None:
                     print(item)
             raise AssertionError(f"Timed out waiting for editable field {field_label!r}")
         effective_value = value
-        on_reset_screen = any(matches(item, "Reset your password") for item in last_nodes)
-        if field_label.casefold() == "email" and on_reset_screen and value.endswith("@example.com"):
-            local = value.split("@", 1)[0].replace(".", "")
-            effective_value = f"{local}@gmail.com"
         left, top, right, bottom = node.bounds
         x, y = (left + right) // 2, (top + bottom) // 2
         print(f"INPUT {field_label!r}: description={getattr(node, 'description', '')!r} text={getattr(node, 'text', '')!r} at {x},{y}")

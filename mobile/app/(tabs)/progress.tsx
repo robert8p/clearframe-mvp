@@ -1,7 +1,7 @@
 import React from "react";
 import { useFocusResource } from "@/lib/use-focus-resource";
-import { historyTrends } from "@/lib/learning-view";
 import { RefreshNotice } from "@/components/learning-surfaces";
+import { ProgressHistoryCard, ScoreExplainer, type ProgressHistory } from "@/components/progress-history";
 import { Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { apiFetch } from "@/lib/api";
@@ -12,28 +12,6 @@ import { Body, Card, Eyebrow, ErrorState, LoadingState, MetricCard, PrimaryButto
 
 function relation(value: MobileProfileResponse["skillScores"][number]["skills"]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-type ProgressHistory = {
-  access: "full" | "limited";
-  freeDays: number;
-  windowDays: number | null;
-  availableFrom: string | null;
-  availableTo: string | null;
-  points: {
-    date: string;
-    skillId: string;
-    skillSlug: string | null;
-    skillName: string;
-    score: number;
-    reliability: number;
-    attempts: number;
-  }[];
-};
-
-function historyWindowLabel(history: ProgressHistory) {
-  if (history.access === "full") return "All available";
-  return `${history.windowDays ?? history.freeDays} days`;
 }
 
 async function loadProgress(signal: AbortSignal) {
@@ -49,13 +27,11 @@ export default function ProgressScreen() {
   const { needsProForFocusedPractice, isPro, openFocusedPractice, openPaywall } = useProGate();
   const data = resource?.profile;
   const history = resource?.history ?? null;
-  const trends = historyTrends(history?.points ?? []);
   if (loading) return <LoadingState />;
   if (!data) return <ErrorState message={error || "Could not load progress."} onRetry={() => void reload()} />;
 
   const average = data.summary.averageScore == null ? null : Math.round(data.summary.averageScore * 100);
   const measured = data.skillScores.filter((row) => row.attempts > 0);
-  const strongest = [...measured].sort((a, b) => Number(b.score) - Number(a.score))[0];
   const next = [...measured].sort((a, b) => Number(a.score) - Number(b.score))[0];
   const nextSkill = next ? relation(next.skills) : null;
   const nextSkillSlug = nextSkill?.slug;
@@ -82,55 +58,16 @@ export default function ProgressScreen() {
       <View style={{ flexGrow: 1, flexBasis: 150 }}><MetricCard label="Streak" value={`${data.profile.current_streak ?? 0}d`} hint="current run" /></View>
     </View>
 
-    <Card style={{ borderColor: "rgba(107,92,255,.38)" }}>
-      <Eyebrow>How to read this</Eyebrow>
-      <Title size={23}>Score + evidence, together</Title>
-      <Body muted>Your Development Score reflects performance in the questions Cogni has seen so far. The evidence label tells you how much observation sits behind that score.</Body>
-      <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Neither is a population percentile or a permanent grade. Early movement should be treated as a signal to keep learning, not a verdict on ability.</Body>
-    </Card>
-
     {resource?.error ? <Card><Eyebrow>History unavailable</Eyebrow><Body muted>Your current scores are available, but history could not be loaded. It has not been reset.</Body><PrimaryButton label="Retry history" secondary onPress={() => void reload()} /></Card> : null}
-    {history ? <Card style={{ borderColor: history.access === "full" ? "rgba(0,229,255,.34)" : colors.line }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <Eyebrow>{history.access === "full" ? "Skill history" : "Recent trend"}</Eyebrow>
-        <Text style={{ color: colors.soft, fontSize: 12.5, fontWeight: "800" }}>{historyWindowLabel(history)}</Text>
-      </View>
-      <Title size={23}>{trends.length ? "How your skills are moving" : "Keep practising to see changes"}</Title>
-      <Body muted>{history.access === "full"
-        ? "Your complete available daily skill-change history is included."
-        : `Free includes the most recent ${history.freeDays} days of skill movement. Cogni Pro unlocks the complete available history.`}</Body>
-      {history.access === "full" && history.availableFrom && history.availableTo
-        ? <Text style={{ color: colors.soft, fontSize: 12.5 }}>Available from {history.availableFrom} to {history.availableTo}</Text>
-        : null}
-      {trends.length ? <View accessible accessibilityLabel={`${trends[0].skillName}. Last ${Math.min(14,trends[0].points.length)} recorded days, from ${trends[0].points.slice(-14)[0].date} to ${trends[0].points.slice(-1)[0].date}. Scores ${trends[0].points.slice(-14).map(point=>point.score).join(", ")}.`} style={{gap:8}}><Body muted style={{fontSize:13}}>Recent recorded days · {trends[0].skillName}</Body><View accessible={false} style={{height:58,flexDirection:"row",alignItems:"flex-end",gap:5,borderBottomWidth:1,borderColor:colors.lineStrong}}>{trends[0].points.slice(-14).map(point=><View key={point.date} style={{flex:1,height:Math.max(0,Math.min(100,point.score))*0.56,backgroundColor:colors.cyan,borderTopLeftRadius:4,borderTopRightRadius:4}} />)}</View><Text style={{color:colors.soft,fontSize:12,lineHeight:18}}>0–100 score scale. Each bar is a recorded day; gaps between dates are not shown.</Text></View> : null}
-      {trends.map((trend) => <View
-        accessible
-        accessibilityLabel={`${trend.skillName}. Changed ${trend.delta >= 0 ? "up" : "down"} ${Math.abs(trend.delta)} points from ${trend.from} to ${trend.to}.`}
-        key={trend.skillId}
-        style={{ minHeight: 52, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.text, fontSize: 15, fontWeight: "800" }}>{trend.skillName}</Text>
-          <Text style={{ color: colors.soft, fontSize: 12.5 }}>{trend.observations} daily observations</Text>
-        </View>
-        <Text style={{ color: trend.delta >= 0 ? colors.green : colors.muted, fontSize: 16, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{trend.delta > 0 ? "+" : ""}{trend.delta}</Text>
-      </View>)}
-      {history.access === "limited" && !isPro ? <PrimaryButton label="Unlock full progress history" onPress={() => openPaywall("progress_history", "progress_history")} /> : null}
-    </Card> : null}
-
-    {strongest ? <Card style={{ borderColor: "rgba(0,229,255,.34)" }}>
-      <Eyebrow>Emerging strength</Eyebrow>
-      <Title size={24}>{relation(strongest.skills)?.name ?? "Skill"}</Title>
-      <Body muted>This is currently one of your stronger measured areas. The evidence label shows how much history sits behind the score.</Body>
-      <SkillBar label={relation(strongest.skills)?.name ?? "Skill"} score={Number(strongest.score)} reliability={Number(strongest.reliability)} />
-    </Card> : null}
+    {history ? <ProgressHistoryCard history={history} showUpgrade={history.access === "limited" && !isPro}
+      onUpgrade={() => openPaywall("progress_history", "progress_history")} /> : null}
 
     {nextSkill && nextSkillSlug ? <Card style={{ borderColor: "rgba(0,229,255,.28)" }}>
-      <Eyebrow>Next best move</Eyebrow>
+      <Eyebrow>Practice focus</Eyebrow>
       <Title size={24}>Sharpen {nextSkill.name}</Title>
       <Body muted>{needsProForFocusedPractice
         ? "Your daily core training remains free. Cogni Pro unlocks additional focused rounds on a skill you choose to practise."
-        : "This is one of your lower measured scores. It is a possible focus—not a proven weakness or a guarantee of improvement."}</Body>
+        : "This is one of your lower measured scores. Use it as a possible focus for your next practice."}</Body>
       <PrimaryButton label={needsProForFocusedPractice ? `Unlock practice for ${nextSkill.name}` : `Practise ${nextSkill.name}`} onPress={() => openFocusedPractice(nextSkillSlug, "progress_next_move")} />
     </Card> : null}
 
@@ -143,5 +80,6 @@ export default function ProgressScreen() {
         ? [...measured].sort((a, b) => Number(a.score) - Number(b.score)).map((row) => <SkillBar key={row.skill_id} label={relation(row.skills)?.name ?? "Skill"} score={Number(row.score)} reliability={Number(row.reliability)} />)
         : <Body muted>Complete your starting check to begin tracking your skill progress.</Body>}
     </Card>
+    <ScoreExplainer />
   </Screen>;
 }

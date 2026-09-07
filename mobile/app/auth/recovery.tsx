@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { Text, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { Text, TextInput, View } from "react-native";
 import { CogniLogo } from "@/components/brand";
 import { FormField } from "@/components/form-field";
 import { Body, Card, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
@@ -12,6 +12,8 @@ export default function RecoveryScreen() {
   const { source } = useLocalSearchParams<{ source?: string }>();
   const fromProfile = source === "profile";
   const { session, loading } = useAuth();
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -19,7 +21,11 @@ export default function RecoveryScreen() {
   const [done, setDone] = useState(false);
 
   if (loading) return <LoadingState label={fromProfile ? "Opening password settings…" : "Opening your recovery session…"} />;
-  if (done) return <Redirect href={fromProfile ? "/(tabs)/profile" : "/(tabs)/home"} />;
+  if (done) return <Screen contentStyle={{ flexGrow: 1, justifyContent: "center" }}><Card>
+    <Title size={28}>Password updated</Title>
+    <Body muted>Your new password is saved. Use it the next time you sign in. You can continue on this device.</Body>
+    <PrimaryButton label={fromProfile ? "Back to profile" : "Continue to Cogni"} onPress={() => router.replace(fromProfile ? "/(tabs)/profile" : "/(tabs)/home")} />
+  </Card></Screen>;
 
   if (!session) {
     return (
@@ -38,10 +44,12 @@ export default function RecoveryScreen() {
     if (busy) return;
     if (password.length < 8) {
       setError("Use at least 8 characters.");
+      passwordRef.current?.focus();
       return;
     }
     if (password !== confirm) {
       setError("Passwords do not match.");
+      confirmRef.current?.focus();
       return;
     }
 
@@ -50,7 +58,7 @@ export default function RecoveryScreen() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      setDone(true);
+      setPassword(""); setConfirm(""); setDone(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not update your password.");
     } finally {
@@ -72,7 +80,12 @@ export default function RecoveryScreen() {
         </Body>
         <View style={{ gap: 14 }}>
           <FormField
+            ref={passwordRef}
             label="New password"
+            editable={!busy}
+            autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
             secureTextEntry
             autoCapitalize="none"
             autoComplete="new-password"
@@ -85,7 +98,10 @@ export default function RecoveryScreen() {
             placeholderTextColor={colors.soft}
           />
           <FormField
+            ref={confirmRef}
             label="Confirm password"
+            editable={!busy}
+            autoCorrect={false}
             secureTextEntry
             autoCapitalize="none"
             autoComplete="new-password"
@@ -112,7 +128,7 @@ export default function RecoveryScreen() {
         ) : null}
         <PrimaryButton label={busy ? "Saving…" : "Save new password"} disabled={busy} loading={busy} onPress={() => void updatePassword()} />
         {fromProfile ? (
-          <PrimaryButton label="Back to profile" secondary onPress={() => router.replace("/(tabs)/profile")} />
+          <PrimaryButton label="Back to profile" secondary disabled={busy} onPress={() => router.replace("/(tabs)/profile")} />
         ) : null}
       </Card>
     </Screen>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Cogni 0.4.0's feedback settings and no-store-key paywall."""
+"""Exercise Cogni preview feedback settings and the disabled-sales paywall."""
 
 from __future__ import annotations
 
@@ -233,15 +233,16 @@ def main() -> int:
     toggle_switch("Haptic feedback", False, True)
     capture("feedback-settings")
 
-    tap("Explore Cogni Pro", scroll=True)
+    tap("About Cogni Pro", scroll=True)
     wait_for("Cogni Pro", timeout=45)
     wait_for("More practice. Deeper progress.", timeout=45)
     wait_for("Unlimited additional focused practice", scroll=True)
     wait_for("Your starting check, daily lesson and assigned core training stay free.", scroll=True)
-    wait_for("Subscriptions are not configured for this build yet.", scroll=True)
-    wait_for("Subscribe", enabled=False, scroll=True)
-    wait_for("Restore purchases", enabled=False, scroll=True)
-    wait_for("renews automatically", scroll=True)
+    wait_for("Keep exploring for free", scroll=True)
+    wait_for("Paid subscriptions are not enabled in this preview.", scroll=True)
+    wait_for("Continue learning", enabled=True, scroll=True)
+    assert_absent("Subscribe")
+    assert_absent("Restore purchases")
     wait_for("Privacy", scroll=True)
     wait_for("Terms", scroll=True)
     wait_for("Subscription terms", scroll=True)
@@ -258,7 +259,7 @@ def main() -> int:
     assert_absent("Reset your password")
     assert_no_fatal_crash()
     capture("pass")
-    print("PASS: exact APK exposed persistent sound/haptic controls and a dismissible, fully disclosed no-store-key Cogni Pro paywall without visible escaped copy.")
+    print("PASS: exact APK exposed persistent sound/haptic controls and a dismissible, truthful free-preview Cogni Pro screen with no purchase action without visible escaped copy.")
     return 0
 
 

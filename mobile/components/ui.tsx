@@ -167,7 +167,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 }
 
 export function SkillBar({ label, score, reliability }: { label: string; score: number; reliability: number }) {
-  const evidence = reliability >= 0.7 ? "Strong evidence" : reliability >= 0.35 ? "Building evidence" : "Early evidence";
+  const evidence = reliability >= 0.7 ? "More evidence" : reliability >= 0.35 ? "Building evidence" : "Early evidence";
   return <View accessible accessibilityLabel={`${label}. Score ${Math.round(score)} out of 100. ${evidence}.`} style={{ gap: 8 }}><View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}><View style={{ flex: 1, gap: 2 }}><Text style={{ color: colors.text, fontSize: 15.5, lineHeight: 22, fontWeight: "800" }}>{label}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>{evidence}</Text></View><Text style={{ color: colors.cyan, fontSize: 17, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{Math.round(score)}</Text></View><ProgressBar value={score} /></View>;
 }
 

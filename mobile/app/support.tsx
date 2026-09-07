@@ -1,5 +1,5 @@
 import appConfig from "../app.json";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { apiFetch } from "@/lib/api";
@@ -18,6 +18,7 @@ const CATEGORIES: { value: Category; label: string }[] = [
 ];
 
 export default function SupportScreen() {
+  const messageRef = useRef<TextInput>(null);
   const [category, setCategory] = useState<Category>("learning");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,7 +28,7 @@ export default function SupportScreen() {
   async function submit() {
     if (busy) return;
     const trimmed = message.trim();
-    if (trimmed.length < 10) { setError("Please add a little more detail so Cogni support can help."); return; }
+    if (trimmed.length < 10) { setError("Please add at least 10 characters so Cogni support can help."); messageRef.current?.focus(); return; }
     setBusy(true); setError("");
     try {
       const result = await apiFetch<{ ok: boolean; requestId: string }>("/api/mobile/support", {
@@ -41,19 +42,20 @@ export default function SupportScreen() {
     } finally { setBusy(false); }
   }
 
-  if (submittedId) return <Screen><Card style={{ borderColor: "rgba(0,229,255,.34)" }}><Eyebrow>Request received</Eyebrow><Title size={27}>Cogni support has your message.</Title><Body muted>Your reference is {submittedId}. Your message is linked securely to your account so we can look into it.</Body><PrimaryButton label="Back to Profile" onPress={() => router.replace("/(tabs)/profile")} /><PrimaryButton secondary label="Send another request" onPress={() => setSubmittedId(null)} /></Card></Screen>;
+  if (submittedId) return <Screen><Card style={{ borderColor: "rgba(0,229,255,.34)" }}><Eyebrow>Request received</Eyebrow><Title size={27}>Your request is saved.</Title><Body muted>Your message is linked securely to your account in the private support queue. Keep this reference if you need to follow up.</Body><Text selectable accessibilityLabel={`Support reference ${submittedId}`} style={{ color: colors.text, fontSize: 14, lineHeight: 22 }}>{submittedId}</Text><PrimaryButton label="Back to profile" onPress={() => router.replace("/(tabs)/profile")} /><PrimaryButton secondary label="Send another request" onPress={() => setSubmittedId(null)} /></Card></Screen>;
 
   return <Screen>
     <View style={{ gap: 6 }}><Eyebrow>Private support</Eyebrow><Title>How can we help?</Title><Body muted>Your message goes to Cogni&apos;s private support queue. Do not include card numbers, passwords or other payment credentials.</Body></View>
     <Card>
       <Eyebrow>Topic</Eyebrow>
-      <View accessibilityRole="radiogroup" style={{ gap: 8 }}>{CATEGORIES.map((item) => { const selected = item.value === category; return <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => setCategory(item.value)} style={({ pressed }) => ({ minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: selected ? colors.cyan : colors.line, backgroundColor: selected ? "rgba(0,229,255,.08)" : "rgba(13,20,47,.75)", paddingHorizontal: 14, justifyContent: "center", opacity: pressed ? .78 : 1 })}><Text style={{ color: colors.text, fontSize: 15, fontWeight: selected ? "900" : "700" }}>{item.label}</Text></Pressable>; })}</View>
+      <View accessibilityRole="radiogroup" style={{ gap: 8 }}>{CATEGORIES.map((item) => { const selected = item.value === category; return <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: selected, disabled: busy }} disabled={busy} onPress={() => setCategory(item.value)} style={({ pressed }) => ({ minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: selected ? colors.cyan : colors.line, backgroundColor: selected ? "rgba(0,229,255,.08)" : "rgba(13,20,47,.75)", paddingHorizontal: 14, paddingVertical: 12, justifyContent: "center", opacity: pressed ? .78 : 1 })}><Text style={{ color: colors.text, fontSize: 15, fontWeight: selected ? "900" : "700" }}>{item.label}</Text></Pressable>; })}</View>
       <Eyebrow>Message</Eyebrow><Body muted style={{ fontSize: 14 }}>Please include at least 10 characters. Your app version is included automatically.</Body>
-      <TextInput multiline textAlignVertical="top" value={message} onChangeText={setMessage} maxLength={4000} placeholder="Describe what happened, what you expected, and anything you already tried." placeholderTextColor={colors.soft} accessibilityLabel="Support message" style={{ minHeight: 160, borderRadius: 16, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg2, color: colors.text, fontSize: 16, lineHeight: 23, padding: 14 }} />
+      <TextInput ref={messageRef} editable={!busy} multiline textAlignVertical="top" value={message} onChangeText={(value) => { setMessage(value); if (error) setError(""); }} maxLength={4000} placeholder="Describe what happened, what you expected, and anything you already tried." placeholderTextColor={colors.soft} accessibilityLabel="Support message" style={{ minHeight: 160, borderRadius: 16, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg2, color: colors.text, fontSize: 16, lineHeight: 23, padding: 14 }} />
       <Text style={{ color: colors.soft, fontSize: 12.5, textAlign: "right" }}>{message.length}/4000</Text>
       {error ? <Text accessibilityLiveRegion="assertive" style={{ color: colors.danger, lineHeight: 21 }}>{error}</Text> : null}
-      <PrimaryButton label={busy ? "Sending…" : "Send support request"} disabled={busy || message.trim().length < 10} loading={busy} onPress={() => void submit()} />
+      <PrimaryButton label={busy ? "Sending…" : "Send support request"} disabled={busy} loading={busy} onPress={() => void submit()} />
     </Card>
+    <PrimaryButton label="Back to profile" secondary disabled={busy} onPress={() => router.replace("/(tabs)/profile")} />
     <Card><Eyebrow>Subscription reminder</Eyebrow><Body muted>Deleting your Cogni account or uninstalling Cogni does not cancel an Apple App Store or Google Play subscription. Use your store subscription settings to stop future renewal.</Body></Card>
   </Screen>;
 }

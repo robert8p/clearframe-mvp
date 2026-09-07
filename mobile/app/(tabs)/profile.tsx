@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Alert, Linking, Switch, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import { FormField } from "@/components/form-field";
 import { CompactAction } from "@/components/interaction-cues";
 import { OptionPicker } from "@/components/option-picker";
@@ -21,7 +20,7 @@ import { useFeedback } from "@/lib/feedback";
 import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from "@/lib/legal";
 import { useProGate } from "@/lib/pro-gate";
 import { supabase } from "@/lib/supabase";
-import { colors, gradients } from "@/lib/theme";
+import { colors } from "@/lib/theme";
 import appConfig from "../../app.json";
 import type { MobileProfileResponse } from "@/lib/types";
 import { ActionLink, Body, Card, Eyebrow, ErrorState, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
@@ -68,9 +67,10 @@ function PreferenceRow({
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
-  const { isPro, entitlement, billingStatus, managementUrl, restore, openPaywall } = useProGate();
+  const { isPro, stateReliable, config, entitlement, billingStatus, managementUrl, restore, openPaywall } = useProGate();
   const { ready: feedbackReady, soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled, playFeedback } = useFeedback();
-  const [data, setData] = useState<MobileProfileResponse | null>(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
+  const [data, setData] = useState<MobileProfileResponse | null>(null); const [loading, setLoading] = useState(true); const [pending, setPending] = useState<"save" | "restore" | "delete" | "signout" | null>(null); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
+  const busy = pending !== null;
   const [name, setName] = useState(""); const [functionArea, setFunctionArea] = useState(""); const [industry, setIndustry] = useState(""); const [goal, setGoal] = useState("");
   const [studyStage, setStudyStage] = useState(""); const [responsibilityScope, setResponsibilityScope] = useState(""); const [organisationScale, setOrganisationScale] = useState("");
 
@@ -94,12 +94,12 @@ export default function ProfileScreen() {
 
   async function save() {
     if (busy || !audience) return;
-    setBusy(true); setError(""); setSaved("");
+    setPending("save"); setError(""); setSaved("");
     try {
       const updated = await apiFetch<MobileProfileResponse>("/api/mobile/profile", {
         method: "POST",
         body: JSON.stringify({
-          fullName: name || null,
+          fullName: name.trim() || null,
           functionArea: functionArea || null,
           industry: isProfessional ? industry || null : null,
           primaryGoal: goal || null,
@@ -108,28 +108,41 @@ export default function ProfileScreen() {
           organisationScale: isProfessional ? organisationScale || null : null,
         }),
       });
-      setData(updated); setSaved("Profile updated");
+      setData(updated); setName(updated.profile.full_name ?? ""); setSaved("Profile updated");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not save profile."); }
-    finally { setBusy(false); }
+    finally { setPending(null); }
   }
 
-  async function logout() { try { await signOut(); router.replace("/"); } catch { Alert.alert("Could not sign out", "Check your connection and try again. Your account is still signed in."); } }
+  async function logout() {
+    if (busy) return;
+    setPending("signout");
+    try { await signOut(); router.replace("/"); }
+    catch { Alert.alert("Could not sign out", "Check your connection and try again. Your account is still signed in."); }
+    finally { setPending(null); }
+  }
+
+  async function openExternal(url: string) {
+    try { await Linking.openURL(url); }
+    catch { Alert.alert("Could not open this page", "Check your connection and try again. You can also contact Cogni Support from your profile."); }
+  }
 
   async function restoreFromProfile() {
-    if (busy) return;
-    setBusy(true);
-    const result = await restore("profile");
-    setBusy(false);
-    Alert.alert(result.ok ? "Purchases restored" : result.outcome === "no_subscription" ? "Nothing to restore" : "Restore incomplete", result.message);
+    if (busy || billingStatus === "not_configured") return;
+    setPending("restore");
+    try {
+      const result = await restore("profile");
+      Alert.alert(result.ok ? "Purchases restored" : result.outcome === "no_subscription" ? "Nothing to restore" : "Restore incomplete", result.message);
+    } catch {
+      Alert.alert("Restore incomplete", "Cogni couldn't restore purchases. Check your connection and try again.");
+    } finally { setPending(null); }
   }
 
   function confirmDeleteAccount() {
-    const subscriptionWarning = isPro || entitlement
-      ? " Deleting your Cogni account does not cancel an App Store or Google Play subscription. Cancel or manage that separately in your store subscription settings if you do not want it to renew."
-      : "";
+    if (busy) return;
+    const subscriptionWarning = " Deleting your Cogni account does not cancel an App Store or Google Play subscription. Cancel or manage that separately in your store subscription settings if you do not want it to renew.";
     Alert.alert(
       "Delete Cogni account?",
-      `This permanently deletes your Cogni account, scores, streak, answers, learning history and Cogni-side entitlement record. This cannot be undone.${subscriptionWarning}`,
+      `This permanently deletes your Cogni account, scores, streak, answers, learning history and subscription access in Cogni. This cannot be undone.${subscriptionWarning}`,
       [
         { text: "Cancel", style: "cancel" },
         { text: "Delete account", style: "destructive", onPress: () => void deleteAccount() },
@@ -139,24 +152,31 @@ export default function ProfileScreen() {
 
   async function deleteAccount() {
     if (busy) return;
-    setBusy(true); setError("");
+    setPending("delete"); setError("");
     try {
       await apiFetch<{ ok: boolean }>("/api/mobile/account", { method: "DELETE" });
       await supabase.auth.signOut({ scope: "local" });
       router.replace("/");
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not delete your account."); setBusy(false); }
+    } catch (caught) {
+      Alert.alert("Deletion incomplete", caught instanceof Error ? caught.message : "Could not delete your account. Please try again.");
+      setPending(null);
+    }
   }
 
-  const initials = (name || data.profile.email || "C").split(/\s+/).map((part) => part[0]).join("").slice(0,2).toUpperCase();
+  const initials = (name.trim() || data.profile.email || "C").split(/\s+/).map((part) => part[0]).join("").slice(0,2).toUpperCase();
   const xp = data.profile.xp ?? 0; const streak = data.profile.current_streak ?? 0; const answers = data.summary.answers;
   const expiry = readableDate(entitlement?.expiration_date);
-  const subscriptionSummary = isPro
+  const subscriptionSummary = !stateReliable
+    ? "We couldn't verify your subscription status. Reopen this screen when you're connected, or restore a purchase below."
+    : isPro
     ? entitlement?.status === "cancelled" ? `Active until ${expiry ?? "the end of the paid period"}; renewal cancelled.`
       : entitlement?.billing_issue ? `Access is active while the store resolves a billing issue${expiry ? `, currently through ${expiry}` : ""}.`
         : `Active${expiry ? ` through ${expiry}` : ""}${entitlement?.will_renew ? "; set to renew in the store" : ""}.`
     : entitlement?.status === "expired" || entitlement?.status === "refunded" || entitlement?.status === "revoked"
       ? `Free plan. Previous Cogni Pro access is ${entitlement.status}.`
-      : "Free plan. Your daily core learning remains available.";
+      : !config.monetizationEnabled
+        ? "Paid subscriptions are not enabled in this preview. Daily learning, focused practice and available history are free to explore."
+        : "Free plan. Your daily core learning remains available.";
   const milestones = [
     { icon: "⚡", label: "100 XP", unlocked: xp >= 100 },
     { icon: "✓", label: "10 answers", unlocked: answers >= 10 },
@@ -164,11 +184,13 @@ export default function ProfileScreen() {
   ];
 
   return <Screen>
-    <LinearGradient colors={["rgba(38,43,112,.95)", "rgba(15,20,51,.98)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 28, borderWidth: 1, borderColor: colors.line, padding: 20, alignItems: "center", gap: 10 }}>
-      <LinearGradient colors={[...gradients.orb]} style={{ width: 88, height: 88, borderRadius: 44, padding: 4 }}><View style={{ flex: 1, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg2 }}><Text accessibilityLabel={`Profile initials ${initials}`} style={{ color: colors.white, fontSize: 27, fontWeight: "900" }}>{initials}</Text></View></LinearGradient>
-      <Title size={27}>{name || "Your Cogni profile"}</Title><Text selectable style={{ color: colors.muted, fontSize: 14.5 }}>{data.profile.email}</Text>{meta ? <CompactAction accent label={meta.label} hint="Change your learning context" onPress={() => router.push("/onboarding")} /> : null}
+    <View style={{ gap: 5 }}><Eyebrow>Your account</Eyebrow><Title>Make Cogni yours</Title><Body muted>Manage your learning, feedback and account in one place.</Body></View>
+    <Card style={{ alignItems: "center", gap: 10 }}>
+      <View style={{ minWidth: 56, minHeight: 56, padding: 12, borderRadius: 18, backgroundColor: colors.panel2, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}><Text accessibilityLabel={`Profile initials ${initials}`} style={{ color: colors.cyan, fontSize: 21, fontWeight: "800" }}>{initials}</Text></View>
+      <Title size={25}>{name.trim() || "Your Cogni profile"}</Title><Text selectable style={{ color: colors.muted, fontSize: 14.5 }}>{data.profile.email}</Text>{meta ? <CompactAction accent label={meta.label} hint="Change your learning context" onPress={() => router.push("/onboarding")} /> : null}
       <View accessible accessibilityLabel={`${xp} XP. ${answers} answers. ${streak} ${streak===1?"day":"days"} streak.`} style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 18, marginTop: 6 }}><View style={{ alignItems: "center", minWidth: 64 }}><Text style={{ color: colors.text, fontSize: 21, fontWeight: "900" }}>{xp}</Text><Text style={{ color: colors.soft, fontSize: 12.5 }}>XP</Text></View><View style={{ alignItems: "center", minWidth: 64 }}><Text style={{ color: colors.text, fontSize: 21, fontWeight: "900" }}>{answers}</Text><Text style={{ color: colors.soft, fontSize: 12.5 }}>Answers</Text></View><View style={{ alignItems: "center", minWidth: 64 }}><Text style={{ color: colors.text, fontSize: 21, fontWeight: "900" }}>{streak}</Text><Text style={{ color: colors.soft, fontSize: 12.5 }}>Streak</Text></View></View>
-    </LinearGradient>
+      <ActionLink label="Get help" onPress={() => router.push("/support")} />
+    </Card>
 
     <Card><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}><Eyebrow>Milestones</Eyebrow><Text style={{ color: colors.soft, fontSize: 12.5 }}>Progress markers</Text></View><View style={{ gap: 0 }}>{milestones.map((item, index) => <View accessible accessibilityLabel={`${item.label}. ${item.unlocked ? "Unlocked" : "Locked"}.`} key={item.label} style={{ minHeight: 62, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: index === milestones.length - 1 ? 0 : 1, borderBottomColor: colors.line }}><Text accessible={false} style={{ width: 30, fontSize: 21, textAlign: "center", opacity: item.unlocked ? 1 : .48 }}>{item.icon}</Text><View style={{ flex: 1, gap: 2 }}><Text style={{ color: colors.text, fontSize: 15.5, lineHeight: 21, fontWeight: "800" }}>{item.label}</Text><Text style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 12.5, lineHeight: 18, fontWeight: "700" }}>{item.unlocked ? "Unlocked" : "Not yet unlocked"}</Text></View><Text accessible={false} style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 18, fontWeight: "900" }}>{item.unlocked ? "✓" : "○"}</Text></View>)}</View></Card>
 
@@ -189,43 +211,44 @@ export default function ProfileScreen() {
 
     <Card style={{ borderColor: isPro ? "rgba(0,229,255,.36)" : colors.line }}>
       <Eyebrow>Subscription</Eyebrow>
-      <Title size={24}>{isPro ? "Cogni Pro" : "Cogni Free"}</Title>
+      <Title size={24}>{!stateReliable ? "Status unavailable" : isPro ? "Cogni Pro" : !config.monetizationEnabled ? "Cogni preview" : "Cogni Free"}</Title>
       <Body muted>{subscriptionSummary}</Body>
-      {!isPro ? <PrimaryButton label="Explore Cogni Pro" onPress={() => openPaywall("profile", "cogni_pro")} /> : null}
-      {managementUrl ? <PrimaryButton secondary label="Manage subscription" onPress={() => void Linking.openURL(managementUrl)} /> : null}
-      <PrimaryButton secondary label={busy ? "Working…" : "Restore purchases"} disabled={busy || billingStatus === "not_configured"} onPress={() => void restoreFromProfile()} />
+      {!isPro ? <PrimaryButton label={stateReliable && !config.monetizationEnabled ? "About Cogni Pro" : "Explore Cogni Pro"} onPress={() => openPaywall("profile", "cogni_pro")} /> : null}
+      {managementUrl ? <PrimaryButton secondary label="Manage subscription" onPress={() => void openExternal(managementUrl)} /> : null}
+      <PrimaryButton secondary label={pending === "restore" ? "Restoring…" : "Restore purchases"} loading={pending === "restore"} disabled={busy || billingStatus === "not_configured"} onPress={() => void restoreFromProfile()} />
+      {billingStatus === "not_configured" ? <Body muted style={{ fontSize: 13, lineHeight: 19 }}>Store purchases and restoration are unavailable in this build.</Body> : null}
       <Body muted style={{ fontSize: 13, lineHeight: 19 }}>Purchases and cancellations are handled by Apple or Google. Deleting your Cogni account does not cancel a store subscription.</Body>
     </Card>
 
     {audience ? <Card>
       <Eyebrow>Personalisation</Eyebrow><Body muted>{isCasual ? "Keep your interests and learning goal current so Cogni can favour useful everyday situations." : "Your choices help Cogni find relevant situations to practise."}</Body>
       <View style={{ gap: 18 }}>
-        <FormField label="Name" value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor={colors.soft} />
-        <OptionPicker label={functionLabelForAudience(audience)} value={functionArea} options={functionOptionsForAudience(audience)} onChange={setFunctionArea} />
-        {isStudent ? <OptionPicker label="Study stage" value={studyStage} options={STUDY_STAGE_OPTIONS} onChange={setStudyStage} /> : null}
-        {isProfessional ? <OptionPicker label="Industry" value={industry} options={INDUSTRY_OPTIONS} onChange={setIndustry} /> : null}
-        {isProfessional ? <OptionPicker label="Your responsibilities" value={responsibilityScope} options={RESPONSIBILITY_OPTIONS} onChange={setResponsibilityScope} /> : null}
-        {isProfessional ? <OptionPicker label="Organisation size" value={organisationScale} options={ORGANISATION_SCALE_OPTIONS} onChange={setOrganisationScale} /> : null}
-        <OptionPicker label={isCasual ? "What would you like to get better at?" : "Primary goal"} value={goal} options={goalOptionsForAudience(audience)} onChange={setGoal} />
+        <FormField label="Name" editable={!busy} autoComplete="name" maxLength={100} value={name} onChangeText={(value) => { setName(value); setSaved(""); }} placeholder="Your name" placeholderTextColor={colors.soft} />
+        <OptionPicker label={functionLabelForAudience(audience)} value={functionArea} options={functionOptionsForAudience(audience)} onChange={(value) => { if (!busy) { setFunctionArea(value); setSaved(""); } } } />
+        {isStudent ? <OptionPicker label="Study stage" value={studyStage} options={STUDY_STAGE_OPTIONS} onChange={(value) => { if (!busy) { setStudyStage(value); setSaved(""); } } } /> : null}
+        {isProfessional ? <OptionPicker label="Industry" value={industry} options={INDUSTRY_OPTIONS} onChange={(value) => { if (!busy) { setIndustry(value); setSaved(""); } } } /> : null}
+        {isProfessional ? <OptionPicker label="Your responsibilities" value={responsibilityScope} options={RESPONSIBILITY_OPTIONS} onChange={(value) => { if (!busy) { setResponsibilityScope(value); setSaved(""); } } } /> : null}
+        {isProfessional ? <OptionPicker label="Organisation size" value={organisationScale} options={ORGANISATION_SCALE_OPTIONS} onChange={(value) => { if (!busy) { setOrganisationScale(value); setSaved(""); } } } /> : null}
+        <OptionPicker label={isCasual ? "What would you like to get better at?" : "Primary goal"} value={goal} options={goalOptionsForAudience(audience)} onChange={(value) => { if (!busy) { setGoal(value); setSaved(""); } } } />
       </View>
       {saved ? <Text accessibilityLiveRegion="polite" style={{ color: colors.green, fontWeight: "800", lineHeight: 22 }}>{saved}</Text> : null}
       {error ? <Text accessibilityLiveRegion="assertive" selectable style={{ color: colors.danger, lineHeight: 22 }}>{error}</Text> : null}
-      <PrimaryButton label={busy ? "Saving…" : "Save profile"} disabled={busy} onPress={() => void save()} />
+      <PrimaryButton label={pending === "save" ? "Saving…" : "Save profile"} loading={pending === "save"} disabled={busy} onPress={() => void save()} />
     </Card> : null}
 
     <Card style={{ borderColor: "rgba(0,229,255,.24)" }}>
       <Eyebrow>Privacy & trust</Eyebrow><Title size={23}>Built to support learning, not label you</Title>
       <Body muted>Cogni checks your answers securely and keeps your learning history linked to your account. Your sign-in session is stored securely on this device.</Body>
       <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Your Development Scores describe your learning so far. The evidence level shows how much practice supports each score. They are not a ranking against other people or a formal assessment. You can delete your account and learning history at any time.</Body>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: 4 }}><ActionLink label="Privacy policy" onPress={() => void Linking.openURL(PRIVACY_URL)} /><ActionLink label="Terms" onPress={() => void Linking.openURL(TERMS_URL)} /><ActionLink label="Support" onPress={() => void Linking.openURL(SUPPORT_URL)} /></View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: 4 }}><ActionLink label="Privacy policy" onPress={() => void openExternal(PRIVACY_URL)} /><ActionLink label="Terms" onPress={() => void openExternal(TERMS_URL)} /><ActionLink label="Support" onPress={() => void openExternal(SUPPORT_URL)} /></View>
     </Card>
 
     <Card>
       <Eyebrow>Account</Eyebrow><Body muted>Your session is stored securely on this device. You can also change your password or permanently remove your account.</Body>
       <PrimaryButton label="Cogni Support" secondary onPress={() => router.push("/support")} />
       <PrimaryButton label="Change password" secondary onPress={() => router.push({ pathname: "/auth/recovery", params: { source: "profile" } })} />
-      <PrimaryButton label="Sign out" secondary onPress={() => void logout()} />
-      <PrimaryButton label={busy ? "Working…" : "Delete account"} secondary disabled={busy} onPress={confirmDeleteAccount} />
+      <PrimaryButton label={pending === "signout" ? "Signing out…" : "Sign out"} loading={pending === "signout"} secondary disabled={busy} onPress={() => void logout()} />
+      <PrimaryButton label={pending === "delete" ? "Deleting account…" : "Delete account"} loading={pending === "delete"} secondary disabled={busy} onPress={confirmDeleteAccount} />
     </Card>
     <Text selectable style={{ color: colors.soft, fontSize: 12, lineHeight: 18, textAlign: "center" }}>Cogni {appConfig.expo.version} · Test preview</Text>
   </Screen>;

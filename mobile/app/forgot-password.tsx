@@ -32,6 +32,12 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setError("Enter a valid email address.");
+      emailRef.current?.focus();
+      return;
+    }
+
     setBusy(true);
     setError("");
     try {
@@ -57,20 +63,22 @@ export default function ForgotPasswordScreen() {
         <CogniLogo centered animated={false} />
       </View>
       <Card>
-        <Title size={30}>Reset your password</Title>
+        <Title size={30}>{sent ? "Check your email" : "Reset your password"}</Title>
         <Body muted>Enter the email address you use for Cogni. The recovery link will reopen this app so you can choose a new password.</Body>
         {!sent ? (
           <>
             <FormField
               ref={emailRef}
               label="Email"
+              editable={!busy}
+              autoCorrect={false}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
               value={email}
               onChangeText={(value) => {
                 setEmail(value);
-                if (error === "Enter your email address first.") setError("");
+                if (error) setError("");
               }}
               returnKeyType="done"
               onSubmitEditing={() => void submit()}
@@ -85,16 +93,20 @@ export default function ForgotPasswordScreen() {
             />
           </>
         ) : (
-          <Text accessibilityLiveRegion="polite" selectable style={{ color: colors.green, lineHeight: 22, fontWeight: "800" }}>
-            Recovery email sent. Open the link in that email on this device.
-          </Text>
+          <View style={{ gap: 12 }}>
+            <Text accessibilityLiveRegion="polite" selectable style={{ color: colors.green, lineHeight: 22, fontWeight: "800" }}>
+              If an account uses {email.trim()}, a recovery email is on its way. Open the link on this device to choose a new password.
+            </Text>
+            <Body muted>Check your spam or junk folder too. If the address has a typo, correct it and request a fresh link.</Body>
+            <PrimaryButton label="Use a different email" secondary onPress={() => { setSent(false); setError(""); }} />
+          </View>
         )}
         {error ? (
           <Text accessibilityLiveRegion="assertive" selectable style={{ color: colors.danger, lineHeight: 22 }}>
             {error}
           </Text>
         ) : null}
-        <PrimaryButton label="Back to sign in" secondary onPress={returnToSignIn} />
+        <PrimaryButton label="Back to sign in" secondary disabled={busy} onPress={returnToSignIn} />
       </Card>
     </Screen>
   );

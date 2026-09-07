@@ -25,6 +25,7 @@ export default function PaywallScreen() {
   const source = firstParam(params.source, "paywall");
   const {
     isPro,
+    stateReliable,
     offering,
     billingStatus,
     billingMessage,
@@ -36,6 +37,7 @@ export default function PaywallScreen() {
   } = useEntitlements();
   const [selectedKind, setSelectedKind] = useState<"monthly" | "annual">("annual");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     void recordAnalytics("paywall_viewed", { feature, source, experiment: config.paywallExperiment });
@@ -48,31 +50,51 @@ export default function PaywallScreen() {
 
   const selected = useMemo(() => selectedKind === "annual" ? offering?.annual ?? offering?.monthly ?? null : offering?.monthly ?? offering?.annual ?? null, [offering, selectedKind]);
   const storeName = Platform.OS === "ios" ? "App Store" : "Google Play";
-  const purchaseReady = billingStatus === "ready" && Boolean(selected);
+  const purchaseReady = stateReliable && config.monetizationEnabled && billingStatus === "ready" && Boolean(selected);
+  const preview = stateReliable && !config.monetizationEnabled;
+
+  const leavePaywall = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/home");
+  };
 
   const dismiss = async () => {
     await recordAnalytics("paywall_dismissed", { feature, source, experiment: config.paywallExperiment });
-    router.back();
+    leavePaywall();
   };
 
   const buy = async () => {
-    if (!selected || busy) return;
-    setBusy(true);
-    const result = await purchase(selected, source);
-    setBusy(false);
-    Alert.alert(result.ok ? "Cogni Pro active" : result.outcome === "cancelled" ? "Purchase cancelled" : "Subscription update", result.message, [
-      { text: result.ok ? "Continue" : "OK", onPress: result.ok ? () => router.back() : undefined },
-    ]);
+    if (!selected || !purchaseReady || busy) return;
+    setBusy(true); setError("");
+    try {
+      const result = await purchase(selected, source);
+      Alert.alert(result.ok ? "Cogni Pro active" : result.outcome === "cancelled" ? "Purchase cancelled" : "Subscription update", result.message, [
+        { text: result.ok ? "Continue" : "OK", onPress: result.ok ? leavePaywall : undefined },
+      ]);
+    } catch {
+      setError("Cogni couldn't confirm the purchase result. Check your store purchase history before trying again, or use Restore purchases.");
+    } finally { setBusy(false); }
   };
 
   const restorePurchases = async () => {
     if (busy || billingStatus === "not_configured") return;
-    setBusy(true);
-    const result = await restore(source);
-    setBusy(false);
-    Alert.alert(result.ok ? "Purchases restored" : result.outcome === "no_subscription" ? "Nothing to restore" : "Restore incomplete", result.message, [
-      { text: result.ok ? "Continue" : "OK", onPress: result.ok ? () => router.back() : undefined },
-    ]);
+    setBusy(true); setError("");
+    try {
+      const result = await restore(source);
+      Alert.alert(result.ok ? "Purchases restored" : result.outcome === "no_subscription" ? "Nothing to restore" : "Restore incomplete", result.message, [
+        { text: result.ok ? "Continue" : "OK", onPress: result.ok ? leavePaywall : undefined },
+      ]);
+    } catch {
+      setError("Cogni couldn't restore purchases. Check your connection and try again.");
+    } finally { setBusy(false); }
+  };
+
+  const reloadPlans = async () => {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { await refresh(false); }
+    catch { setError("Cogni couldn't check subscription availability. Please try again."); }
+    finally { setBusy(false); }
   };
 
   const plan = (pkg: CogniPurchasePackage | null, saving?: number | null) => {
@@ -99,7 +121,7 @@ export default function PaywallScreen() {
           boxShadow: selectedPlan ? glow.cyan : undefined,
         })}
       >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <Text style={{ color: colors.text, fontSize: 17, fontWeight: "900" }}>{planLabel(pkg)}</Text>
           {saving && saving > 0 ? <Text style={{ color: colors.cyan, fontSize: 13, fontWeight: "900" }}>Save {saving}%</Text> : null}
         </View>
@@ -120,7 +142,7 @@ export default function PaywallScreen() {
       <View style={{ gap: 9 }}>
         <Eyebrow>Cogni Pro</Eyebrow>
         <Title>More practice. Deeper progress.</Title>
-        <Body muted>Keep the free daily learning habit. Upgrade when you want to accelerate it.</Body>
+        <Body muted>Your daily lesson and assigned training stay free. Cogni Pro adds more ways to practise.</Body>
       </View>
 
       <Card style={{ gap: 13 }}>
@@ -136,15 +158,24 @@ export default function PaywallScreen() {
           <Eyebrow>Already active</Eyebrow>
           <Title size={25}>You have Cogni Pro.</Title>
           <Body muted>Your Cogni Pro subscription is active.</Body>
-          <PrimaryButton label="Continue" onPress={() => router.back()} />
+          <PrimaryButton label="Continue" onPress={leavePaywall} />
+        </Card>
+      ) : preview ? (
+        <Card style={{ gap: 13 }}>
+          <Eyebrow>Test preview</Eyebrow>
+          <Title size={25}>Keep exploring for free</Title>
+          <Body muted>Paid subscriptions are not enabled in this preview. You can try focused practice and available progress history without subscribing.</Body>
+          <PrimaryButton label="Continue learning" onPress={leavePaywall} />
+          {billingStatus !== "not_configured" ? <PrimaryButton secondary label="Restore purchases" onPress={() => void restorePurchases()} disabled={busy} loading={busy} /> : null}
         </Card>
       ) : (
         <Card style={{ gap: 13 }}>
           <Eyebrow>Choose your plan</Eyebrow>
           {billingStatus === "loading" ? <View style={{ minHeight: 92, justifyContent: "center", alignItems: "center", gap: 10 }}><ActivityIndicator color={colors.cyan} /><Text style={{ color: colors.muted }}>Loading prices from {storeName}…</Text></View> : null}
-          {offering ? <View accessibilityRole="radiogroup" style={{ gap: 10 }}>{plan(offering.annual, offering.annualSavingPercent)}{plan(offering.monthly)}</View> : null}
+          {offering && stateReliable ? <View accessibilityRole="radiogroup" style={{ gap: 10 }}>{plan(offering.annual, offering.annualSavingPercent)}{plan(offering.monthly)}</View> : null}
           {billingStatus !== "loading" && billingStatus !== "ready" ? <Text accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 14.5, lineHeight: 21 }}>{billingMessage ?? "Subscription options are unavailable right now."}</Text> : null}
-          {billingStatus === "error" || billingStatus === "no_offerings" ? <PrimaryButton secondary label="Try loading plans again" onPress={() => void refresh(false)} disabled={busy} /> : null}
+          {!stateReliable ? <Body muted>We couldn&apos;t verify subscription availability. Your current access has not been changed. Check your connection and try again.</Body> : null}
+          {!stateReliable || billingStatus === "error" || billingStatus === "no_offerings" ? <PrimaryButton secondary label="Try loading plans again" onPress={() => void reloadPlans()} disabled={busy} /> : null}
           <PrimaryButton
             label={busy ? "Working…" : selected ? `Subscribe — ${selected.priceString} / ${periodLabel(selected)}` : "Subscribe"}
             onPress={() => void buy()}
@@ -157,6 +188,7 @@ export default function PaywallScreen() {
         </Card>
       )}
 
+      {error ? <Text accessibilityLiveRegion="assertive" selectable style={{ color: colors.danger, lineHeight: 22 }}>{error}</Text> : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center", columnGap: 4 }}>
         <ActionLink label="Privacy" onPress={() => void Linking.openURL(PRIVACY_URL)} />
         <ActionLink label="Terms" onPress={() => void Linking.openURL(TERMS_URL)} />

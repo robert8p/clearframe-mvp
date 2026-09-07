@@ -1,0 +1,128 @@
+name: Cogni welcome rendering isolation
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-render-isolation.yml]
+permissions:
+  contents: read
+jobs:
+  isolate:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [no-portrait, no-button-shadow, no-new-visuals]
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      VARIANT: ${{ matrix.variant }}
+      EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: ' '
+      EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: ' '
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: df97ce58b85e9a2060a8aa95ea02c9e2166e2534
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: android-actions/setup-android@v3
+      - name: Apply only transient diagnostic changes, never production changes
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/isolation
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          v=os.environ['VARIANT']
+          if v in ['no-portrait','no-new-visuals']:
+              p=Path('mobile/components/visuals.tsx');s=p.read_text();a=s.index('export function WelcomeArtwork()');b=s.index('export type MotifKind',a)
+              s=s[:a]+'export function WelcomeArtwork() { return null; }\n'+s[b:];p.write_text(s)
+          if v in ['no-button-shadow','no-new-visuals']:
+              p=Path('mobile/components/ui.tsx');s=p.read_text();old='boxShadow: secondary || blocked ? undefined : "0 3px 22px rgba(80,130,255,0.36)"';assert old in s;s=s.replace(old,'boxShadow: undefined');p.write_text(s)
+          if v=='no-new-visuals':
+              p=Path('mobile/app/index.tsx');s=p.read_text();start=s.index('    <View style={{flexDirection:"row",justifyContent:"space-between"');end=s.index('    <Text selectable',start);s=s[:start]+s[end:];p.write_text(s)
+          PY
+          git diff --stat
+          cd mobile
+          npm ci --include=dev --no-audit --no-fund
+          npx expo export:embed --help > /tmp/isolation/embed-help.txt
+          npx expo export:embed --platform android --dev false --entry-file node_modules/expo-router/entry.js --bundle-output /tmp/isolation/index.android.bundle --assets-dest /tmp/isolation/resources
+      - name: Create locally signed test-only APK without accessing release credentials
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --max-time 180 https://expo.dev/artifacts/eas/I3gSpUZYogOTT-XRAGsNHZOF7NjL6tbVkoXODgFFM38.apk --output /tmp/original.apk
+          echo 'b427f68cea176cd8fb0e062307dba86f5983bbfc28f311eeedd884a5bd716bf2  /tmp/original.apk' | sha256sum --check --strict
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          with ZipFile('/tmp/original.apk') as source,ZipFile('/tmp/unsigned.apk','w') as target:
+              bundles=[n for n in source.namelist() if n.endswith('/index.android.bundle')];assert len(bundles)==1
+              for info in source.infolist():
+                  if info.filename.startswith('META-INF/'):continue
+                  data=Path('/tmp/isolation/index.android.bundle').read_bytes() if info.filename==bundles[0] else source.read(info.filename)
+                  target.writestr(info,data)
+          PY
+          ALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          "$ALIGN" -P 16 -f 4 /tmp/unsigned.apk /tmp/diagnostic.apk
+          keytool -genkeypair -keystore /tmp/disposable.jks -alias diagnostic -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 2 -dname 'CN=Disposable Test Only'
+          "$SIGNER" sign --ks /tmp/disposable.jks --ks-key-alias diagnostic --ks-pass pass:android --key-pass pass:android /tmp/diagnostic.apk
+          "$SIGNER" verify /tmp/diagnostic.apk
+          echo 'Diagnostic only: production APK and signing credentials untouched; no APK is published.'
+      - name: Prepare bounded launch with pre-launch streaming logs
+        run: |
+          cat > /tmp/check.py <<'PY'
+          import subprocess,time,json,os
+          from pathlib import Path
+          out=Path('/tmp/isolation');log=(out/'streamed-logcat.txt').open('wb')
+          proc=subprocess.Popen(['adb','logcat','-v','threadtime'],stdout=log,stderr=subprocess.STDOUT)
+          result={'variant':os.environ['VARIANT'],'diagnosticOnly':True}
+          def adb(*args,timeout=25):return subprocess.check_output(['adb',*args],timeout=timeout)
+          try:
+              adb('install','-r','/tmp/diagnostic.apk',timeout=150)
+              adb('shell','am','start','-W','-n','app.gocogni.cogni/.MainActivity',timeout=45)
+              time.sleep(7)
+              (out/'welcome.png').write_bytes(adb('exec-out','screencap','-p'))
+              adb('shell','uiautomator','dump','--compressed','/sdcard/check.xml')
+              xml=adb('shell','cat','/sdcard/check.xml');(out/'hierarchy.xml').write_bytes(xml)
+              assert b'Sharpen how you think.' in xml,'Expected native welcome is not visible'
+              result['status']='passed'
+          except Exception as error:
+              result['status']='failed';result['error']=str(error);raise
+          finally:
+              proc.terminate();log.close();(out/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
+          PY
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 12
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu software -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
+          script: python3 -u /tmp/check.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-isolate-${{ matrix.variant }}-${{ github.run_attempt }}
+          path: |
+            /tmp/isolation/*.txt
+            /tmp/isolation/*.json
+            /tmp/isolation/*.xml
+            /tmp/isolation/*.png
+          retention-days: 7
+          if-no-files-found: warn

@@ -37,6 +37,7 @@ export function MountainScene({ height = 182 }: { height?: number }) {
     <LinearGradient colors={["transparent","#0e1a35"]} locations={[.1,1]} style={{position:"absolute",left:0,right:0,bottom:0,height:height*.35}} />
   </View>;
 }
+/** Standard PNG preserves the approved pixels without an optional WebP decoder. */
 export function WelcomeArtwork() {
   return <View {...decorative} style={{position:"absolute",top:0,left:0,right:0,height:310,overflow:"hidden"}}>
     <Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:"100%",height:310}} />

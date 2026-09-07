@@ -2,7 +2,7 @@ name: Cogni 0.4.5 Nightfall Android Expo release
 'on':
   push:
     branches: [release/cogni-0.4.5]
-    paths: [.github/workflows/cogni-045-expo.yml]
+    paths: [.github/workflows/cogni-045-expo.yml, .github/design-045-core.json, .github/design-045-screens.json, .github/design-045-tests.json, 'mobile/**']
   workflow_dispatch: {}
 permissions:
   contents: read

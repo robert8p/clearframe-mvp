@@ -1,0 +1,129 @@
+name: Cogni Nightfall native component rendering
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-component-render.yml]
+permissions:
+  contents: read
+jobs:
+  components:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: db9d9b3e81248cac0e5784222a044fc5f8249eaa
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: android-actions/setup-android@v3
+      - name: Compile actual release components in an isolated offline test harness
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/components
+          cat > native-component-fixture.tsx <<'TSX'
+          import React,{useState} from 'react';
+          import {registerRootComponent} from 'expo';
+          import {View} from 'react-native';
+          import {SafeAreaProvider} from 'react-native-safe-area-context';
+          import {Screen,Card,Title,Body,ProgressRing,ProgressBar,PrimaryButton} from './components/ui';
+          import {TrainingCard,SkillShelf,SkillTile} from './components/learning-surfaces';
+          const rows=[['Reasoning','reasoning'],['Perspective','perspective'],['Decisions','decision-making'],['Growth','growth']].map(([name,slug],i)=>({skill_id:String(i),score:43,attempts:2,reliability:.25,skills:{id:String(i),name,slug,description:'A synthetic fixture for visual verification only.'}}));
+          function App(){const [page,setPage]=useState(0);return <SafeAreaProvider><Screen contentStyle={{paddingTop:40}}><Title size={24}>Native component test</Title><Body muted>Synthetic data. No account or server access.</Body>{page===0?<><TrainingCard today={{state:'training',session:{challenges:[],answeredChallengeIds:[]}} as any} label="Continue practice" onPress={()=>setPage(1)} /><SkillShelf rows={rows as any} onOpen={()=>setPage(1)} /><SkillTile row={rows[0] as any} onPress={()=>setPage(1)} /></>:<><Card><Title size={25}>Recent performance</Title><View style={{alignItems:'center',gap:20}}><ProgressRing value={43} label="Test score" /><ProgressBar value={43} /><Body>Recorded score: 43 percent</Body></View></Card><Card><Title size={24}>Missing and completed states</Title><ProgressRing value={null} /><ProgressRing value={100} label="Test complete" /></Card><PrimaryButton label="Back to training" onPress={()=>setPage(0)} /></>}</Screen></SafeAreaProvider>}
+          registerRootComponent(App);
+          TSX
+          npm ci --include=dev --no-audit --no-fund
+          npx expo export:embed --platform android --dev false --entry-file native-component-fixture.tsx --bundle-output /tmp/components/index.android.bundle --assets-dest /tmp/components/resources
+      - name: Sign only an unpublished disposable test binary
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --max-time 180 https://expo.dev/artifacts/eas/I3gSpUZYogOTT-XRAGsNHZOF7NjL6tbVkoXODgFFM38.apk --output /tmp/original.apk
+          echo 'b427f68cea176cd8fb0e062307dba86f5983bbfc28f311eeedd884a5bd716bf2  /tmp/original.apk' | sha256sum --check --strict
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          with ZipFile('/tmp/original.apk') as source,ZipFile('/tmp/unsigned.apk','w') as target:
+              bundles=[n for n in source.namelist() if n.endswith('/index.android.bundle')];assert len(bundles)==1
+              for info in source.infolist():
+                  if info.filename.startswith('META-INF/'):continue
+                  target.writestr(info,Path('/tmp/components/index.android.bundle').read_bytes() if info.filename==bundles[0] else source.read(info.filename))
+          PY
+          ALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          "$ALIGN" -P 16 -f 4 /tmp/unsigned.apk /tmp/diagnostic.apk
+          keytool -genkeypair -keystore /tmp/disposable.jks -alias diagnostic -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 2 -dname 'CN=Disposable Component Test Only'
+          "$SIGNER" sign --ks /tmp/disposable.jks --ks-key-alias diagnostic --ks-pass pass:android --key-pass pass:android /tmp/diagnostic.apk
+      - name: Prepare bounded component interaction checks
+        run: |
+          cat > /tmp/components.py <<'PY'
+          import subprocess,time,json,re,xml.etree.ElementTree as ET
+          from pathlib import Path
+          out=Path('/tmp/components');result={'diagnosticOnly':True,'syntheticData':True,'actualReleaseComponents':True,'accountAccess':False}
+          def adb(*args,timeout=35):return subprocess.check_output(['adb',*args],timeout=timeout)
+          def capture(label):(out/(label+'.png')).write_bytes(adb('exec-out','screencap','-p'))
+          def nodes():
+              adb('shell','uiautomator','dump','--compressed','/sdcard/components.xml')
+              raw=adb('shell','cat','/sdcard/components.xml');(out/'hierarchy.xml').write_bytes(raw);return list(ET.fromstring(raw).iter('node'))
+          def tap(label):
+              for _ in range(9):
+                  for n in nodes():
+                      if label in [n.attrib.get('content-desc'),n.attrib.get('text')] and n.attrib.get('enabled')=='true':
+                          b=list(map(int,re.findall(r'\d+',n.attrib['bounds'])))
+                          if b[2]<=b[0] or b[3]<=b[1]:continue
+                          adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));time.sleep(2);return
+                  adb('shell','input','swipe','540','1900','540','700','350')
+              raise RuntimeError('No component action: '+label)
+          def top():
+              for _ in range(5):adb('shell','input','swipe','540','700','540','1900','250')
+          try:
+              adb('install','-r','/tmp/diagnostic.apk',timeout=150)
+              adb('shell','am','start','-W','-n','app.gocogni.cogni/.MainActivity',timeout=45);time.sleep(12)
+              for scale,name in [('1.0','normal'),('1.6','large')]:
+                  adb('shell','settings','put','system','font_scale',scale);time.sleep(3);top();capture('training-'+name)
+                  assert any('Train your thinking' in n.attrib.get('text','') for n in nodes())
+                  adb('shell','input','swipe','540','1900','540','900','350');capture('skills-'+name)
+                  top();tap('Continue practice');top();capture('progress-'+name)
+                  assert any('Recent performance' in n.attrib.get('text','') for n in nodes())
+                  tap('Back to training');top();result[name]='training card, skill motifs, progress ring, missing score, full score and primary controls passed'
+              result['status']='passed'
+          except Exception as error:
+              result['status']='failed';result['error']=str(error)
+              try:capture('failure')
+              except Exception:pass
+              raise
+          finally:(out/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result,indent=2))
+          PY
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 12
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu software -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
+          script: python3 -u /tmp/components.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-045-native-components-${{ github.run_attempt }}
+          path: |
+            /tmp/components/*.png
+            /tmp/components/*.json
+            /tmp/components/*.xml
+          retention-days: 14
+          if-no-files-found: warn

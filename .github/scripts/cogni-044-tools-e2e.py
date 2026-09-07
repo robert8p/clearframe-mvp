@@ -7,6 +7,7 @@ from pathlib import Path
 import time
 import urllib.request
 import urllib.error
+import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('reliable', ROOT / 'cogni-auth-route-e2e-fixed.py')
 runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
@@ -54,11 +55,23 @@ def main():
         sign_in(EMAIL); ui.wait_for('Hello, Cogni',timeout=45); ui.capture('home')
         # This suite owns a separate fresh identity. Submit a real UI answer so
         # the local practice-day record is exercised, not seeded or mocked.
-        ui.tap('Train'); ui.wait_for('Your practice')
-        ui.tap('Start my starting check',scroll=True); ui.wait_for('1 of 12')
-        ui.tap('Check which parts were generated and verify key facts before using them.',scroll=True)
-        ui.tap('80 percent confident',scroll=True); ui.tap('Submit answer',scroll=True)
-        ui.wait_for('Key idea',scroll=True); ui.capture('live-answer-before-saving')
+        ui.tap('Train'); ui.wait_for_train_landing()
+        ui.tap('Start your check',scroll=True); ui.wait_for('Choose one',timeout=45)
+        ui.dump_ui('answer-options')
+        tree=ET.fromstring((ui.OUT/'window-answer-options.xml').read_text())
+        options=[element for element in tree.iter('node')
+                 if element.attrib.get('class') in ('android.widget.Button','android.widget.RadioButton')
+                 and element.attrib.get('content-desc')
+                 and element.attrib.get('content-desc')!='Submit answer'
+                 and 'percent confident' not in element.attrib.get('content-desc','')]
+        assert options,'No selectable answer in the starting check'
+        ui.tap(options[0].attrib['content-desc'])
+        ui.wait_for('Submit answer',scroll=True)
+        if any('percent confident' in node.description for node in ui.dump_ui('confidence-choice')):
+            ui.wait_for('Submit answer',enabled=False)
+            ui.tap('60 percent confident',scroll=True)
+        ui.tap('Submit answer',scroll=True)
+        ui.wait_for('Next question',timeout=60,scroll=True); ui.capture('live-answer-before-saving')
         ui.tap('Home'); ui.wait_for('Hello, Cogni',timeout=45); ui.scroll_to_top()
         ui.tap('Save key idea',scroll=True); ui.wait_for('Key idea saved',timeout=25)
         ui.scroll_to_top(); ui.tap('Open saved ideas',scroll=True); ui.wait_for('Your thinking toolkit')
@@ -70,9 +83,11 @@ def main():
         result['saveRevealShareSheetAndPracticeDay'] = 'passed; share sheet cancelled without sending'
         restart(); ui.wait_for('Home',timeout=50); toolkit(); ui.wait_for('1 of 3 practice days',scroll=True); ui.tap('Reveal idea',scroll=True); ui.wait_for('Hide idea',scroll=True)
         result['coldRestartPersistence'] = 'passed'
+        # Real connectivity is disabled; no mock response substitutes for offline review.
         ui.adb('shell','svc','wifi','disable'); ui.adb('shell','svc','data','disable'); time.sleep(2)
         restart(); time.sleep(15); toolkit(); ui.tap('Reveal idea',scroll=True); ui.wait_for('Hide idea',scroll=True); ui.capture('saved-idea-offline')
         result['offlineColdRestartReview'] = 'passed'
+        ui.tap('Hide idea',scroll=True); ui.wait_for('Reveal idea',scroll=True)
         ui.adb('shell','svc','wifi','enable'); ui.adb('shell','svc','data','enable'); time.sleep(5)
         ui.adb('shell','settings','put','system','font_scale','1.6'); time.sleep(3)
         ui.scroll_to_top(); ui.wait_for('Your thinking toolkit'); ui.capture('toolkit-large-text'); ui.wait_for('1 recorded practice day this week.',scroll=True)
@@ -80,6 +95,7 @@ def main():
         ui.adb('shell','settings','put','system','font_scale','1.0'); time.sleep(2)
         result['largeTextToolkit'] = 'passed'
         sign_out(); ui.adb('shell','am','start','-W','-a','android.intent.action.VIEW','-d','cogni://toolkit',ui.PACKAGE); time.sleep(3); ui.scroll_to_top(); ui.wait_for('Make room for a clearer perspective.',timeout=45); absent('Reveal idea')
+        # Provision a second disposable account through the public auth and app API.
         status, body = post('/auth/v1/signup', {'email':OTHER,'password':PASSWORD,'data':{'full_name':'Cogni Tools E2E'}})
         status, body = post('/auth/v1/token?grant_type=password', {'email':OTHER,'password':PASSWORD})
         assert status == 200 and body.get('access_token'); other_token = body['access_token']

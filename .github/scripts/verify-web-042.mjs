@@ -1,6 +1,6 @@
-const fs = require('node:fs');
-const assert = require('node:assert/strict');
-const { chromium } = require('/tmp/cogni-browser-tools/node_modules/playwright');
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import { chromium } from '/tmp/cogni-browser-tools/node_modules/playwright/index.mjs';
 const out = '/tmp/cogni-browser';
 async function checkLayout(page, label) {
   const result = await page.evaluate(() => ({width:innerWidth,scroll:document.documentElement.scrollWidth,overlay:Boolean(document.querySelector('[data-nextjs-dialog]')),text:document.body.innerText.length}));
@@ -9,7 +9,7 @@ async function checkLayout(page, label) {
 }
 (async()=>{
  const browser=await chromium.launch({headless:true}); let page; const errors=[]; const records=[];
- fs.writeFileSync(out+'/playwright-version.txt',require('/tmp/cogni-browser-tools/node_modules/playwright/package.json').version);
+ fs.writeFileSync(out+'/playwright-version.txt',JSON.parse(fs.readFileSync('/tmp/cogni-browser-tools/node_modules/playwright/package.json','utf8')).version);
  try {
   for(const width of [320,390,430,1280]) {
    const context=await browser.newContext({viewport:{width,height:844}});page=await context.newPage();page.setDefaultTimeout(15000);

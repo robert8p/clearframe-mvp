@@ -19,4 +19,4 @@ agent-browser snapshot -i > /tmp/cogni-browser/agent-initial-snapshot.txt
 agent-browser screenshot --full /tmp/cogni-browser/agent-initial.png
 agent-browser errors > /tmp/cogni-browser/agent-errors.txt
 agent-browser close
-node .github/scripts/verify-web-042.cjs
+node .github/scripts/verify-web-042.mjs

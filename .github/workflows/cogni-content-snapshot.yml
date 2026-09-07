@@ -1,0 +1,36 @@
+name: Cogni encrypted editorial snapshot
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-content-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Retrieve only encrypted content from the fixed read-only export
+      env:
+        SUPABASE_ANON_JWT: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoa2xmcnFoc21vZnFyYXdmZGp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNDE2NjQsImV4cCI6MjEwMTcxNzY2NH0.cRC7z6B8Qegs5HpeXGID0W3enZnquFhOFTbVarGDp1U
+      run: |
+        set -euo pipefail
+        curl --fail --silent --show-error --max-time 120 \
+          -H "Authorization: Bearer $SUPABASE_ANON_JWT" \
+          -H "apikey: $SUPABASE_ANON_JWT" \
+          https://dhklfrqhsmofqrawfdjz.supabase.co/functions/v1/cogni-editorial-export \
+          -o /tmp/cogni-content-encrypted.json
+        python3 - <<'PY'
+        import json
+        p=json.load(open('/tmp/cogni-content-encrypted.json'))
+        assert p['algorithm']=='RSA-OAEP-256+A256GCM+gzip'
+        assert set(p)=={'version','algorithm','iv','wrappedKey','ciphertext'}
+        assert len(p['ciphertext'])>1000
+        print('Encrypted content snapshot retrieved; no plaintext answers or user data exported to logs.')
+        PY
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cogni-encrypted-content-snapshot
+        path: /tmp/cogni-content-encrypted.json
+        retention-days: 1
+        if-no-files-found: error

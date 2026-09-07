@@ -1,0 +1,179 @@
+name: Cogni 0.4.2 exact APK retest and release
+on:
+  push:
+    branches: [release/cogni-0.4.2]
+    paths: ['.github/workflows/cogni-042-retest.yml']
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: cogni-042-exact-retest
+  cancel-in-progress: false
+jobs:
+  runtime-and-release:
+    if: github.ref == 'refs/heads/release/cogni-0.4.2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+      SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+      APK_PATH: /tmp/cogni-release/Cogni-0.4.2-preview.apk
+      API_LEVEL: '36'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: release/cogni-0.4.2
+          fetch-depth: 0
+      - name: Correct only the screenshot helper and prove native source equivalence
+        run: |
+          set -euo pipefail
+          git diff --exit-code 128bb72484dce5f1b7ed0835a39ef8108b9c4b0f -- mobile supabase public lib package.json
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p=Path('.github/scripts/cogni-auth-main-flow.py');s=p.read_text();h=hashlib.sha256(s.encode()).hexdigest()
+          before='50fbfcde0a13d305bae5bb33372208dc9af7eebbd494d9d91e2424c6f9595e8f'
+          after='4e270f2e6b24c9d5a621247daf3dc4c11a474cd99c680b5369a262eb2e2dae5f'
+          assert h in (before,after),'Unexpected test-source change'
+          if h==before:
+              assert s.count('capture("skills-search-and-filters")')==1
+              s=s.replace('capture("skills-search-and-filters")','capture_evidence("skills-search-and-filters")')
+              assert hashlib.sha256(s.encode()).hexdigest()==after
+              p.write_text(s)
+          PY
+          if ! git diff --quiet; then
+            git add .github/scripts/cogni-auth-main-flow.py
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'test: use the existing native screenshot evidence helper'
+            git push origin HEAD:release/cogni-0.4.2
+          fi
+          echo "TEST_SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/34074186067/jobs" > /tmp/original-jobs.json
+          python3 - <<'PY'
+          import json
+          jobs=json.load(open('/tmp/original-jobs.json'))['jobs']
+          for name in ['build-exact-apk','web-and-ios-validation']:
+              assert any(j['name']==name and j['conclusion']=='success' for j in jobs),name+' did not pass'
+          print('Original signed build, source tests and compilation gates passed.')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: cogni-0.4.2-exact-apk
+          path: /tmp/cogni-release
+          run-id: 34074186067
+          github-token: ${{ github.token }}
+      - name: Verify exact APK bytes and provision a disposable test identity
+        run: |
+          set -euo pipefail
+          EMAIL="cogni.e2e.route.${GITHUB_RUN_ID}@example.com"
+          SECRET=$(printf '%s' "$EXPO_TOKEN:$GITHUB_RUN_ID:cogni042retest" | sha256sum | cut -c1-28)
+          PASSWORD="Cg${SECRET}9a"
+          export EMAIL PASSWORD
+          echo "::add-mask::$EMAIL"
+          echo "::add-mask::$PASSWORD"
+          echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import os,json,hashlib,urllib.request,urllib.error
+          from pathlib import Path
+          apk=Path(os.environ['APK_PATH']);meta=json.loads((apk.parent/'metadata.json').read_text())
+          assert meta['sourceCommit']=='128bb72484dce5f1b7ed0835a39ef8108b9c4b0f'
+          assert meta['version']=='0.4.2' and meta['versionCode']=='57'
+          assert hashlib.sha256(apk.read_bytes()).hexdigest()==meta['sha256']=='22fe4794bde224ec4eafd13770edb950de0ab1053557a0346f447cc0175121e5'
+          def post(path,body):
+              req=urllib.request.Request(os.environ['SUPABASE_URL']+path,data=json.dumps(body).encode(),headers={'apikey':os.environ['SUPABASE_KEY'],'Content-Type':'application/json'},method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:return r.status,json.load(r)
+              except urllib.error.HTTPError as e:return e.code,json.load(e)
+          credentials={'email':os.environ['EMAIL'],'password':os.environ['PASSWORD']}
+          status,_=post('/auth/v1/signup',{**credentials,'data':{'full_name':'Cogni Route E2E'}})
+          print('Signup status:',status)
+          status,body=post('/auth/v1/token?grant_type=password',credentials)
+          assert status==200 and body.get('access_token'),'Test-account preflight failed'
+          print('Exact signed build 57 and disposable sign-in verified.')
+          PY
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Execute exact APK and complete the interaction suites
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            bash .github/scripts/verify-cogni-apk-runtime.sh
+            bash -o pipefail -c 'python3 -u .github/scripts/cogni-auth-route-e2e-fixed.py 2>&1 | tee /tmp/cogni-interactions.txt'
+            bash -o pipefail -c 'python3 -u .github/scripts/cogni-monetization-prestore-e2e.py 2>&1 | tee /tmp/cogni-paywall.txt'
+      - name: Delete both disposable accounts and verify sign-in rejection
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          from pathlib import Path
+          url,key=os.environ['SUPABASE_URL'],os.environ['SUPABASE_KEY']
+          def post(path,payload,token=None):
+              headers={'apikey':key,'Content-Type':'application/json'}
+              if token:headers['Authorization']='Bearer '+token
+              req=urllib.request.Request(url+path,data=json.dumps(payload).encode(),headers=headers,method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:return r.status,json.load(r)
+              except urllib.error.HTTPError as e:return e.code,json.load(e)
+          results=[];base=os.environ.get('E2E_EMAIL')
+          if base:
+              for email in [base,base.replace('.route.','.signup.')]:
+                  credentials={'email':email,'password':os.environ['E2E_PASSWORD']}
+                  status,body=post('/auth/v1/token?grant_type=password',credentials);token=body.get('access_token')
+                  if token:
+                      status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/account','method':'DELETE','body':None,'context':{'timeZone':'UTC'}},token)
+                      assert status==200,'Disposable account deletion failed'
+                      status,body=post('/auth/v1/token?grant_type=password',credentials)
+                      assert not body.get('access_token'),'Deleted account can still sign in'
+                      results.append('Deleted through Cogni API; sign-in rejected.')
+                  else:
+                      assert status==400,'Unexpected cleanup status'
+                      results.append('Sign-in rejected: account not created or already deleted by UI suite.')
+          Path('/tmp/cogni-cleanup').mkdir(exist_ok=True)
+          Path('/tmp/cogni-cleanup/cleanup.txt').write_text('\n'.join(results))
+          print('\n'.join(results))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-0.4.2-exact-retest-evidence
+          path: |
+            /tmp/cogni-interactions.txt
+            /tmp/cogni-paywall.txt
+            /tmp/cogni-cleanup/
+            /tmp/cogni-runtime-api-36/
+            /tmp/cogni-auth-route-api-36/
+            /tmp/cogni-profile-password-api-36/
+            /tmp/cogni-copy-feedback-api-36/
+            /tmp/cogni-signup-onboarding-api-36/
+            /tmp/cogni-monetization-prestore-api-36/
+          retention-days: 30
+      - name: Publish only after exact signed-APK interaction tests and cleanup passed
+        run: |
+          set -euo pipefail
+          TAG=v0.4.2-preview.1
+          if gh release view "$TAG" >/dev/null 2>&1; then echo 'Refusing to overwrite an existing release.' >&2;exit 1;fi
+          cp COGNI_0.4.2_TESTING.md /tmp/cogni-release/TESTING.md
+          cp COGNI_0.4.2_STAKEHOLDER_REVIEW.md /tmp/cogni-release/STAKEHOLDER_REVIEW.md
+          printf '22fe4794bde224ec4eafd13770edb950de0ab1053557a0346f447cc0175121e5  Cogni-0.4.2-preview.apk\n' > /tmp/cogni-release/SHA256SUMS.txt
+          cp COGNI_0.4.2_TESTING.md /tmp/cogni-release-notes.md
+          printf '\nCompiled Android source: `128bb72484dce5f1b7ed0835a39ef8108b9c4b0f`. Build 57.\n\nRelease/test source: `%s`. Native inputs were verified identical; subsequent changes concern website and test tooling.\n\nSigned build and source checks: https://github.com/%s/actions/runs/34074186067\n\nExact APK runtime retest: https://github.com/%s/actions/runs/%s\n' "$TEST_SOURCE_COMMIT" "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> /tmp/cogni-release-notes.md
+          gh release create "$TAG" --target "$TEST_SOURCE_COMMIT" --prerelease --title 'Cogni 0.4.2 — stakeholder-review Android preview' --notes-file /tmp/cogni-release-notes.md /tmp/cogni-release/Cogni-0.4.2-preview.apk /tmp/cogni-release/metadata.json /tmp/cogni-release/SHA256SUMS.txt /tmp/cogni-release/TESTING.md /tmp/cogni-release/STAKEHOLDER_REVIEW.md

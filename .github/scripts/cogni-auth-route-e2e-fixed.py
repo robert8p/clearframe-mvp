@@ -76,53 +76,56 @@ def install_reliable_automation(module: ModuleType) -> None:
         raise AssertionError(f"Timed out waiting for clickable control {label!r}")
 
     def type_android_text(value: str) -> None:
-        escaped = value.replace("%", "%25").replace(" ", "%s")
-        module.adb("shell", "input", "text", escaped)
+        # Avoid injecting an entire controlled-input value within one render.
+        for offset in range(0, len(value), 4):
+            chunk = value[offset:offset + 4].replace("%", "%25").replace(" ", "%s")
+            module.adb("shell", "input", "text", chunk)
+            time.sleep(0.12)
 
     def input_text(field_label: str, value: str, *, scroll: bool = False) -> None:
-        deadline = time.time() + 35
-        node = None
-        last_nodes: list[object] = []
-        while time.time() < deadline:
-            last_nodes = module.dump_ui("input-latest")
-            candidates = [item for item in last_nodes if str(getattr(item, "description", "")).casefold() == field_label.casefold() and getattr(item, "enabled", False)]
-            if candidates:
-                clickable = [item for item in candidates if getattr(item, "clickable", True)]
-                node = clickable[0] if clickable else candidates[0]
-                break
-            if scroll:
-                module.swipe_up()
-            else:
-                time.sleep(0.7)
-        if node is None:
-            for item in last_nodes:
-                if getattr(item, "text", "") or getattr(item, "description", ""):
-                    print(item)
-            raise AssertionError(f"Timed out waiting for editable field {field_label!r}")
-        effective_value = value
-        left, top, right, bottom = node.bounds
-        x, y = (left + right) // 2, (top + bottom) // 2
-        print(f"INPUT {field_label!r}: description={getattr(node, 'description', '')!r} text={getattr(node, 'text', '')!r} at {x},{y}")
-        module.adb("shell", "input", "tap", str(x), str(y))
-        time.sleep(0.4)
-        type_android_text(effective_value)
-        time.sleep(0.8)
-        if "password" not in field_label.casefold():
-            verified = False
-            verify_deadline = time.time() + 6
-            while time.time() < verify_deadline:
-                for item in module.dump_ui("input-verify"):
-                    if str(getattr(item, "description", "")).casefold() == field_label.casefold():
-                        if str(getattr(item, "text", "")) == effective_value:
-                            verified = True
-                            break
-                if verified:
+        for attempt in range(3):
+            deadline = time.time() + 35
+            node = None
+            last_nodes: list[object] = []
+            while time.time() < deadline:
+                last_nodes = module.dump_ui("input-latest")
+                candidates = [item for item in last_nodes if str(getattr(item, "description", "")).casefold() == field_label.casefold() and getattr(item, "enabled", False)]
+                if candidates:
+                    clickable = [item for item in candidates if getattr(item, "clickable", True)]
+                    node = clickable[0] if clickable else candidates[0]
                     break
-                time.sleep(0.5)
-            if not verified:
-                raise AssertionError(f"Android did not enter the exact expected value into {field_label!r}")
-        module.adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
-        time.sleep(0.6)
+                if scroll:
+                    module.swipe_up()
+                else:
+                    time.sleep(0.7)
+            if node is None:
+                raise AssertionError(f"Timed out waiting for editable field {field_label!r}")
+            left, top, right, bottom = node.bounds
+            x, y = (left + right) // 2, (top + bottom) // 2
+            print(f"INPUT {field_label!r}, attempt {attempt + 1}", flush=True)
+            module.adb("shell", "input", "tap", str(x), str(y))
+            time.sleep(0.45)
+            module.adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
+            module.adb("shell", "input", "keyevent", *(["KEYCODE_DEL"] * 256))
+            time.sleep(0.3)
+            type_android_text(value)
+            time.sleep(0.8)
+            verified = "password" in field_label.casefold()
+            # Masked password fields are verified by actual sign-in/password
+            # change. Other fields must still match every character exactly.
+            verify_deadline = time.time() + 6
+            while not verified and time.time() < verify_deadline:
+                for item in module.dump_ui("input-verify"):
+                    if str(getattr(item, "description", "")).casefold() == field_label.casefold() and str(getattr(item, "text", "")) == value:
+                        verified = True
+                        break
+                if not verified:
+                    time.sleep(0.5)
+            if verified:
+                module.adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
+                time.sleep(0.6)
+                return
+        raise AssertionError(f"Android did not enter the exact expected value into {field_label!r} after three attempts")
 
     original_wait = module.wait_for
     def wait_for(label: str, **kwargs):

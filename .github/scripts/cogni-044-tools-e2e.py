@@ -52,7 +52,14 @@ def main():
         ui.wait_for('Less guessing. More questioning.'); ui.capture('sample-complete'); ui.tap('Back to welcome',scroll=True)
         result['sampleThreeDecisions'] = 'passed'
         sign_in(EMAIL); ui.wait_for('Hello, Cogni',timeout=45); ui.capture('home')
-        # One live server answer was submitted by the preceding regression suite.
+        # This suite owns a separate fresh identity. Submit a real UI answer so
+        # the local practice-day record is exercised, not seeded or mocked.
+        ui.tap('Train'); ui.wait_for('Your practice')
+        ui.tap('Start my starting check',scroll=True); ui.wait_for('1 of 12')
+        ui.tap('Check which parts were generated and verify key facts before using them.',scroll=True)
+        ui.tap('80 percent confident',scroll=True); ui.tap('Submit answer',scroll=True)
+        ui.wait_for('Key idea',scroll=True); ui.capture('live-answer-before-saving')
+        ui.tap('Home'); ui.wait_for('Hello, Cogni',timeout=45); ui.scroll_to_top()
         ui.tap('Save key idea',scroll=True); ui.wait_for('Key idea saved',timeout=25)
         ui.scroll_to_top(); ui.tap('Open saved ideas',scroll=True); ui.wait_for('Your thinking toolkit')
         ui.tap('3 days a week',scroll=True); ui.scroll_to_top(); ui.wait_for('1 of 3 practice days',scroll=True)
@@ -63,7 +70,6 @@ def main():
         result['saveRevealShareSheetAndPracticeDay'] = 'passed; share sheet cancelled without sending'
         restart(); ui.wait_for('Home',timeout=50); toolkit(); ui.wait_for('1 of 3 practice days',scroll=True); ui.tap('Reveal idea',scroll=True); ui.wait_for('Hide idea',scroll=True)
         result['coldRestartPersistence'] = 'passed'
-        # Real connectivity is disabled; no mock response substitutes for offline review.
         ui.adb('shell','svc','wifi','disable'); ui.adb('shell','svc','data','disable'); time.sleep(2)
         restart(); time.sleep(15); toolkit(); ui.tap('Reveal idea',scroll=True); ui.wait_for('Hide idea',scroll=True); ui.capture('saved-idea-offline')
         result['offlineColdRestartReview'] = 'passed'
@@ -74,7 +80,6 @@ def main():
         ui.adb('shell','settings','put','system','font_scale','1.0'); time.sleep(2)
         result['largeTextToolkit'] = 'passed'
         sign_out(); ui.adb('shell','am','start','-W','-a','android.intent.action.VIEW','-d','cogni://toolkit',ui.PACKAGE); time.sleep(3); ui.scroll_to_top(); ui.wait_for('Make room for a clearer perspective.',timeout=45); absent('Reveal idea')
-        # Provision a second disposable account through the public auth and app API.
         status, body = post('/auth/v1/signup', {'email':OTHER,'password':PASSWORD,'data':{'full_name':'Cogni Tools E2E'}})
         status, body = post('/auth/v1/token?grant_type=password', {'email':OTHER,'password':PASSWORD})
         assert status == 200 and body.get('access_token'); other_token = body['access_token']

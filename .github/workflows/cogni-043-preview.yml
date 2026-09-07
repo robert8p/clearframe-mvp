@@ -96,6 +96,7 @@ jobs:
         run: |
           npm ci --include=dev --no-audit --no-fund
           npx expo install --check
+          npx expo-doctor
           npm run validate
       - name: Typecheck and test server security and billing
         working-directory: .

@@ -1,0 +1,66 @@
+name: Cogni compatible welcome artwork
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-png-artwork.yml]
+permissions:
+  contents: write
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Install pinned image conversion tooling
+        run: python3 -m pip install --disable-pip-version-check Pillow==12.3.0
+      - name: Convert the approved pixels and update exact asset contract
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          from PIL import Image
+          root=Path.cwd();asset=root/'mobile/assets/approved-dreamscape.webp';raw=asset.read_bytes()
+          assert hashlib.sha1(f'blob {len(raw)}\0'.encode()+raw).hexdigest()=='c2e81a4e75327a1fbd8fee1427857ab428892baa'
+          image=Image.open(asset).convert('RGB');assert image.size==(269,217)
+          png=root/'mobile/assets/approved-dreamscape.png'
+          image.save(png,format='PNG',optimize=False,compress_level=9)
+          assert Image.open(png).convert('RGB').tobytes()==image.tobytes()
+          assert png.stat().st_size<100000
+          sha=hashlib.sha256(png.read_bytes()).hexdigest()
+          p=root/'mobile/components/visuals.tsx';s=p.read_text()
+          assert s.count('require("../assets/approved-dreamscape.webp")')==1
+          p.write_text(s.replace('require("../assets/approved-dreamscape.webp")','require("../assets/approved-dreamscape.png")'))
+          p=root/'mobile/scripts/nightfall.test.mjs';s=p.read_text()
+          assert s.count('approved-dreamscape.webp')==2
+          s=s.replace('approved-dreamscape.webp','approved-dreamscape.png')
+          old="assert.equal(bytes.subarray(8,12).toString(),'WEBP');assert(bytes.length<10000);"
+          assert old in s
+          s=s.replace(old,"assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert(bytes.length<100000);")
+          old="assert.equal(crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\\0`),bytes])).digest('hex'),'c2e81a4e75327a1fbd8fee1427857ab428892baa');"
+          assert old in s
+          s=s.replace(old,"assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),'"+sha+"');")
+          p.write_text(s)
+          allowed=['mobile/assets/approved-dreamscape.png','mobile/components/visuals.tsx','mobile/scripts/nightfall.test.mjs']
+          subprocess.run(['git','add','--',*allowed],check=True)
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          subprocess.run(['git','commit','-m','fix(android): use standard lossless PNG for approved welcome artwork'],check=True)
+          current=subprocess.check_output(['git','ls-remote','origin','refs/heads/release/cogni-0.4.5'],text=True).split()[0]
+          assert current==os.environ['GITHUB_SHA'],'Refusing to replace newer branch work'
+          subprocess.run(['git','push','origin','HEAD:refs/heads/release/cogni-0.4.5'],check=True)
+          commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          report={'sourceCommit':commit,'format':'PNG','width':269,'height':217,'sha256':sha,'pixelsUnchanged':True,'nativeVerification':'pending'}
+          Path('/tmp/cogni-png-conversion.json').write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-png-artwork
+          path: |
+            /tmp/cogni-png-conversion.json
+            mobile/assets/approved-dreamscape.png
+          retention-days: 7
+          if-no-files-found: error

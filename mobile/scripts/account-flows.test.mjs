@@ -39,6 +39,7 @@ function screen(file, overrides = {}) {
     '@/components/interaction-cues': named('CompactAction'), '@/components/option-picker': named('OptionPicker'),
     '@/lib/audience': { isMobileAudience: () => true, mobileAudienceMeta: () => ({ label: 'Everyday learner' }) },
     '@/lib/context-options': { functionLabelForAudience: () => 'Interests', functionOptionsForAudience: () => [], goalOptionsForAudience: () => [] },
+    '@/lib/notebook': { useNotebook: () => ({ clear: async () => {} }) },
     '@/lib/feedback': { useFeedback: () => ({ ready: true, soundEnabled: false, hapticsEnabled: false }) },
     '@/lib/auth': { useAuth: () => ({ session: { user: { id: 'learner-a' } }, loading: false, signOut: async () => {}, ...overrides.auth }) },
     '@/lib/supabase': { supabase: { auth: { updateUser: async data => { calls.push(data); return { error: null }; }, resetPasswordForEmail: async email => { calls.push(email); return { error: null }; }, signOut: async () => ({}), ...overrides.supabase } } },

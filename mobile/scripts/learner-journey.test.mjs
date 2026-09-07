@@ -35,6 +35,8 @@ function mount(relative, { props = {}, request = async () => outcome, clock = ()
     '@/components/form-field': { FormField: 'FormField' },
     '@/lib/api': { todayApiPath: () => '/api/mobile/today', apiFetch: async (path, options) => { requests.push({ path, body: options?.body && JSON.parse(options.body) }); return request(path, options); } },
     '@/lib/accessibility': { useReducedMotion: () => true },
+    '@/lib/notebook': { useNotebook: () => ({ recordPracticeDay: async () => {} }) },
+    '@/components/practice-tools': { SaveIdeaButton: 'SaveIdeaButton', DeviceToolsNotice: 'DeviceToolsNotice' },
     '@/lib/feedback': { useFeedback: () => feedback },
     '@/lib/theme': { colors: {} },
     '@/components/ui': ui,

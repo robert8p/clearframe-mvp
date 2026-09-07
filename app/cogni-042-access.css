@@ -1,6 +1,8 @@
-/* Undo the legacy fixed-height mobile welcome screen for the scrolling editorial page. */
-.cg-public-shell.cg-editorial-landing{height:auto;min-height:100svh;max-height:none;overflow:visible;display:block;overflow-wrap:anywhere}
+/* Retire the fixed-height welcome treatment without clipping content or focus rings. */
+.cg-public-shell.cg-editorial-landing{height:auto;min-height:100svh;max-height:none;overflow:visible;display:block;place-items:normal;overflow-wrap:anywhere}
+.cg-public-shell.cg-editorial-landing::before,.cg-public-shell.cg-editorial-landing::after{content:none;display:none}
 .cg-editorial-landing .cg-public-grid{height:auto;min-height:0;max-height:none;overflow:visible}
 .cg-editorial-landing .cg-public-phone{height:auto;max-height:none;display:block}
 .cg-editorial-landing .cg-public-phone>.cg-button{margin-top:12px}
-.cg-editorial-landing .cg-landing-header{flex-wrap:wrap}
+.cg-editorial-landing .cg-landing-header{flex-wrap:wrap;width:100%}
+.cg-editorial-landing .cg-landing-footer{width:100%}

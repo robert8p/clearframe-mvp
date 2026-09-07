@@ -307,7 +307,15 @@ def test_all_tabs() -> None:
     assert_absent("Something went wrong")
 
     tap("Skills")
-    wait_for("Explore your skill map", timeout=45)
+    wait_for("Find your focus", timeout=45)
+    wait_for("Search skills", timeout=45, scroll=True)
+    capture("skills-search-and-filters")
+    input_text("Search skills", "zzzcogninomatch", scroll=True)
+    adb("shell", "input", "keyevent", "KEYCODE_BACK", check=False)
+    wait_for("No skills match yet", timeout=30, scroll=True)
+    tap("Reset filters", scroll=True)
+    scroll_to_top()
+    wait_for("Find your focus", timeout=30)
     wait_for("Skills", timeout=45)
     assert_absent("Something went wrong")
 

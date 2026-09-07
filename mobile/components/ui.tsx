@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, Text, View, type ScrollViewProps, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions, type ScrollViewProps, type StyleProp, type ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { CogniMark } from "@/components/brand";
 import { useReducedMotion } from "@/lib/accessibility";
@@ -8,38 +9,12 @@ import { colors, gradients, glow } from "@/lib/theme";
 type ScreenProps = ScrollViewProps & { refreshing?: boolean; onRefresh?: () => void; contentStyle?: StyleProp<ViewStyle> };
 
 function AmbientBackground() {
-  const reducedMotion = useReducedMotion();
-  const drift = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reducedMotion) {
-      drift.stopAnimation();
-      drift.setValue(0);
-      return;
-    }
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(drift, { toValue: 1, duration: 6200, useNativeDriver: true }),
-      Animated.timing(drift, { toValue: 0, duration: 6200, useNativeDriver: true }),
-    ]));
-    animation.start();
-    return () => animation.stop();
-  }, [drift, reducedMotion]);
-
-  const translate = drift.interpolate({ inputRange: [0, 1], outputRange: [0, 12] });
-  const opacity = drift.interpolate({ inputRange: [0, 1], outputRange: [0.20, 0.34] });
-
-  return (
-    <View pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants" style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, overflow: "hidden" }}>
-      <Animated.View style={{ position: "absolute", width: 230, height: 230, borderRadius: 115, right: -120, top: 70, backgroundColor: "rgba(107,92,255,0.16)", opacity, transform: [{ translateY: translate }], boxShadow: glow.violet }} />
-      <Animated.View style={{ position: "absolute", width: 190, height: 190, borderRadius: 95, left: -120, top: 410, backgroundColor: "rgba(0,229,255,0.09)", opacity, transform: [{ translateY: Animated.multiply(translate, -0.7) }], boxShadow: glow.cyan }} />
-      <Text accessible={false} style={{ position: "absolute", top: 112, left: 28, color: "rgba(0,229,255,0.30)", fontSize: 10 }}>✦</Text>
-      <Text accessible={false} style={{ position: "absolute", top: 252, right: 42, color: "rgba(255,79,216,0.24)", fontSize: 8 }}>✦</Text>
-      <Text accessible={false} style={{ position: "absolute", top: 620, left: 54, color: "rgba(107,92,255,0.30)", fontSize: 9 }}>•</Text>
-    </View>
-  );
+  return <LinearGradient pointerEvents="none" accessible={false} colors={["rgba(120,104,239,.08)", "transparent"]} style={{ position:"absolute",top:0,right:0,left:0,height:280 }} />;
 }
 
 export const Screen = React.forwardRef<ScrollView, ScreenProps>(function Screen({ children, refreshing, onRefresh, contentStyle, style, ...props }, ref) {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AmbientBackground />
@@ -51,7 +26,7 @@ export const Screen = React.forwardRef<ScrollView, ScreenProps>(function Screen(
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
         style={[{ flex: 1 }, style]}
-        contentContainerStyle={[{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 132, gap: 16 }, contentStyle]}
+        contentContainerStyle={[{ width: "100%", maxWidth: 720, alignSelf: "center", paddingHorizontal: width < 360 ? 16 : 20, paddingTop: 14, paddingBottom: Math.max(insets.bottom + 24, 32), gap: 20 }, contentStyle]}
         refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.cyan} /> : undefined}
         {...props}
       >
@@ -65,19 +40,18 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
   // Learning content must be readable before any animation runs. In particular,
   // Android with animations disabled must never strand a question at opacity 0.
   return (
-    <View style={[{ position: "relative", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel, borderRadius: 24, borderCurve: "continuous", padding: 18, gap: 11, overflow: "hidden", boxShadow: "0 10px 34px rgba(0,0,0,0.18)" }, style]}>
-      <LinearGradient pointerEvents="none" colors={["rgba(48,61,130,0.18)", "rgba(14,20,48,0.04)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
+    <View style={[{ position: "relative", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel, borderRadius: 20, borderCurve: "continuous", padding: 18, gap: 11, overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" }, style]}>
       {children}
     </View>
   );
 }
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <Text style={{ color: colors.cyan, fontSize: 12.5, lineHeight: 18, fontWeight: "900", letterSpacing: 1.0, textTransform: "uppercase" }}>{children}</Text>;
+  return <Text style={{ color: colors.cyan, fontSize: 12.5, lineHeight: 18, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" }}>{children}</Text>;
 }
 
 export function Title({ children, size = 32 }: { children: React.ReactNode; size?: number }) {
-  return <Text accessibilityRole="header" selectable style={{ color: colors.text, fontSize: size, lineHeight: Math.round(size * 1.12), fontWeight: "800", letterSpacing: -0.8 }}>{children}</Text>;
+  return <Text accessibilityRole="header" selectable style={{ color: colors.text, fontSize: size, lineHeight: Math.round(size * 1.22), fontWeight: "800", letterSpacing: -0.6 }}>{children}</Text>;
 }
 
 export function Body({ children, muted = false, style }: { children: React.ReactNode; muted?: boolean; style?: object }) {
@@ -110,7 +84,7 @@ export function PrimaryButton({ label, onPress, disabled = false, secondary = fa
     <Text style={{ flexShrink: 1, textAlign: "center", color: secondary ? colors.text : colors.white, fontSize: 16, lineHeight: 23, fontWeight: "800" }}>{label}</Text>
     {trailingArrow && !loading ? <Text accessible={false} style={{ color: colors.white, fontSize: 21, lineHeight: 25, fontWeight: "700" }}>→</Text> : null}
   </View>;
-  return <Animated.View style={{ transform: [{ scale }], borderRadius: 19, borderWidth: 2, borderColor: focused ? colors.cyan : "transparent", padding: 2, boxShadow: secondary ? undefined : "0 8px 26px rgba(107,92,255,0.22)" }}>
+  return <Animated.View style={{ transform: [{ scale }], borderRadius: 19, borderWidth: 2, borderColor: focused ? colors.cyan : "transparent", padding: 2, boxShadow: secondary ? undefined : "0 6px 18px rgba(80,69,187,0.16)" }}>
     <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={accessibilityHint} accessibilityState={{ disabled: blocked, busy: loading }} disabled={blocked} onPress={onPress} onPressIn={() => animate(0.985)} onPressOut={() => animate(1)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={({ pressed }) => ({ opacity: disabled && !loading ? 0.48 : pressed ? 0.90 : 1, minHeight: 56, borderRadius: 15, overflow: "hidden", borderCurve: "continuous", borderWidth: secondary ? 1 : 0, borderColor: colors.lineStrong })}>
       {secondary ? <View style={{ backgroundColor: "rgba(17,24,55,.94)" }}>{content}</View> : <LinearGradient colors={[...gradients.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>{content}</LinearGradient>}
     </Pressable>
@@ -123,7 +97,7 @@ export function ActionLink({ label, onPress, hint }: { label: string; onPress: (
 
 export function ProgressBar({ value }: { value: number }) {
   const reducedMotion = useReducedMotion();
-  const percent = Math.max(0, Math.min(100, value));
+  const percent = Number.isFinite(value) ? Math.max(0, Math.min(100, Number(value))) : 0;
   const animated = useRef(new Animated.Value(reducedMotion ? percent : 0)).current;
 
   useEffect(() => {
@@ -138,13 +112,15 @@ export function ProgressBar({ value }: { value: number }) {
   }, [animated, percent, reducedMotion]);
 
   const width = animated.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
-  return <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(percent), text: `${Math.round(percent)} percent` }} style={{ height: 8, borderRadius: 999, overflow: "hidden", backgroundColor: "#1d2850" }}><Animated.View style={{ width, height: "100%" }}><LinearGradient colors={[colors.cyan, colors.violet, colors.magenta]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, borderRadius: 999 }} /></Animated.View></View>;
+  return <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(percent), text: `${Math.round(percent)} percent` }} style={{ height: 8, borderRadius: 999, overflow: "hidden", backgroundColor: "#1d2850" }}><Animated.View style={{ width, height: "100%" }}><LinearGradient colors={[colors.cyan, colors.blue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, borderRadius: 999 }} /></Animated.View></View>;
 }
 
-export function ProgressRing({ value, label }: { value: number; label?: string }) {
+export function ProgressRing({ value, label }: { value: number | null; label?: string }) {
   const reducedMotion = useReducedMotion();
-  const percent = Math.max(0, Math.min(100, value));
+  const percent = Number.isFinite(value) ? Math.max(0, Math.min(100, Number(value))) : 0;
   const scale = useRef(new Animated.Value(reducedMotion ? 1 : 0.92)).current;
+  const { fontScale } = useWindowDimensions();
+  const hasValue = value !== null && Number.isFinite(value);
   const segmentCount = 20;
   const activeCount = Math.round(percent / 100 * segmentCount);
   const center = 46;
@@ -160,6 +136,7 @@ export function ProgressRing({ value, label }: { value: number; label?: string }
     return () => animation.stop();
   }, [reducedMotion, scale]);
 
+  if (!hasValue || fontScale > 1.25) return <View accessible accessibilityLabel={hasValue ? `${Math.round(percent)} percent ${label ?? "score"}` : "No score yet"} style={{ alignItems:"center",justifyContent:"center",minWidth:78,padding:12,gap:4 }}><Text style={{ color:colors.text,fontSize:26,fontWeight:"800" }}>{hasValue ? `${Math.round(percent)}%` : "—"}</Text><Text style={{ color:colors.muted,fontSize:13 }}>{hasValue ? label : "No score yet"}</Text></View>;
   return (
     <Animated.View accessibilityRole="progressbar" accessibilityLabel={label ? `${label} score` : "Score"} accessibilityValue={{ min: 0, max: 100, now: Math.round(percent), text: `${Math.round(percent)} percent` }} style={{ width: 92, height: 92, borderRadius: 46, transform: [{ scale }], backgroundColor: "rgba(11,16,35,.82)", borderWidth: 1, borderColor: colors.line, boxShadow: glow.cyan, alignItems: "center", justifyContent: "center" }}>
       {Array.from({ length: segmentCount }, (_, index) => {

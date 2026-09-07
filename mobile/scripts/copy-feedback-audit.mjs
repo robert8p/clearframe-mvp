@@ -68,7 +68,9 @@ for (const [needle, message] of [
 const api = readMobile("lib/api.ts");
 requireText(api, 'import { cleanDisplayPayload, cleanDisplayCopy } from "@/lib/copy"', "The mobile API must use the display-copy safety net.");
 requireText(api, "const payload = cleanDisplayPayload(result.payload as T)", "Successful API responses must be cleaned before rendering or caching.");
-requireText(api, "cleanDisplayPayload(parsed.data)", "Cached display data must also be cleaned.");
+forbidText(api, "readCached", "Unscoped personal response caches must not return.");
+requireText(api, "removeLegacyResponseCache", "Legacy personal response caches must be removed.");
+requireText(api, "assertAccount", "Late responses must be bound to the signed-in account.");
 
 const migration = readRepo("supabase/migrations/20260904010500_polish_training_copy.sql");
 for (const contentKey of [

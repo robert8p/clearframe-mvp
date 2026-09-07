@@ -1,40 +1,24 @@
 import Link from "next/link";
 import { CogniMark } from "@/components/CogniMark";
-
+import { PracticePreview } from "@/components/PracticePreview";
 export default function LandingPage() {
-  return (
-    <main className="cg-public-shell">
-      <div className="cg-public-grid">
-        <section className="cg-public-copy">
-          <CogniMark />
-          <div className="cg-kicker" style={{ marginTop: 30 }}>Daily practice for sharper thinking</div>
-          <h1>Train your thinking</h1>
-          <p className="cg-public-lead">
-            Build clearer thinking through short daily practice. Weigh evidence, question assumptions and check AI answers.
-          </p>
-          <div className="cg-public-actions">
-            <Link className="cg-button" href="/signup">Start learning</Link>
-            <Link className="cg-button secondary" href="/login">Sign in</Link>
-          </div>
-          <div className="cg-public-features">
-            <div><span className="cg-feature-dot cyan"/><div><strong>Smart learning</strong><p>Sessions adapt to the skills you most need to practise.</p></div></div>
-            <div><span className="cg-feature-dot purple"/><div><strong>AI coach</strong><p>Get clear coaching that helps you question assumptions and explain your thinking.</p></div></div>
-            <div><span className="cg-feature-dot green"/><div><strong>Track progress</strong><p>See how your skills change as Cogni learns from more of your answers.</p></div></div>
-          </div>
-        </section>
-
-        <section className="cg-public-phone">
-          <div className="cg-phone-status"><span>9:41</span><span>●●●</span></div>
-          <div className="cg-brain-orb"><span>◌</span></div>
-          <div className="cg-phone-welcome">
-            <span>Welcome to</span>
-            <strong>Cogni</strong>
-            <p>Your daily learning companion for clearer thinking and better decisions.</p>
-          </div>
-          <Link className="cg-button cg-full" href="/signup">Get started</Link>
-          <p className="cg-phone-signin">Already have an account? <Link href="/login">Sign in</Link></p>
-        </section>
-      </div>
-    </main>
-  );
+  return <main className="cg-public-shell cg-editorial-landing">
+    <header className="cg-landing-header"><CogniMark /><Link className="cg-quiet-link" href="/login">Sign in →</Link></header>
+    <div className="cg-public-grid">
+      <section className="cg-public-copy">
+        <div className="cg-kicker">A daily practice for a clearer mind</div>
+        <h1>Train your thinking<span className="cg-headline-accent">One decision at a time.</span></h1>
+        <p className="cg-public-lead">Weigh evidence. Question assumptions. Check AI answers. Build a thoughtful daily habit with short decisions and useful explanations.</p>
+        <div className="cg-public-actions"><Link className="cg-button" href="/signup">Get started →</Link><a className="cg-quiet-link" href="#try-cogni">Try a decision first ↓</a></div>
+        <p className="cg-landing-trust">Your starting check and daily core learning stay free.</p>
+        <div className="cg-public-features">
+          <div><span className="cg-feature-dot cyan" aria-hidden="true"/><div><strong>Practice that adapts</strong><p>Relevant situations chosen around your learning context and recent answers.</p></div></div>
+          <div><span className="cg-feature-dot purple" aria-hidden="true"/><div><strong>The reasoning, not just the result</strong><p>Explore a key idea after each answer and how to apply it.</p></div></div>
+          <div><span className="cg-feature-dot green" aria-hidden="true"/><div><strong>Progress without labels</strong><p>Read your scores alongside their evidence—not as an assessment of who you are.</p></div></div>
+        </div>
+      </section>
+      <section id="try-cogni" className="cg-public-phone" aria-label="Try a Cogni practice example"><PracticePreview /><Link className="cg-button secondary cg-full" href="/signup">Get started</Link><p className="cg-phone-signin">Already have an account? <Link href="/login">Sign in</Link></p></section>
+    </div>
+    <footer className="cg-landing-footer"><span>Cogni · Train your thinking</span><span>Learning indicators, not formal assessments.</span></footer>
+  </main>;
 }

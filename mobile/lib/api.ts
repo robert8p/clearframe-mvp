@@ -1,10 +1,11 @@
+import { removeLegacyResponseCache, sameAccount, throwIfCancelled } from "./request-safety";
 import { cleanDisplayPayload, cleanDisplayCopy } from "@/lib/copy";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
 
 const FUNCTION_URL = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/mobile-api`;
 const REQUEST_TIMEOUT_MS = 12_000;
 const GET_RETRY_DELAY_MS = 450;
-const CACHE_TTL_MS = 5 * 60 * 1000;
+try { removeLegacyResponseCache(globalThis.localStorage); } catch { /* Native storage may be unavailable. */ }
 
 export class ApiError extends Error {
   constructor(
@@ -30,32 +31,6 @@ function timeZone() {
   }
 }
 
-function cacheKey(path: string) {
-  return `cogni:api-cache:${path.split("?")[0]}`;
-}
-
-function readCached<T>(path: string): T | null {
-  if (!globalThis.localStorage || !path.startsWith("/api/mobile/profile") && !path.startsWith("/api/mobile/today")) return null;
-  try {
-    const raw = globalThis.localStorage.getItem(cacheKey(path));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { savedAt?: number; data?: T };
-    if (!parsed.savedAt || Date.now() - parsed.savedAt > CACHE_TTL_MS) return null;
-    return parsed.data === undefined ? null : cleanDisplayPayload(parsed.data);
-  } catch {
-    return null;
-  }
-}
-
-function writeCached(path: string, data: unknown) {
-  if (!globalThis.localStorage || !path.startsWith("/api/mobile/profile") && !path.startsWith("/api/mobile/today")) return;
-  try {
-    globalThis.localStorage.setItem(cacheKey(path), JSON.stringify({ savedAt: Date.now(), data }));
-  } catch {
-    // Cache failure should never block the live app.
-  }
-}
-
 function parseBody(body: BodyInit | null | undefined) {
   if (typeof body !== "string" || !body.trim()) return undefined;
   try { return JSON.parse(body); } catch { throw new ApiError("The app prepared an invalid request.", 400, "invalid_request"); }
@@ -65,8 +40,11 @@ async function wait(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function invoke<T>(path: string, method: string, body: unknown, accessToken: string): Promise<{ response: Response; payload: T | Record<string, unknown> }> {
+async function invoke<T>(path: string, method: string, body: unknown, accessToken: string, signal?: AbortSignal | null): Promise<{ response: Response; payload: T | Record<string, unknown> }> {
+  throwIfCancelled(signal);
   const controller = new AbortController();
+  const cancel = () => controller.abort();
+  signal?.addEventListener("abort", cancel, { once: true });
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(FUNCTION_URL, {
@@ -83,6 +61,7 @@ async function invoke<T>(path: string, method: string, body: unknown, accessToke
     return { response, payload };
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener("abort", cancel);
   }
 }
 
@@ -103,28 +82,39 @@ function errorFromPayload(payload: unknown, status: number) {
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = (options.method ?? "GET").toUpperCase();
   const requestBody = parseBody(options.body);
-  const cache = method === "GET" ? readCached<T>(path) : null;
+  throwIfCancelled(options.signal);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new ApiError("Please sign in again.", 401, "auth_required");
 
+  const accountId = session.user.id;
+  const assertAccount = async () => {
+    throwIfCancelled(options.signal);
+    const current = await supabase.auth.getSession();
+    if (!sameAccount(accountId, current.data.session?.user.id)) throw new ApiError("Your account changed. Please reopen this screen.", 401, "account_changed");
+  };
   let token = session.access_token;
   const maxAttempts = method === "GET" ? 2 : 1;
   let lastError: unknown;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      let result = await invoke<T>(path, method, requestBody, token);
+      await assertAccount();
+      let result = await invoke<T>(path, method, requestBody, token, options.signal);
       if (result.response.status === 401) {
+        await assertAccount();
         const refreshed = await supabase.auth.refreshSession();
         if (refreshed.data.session?.access_token) {
+          if (!sameAccount(accountId, refreshed.data.session.user.id)) throw new ApiError("Please sign in again.", 401, "account_changed");
           token = refreshed.data.session.access_token;
-          result = await invoke<T>(path, method, requestBody, token);
+          result = await invoke<T>(path, method, requestBody, token, options.signal);
         }
       }
 
       if (result.response.ok) {
         const payload = cleanDisplayPayload(result.payload as T);
-        if (method === "GET") writeCached(path, payload);
+        // Account deletion deliberately invalidates the caller’s server session.
+        if (!(path === "/api/mobile/account" && method === "DELETE")) await assertAccount();
+        throwIfCancelled(options.signal);
         return payload;
       }
 
@@ -136,6 +126,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       }
       throw error;
     } catch (caught) {
+      throwIfCancelled(options.signal);
       lastError = caught;
       if (caught instanceof ApiError) throw caught;
       if (method === "GET" && attempt + 1 < maxAttempts) {
@@ -145,7 +136,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     }
   }
 
-  if (cache !== null) return cache;
+  throwIfCancelled(options.signal);
   if (lastError instanceof Error && lastError.name === "AbortError") throw new ApiError("The request took too long. Check your connection and try again.", 408, "timeout");
   throw new ApiError("Connection interrupted. Check your connection and try again.", 0, "connection_interrupted");
 }

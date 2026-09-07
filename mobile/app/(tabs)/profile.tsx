@@ -113,7 +113,7 @@ export default function ProfileScreen() {
     finally { setBusy(false); }
   }
 
-  async function logout() { await signOut(); router.replace("/"); }
+  async function logout() { try { await signOut(); router.replace("/"); } catch { Alert.alert("Could not sign out", "Check your connection and try again. Your account is still signed in."); } }
 
   async function restoreFromProfile() {
     if (busy) return;

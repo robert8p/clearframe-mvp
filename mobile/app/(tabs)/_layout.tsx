@@ -69,7 +69,7 @@ function TabIcon({ name, active }: { name: TabGlyphName; active: boolean }) {
     ]).start();
   }, [active, reducedMotion, scale]);
 
-  const glyph = <TabGlyph name={name} color={active ? colors.white : colors.soft} />;
+  const glyph = <TabGlyph name={name} color={active ? colors.cyan : colors.soft} />;
 
   return (
     <Animated.View
@@ -78,7 +78,7 @@ function TabIcon({ name, active }: { name: TabGlyphName; active: boolean }) {
     >
       {active ? (
         <LinearGradient
-          colors={["rgba(0,184,255,.78)", "rgba(107,92,255,.82)", "rgba(184,59,255,.72)"]}
+          colors={["#354675", "#3c3a73"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ width: 44, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "rgba(207,243,255,.46)", alignItems: "center", justifyContent: "center" }}

@@ -1,78 +1,40 @@
-import React, { useCallback, useState } from "react";
-import { Redirect, router, useFocusEffect } from "expo-router";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { CompactAction } from "@/components/interaction-cues";
-import { CogniOrb } from "@/components/orb";
-import { ActionLink, Body, Card, Eyebrow, ErrorState, LoadingState, MetricCard, PrimaryButton, ProgressRing, Screen, SkillBar, Title } from "@/components/ui";
+import React from "react";
+import { Redirect, router } from "expo-router";
+import { View } from "react-native";
+import { ActionLink, Body, Card, Eyebrow, ErrorState, LoadingState, MetricCard, Screen, Title } from "@/components/ui";
+import { RefreshNotice, SkillTile, TrainingCard } from "@/components/learning-surfaces";
 import { apiFetch } from "@/lib/api";
 import { mobileAudienceMeta } from "@/lib/audience";
+import { selectSkills, skillDetails } from "@/lib/learning-view";
 import { getTrainingAction } from "@/lib/training-action";
-import { colors } from "@/lib/theme";
+import { useFocusResource } from "@/lib/use-focus-resource";
+import { useProGate } from "@/lib/pro-gate";
 import type { MobileProfileResponse, TodayResponse } from "@/lib/types";
 
-function skillRelation(value: MobileProfileResponse["skillScores"][number]["skills"]) { return Array.isArray(value) ? value[0] : value; }
-
+async function loadHome(signal:AbortSignal) {
+  const [profile,today] = await Promise.all([apiFetch<MobileProfileResponse>("/api/mobile/profile",{signal}),apiFetch<TodayResponse>("/api/mobile/today",{signal})]);
+  return {profile,today};
+}
 export default function HomeScreen() {
-  const { width, fontScale } = useWindowDimensions();
-  const [profile, setProfile] = useState<MobileProfileResponse | null>(null); const [today, setToday] = useState<TodayResponse | null>(null); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState("");
-  const load = useCallback(async (refresh = false) => { if (refresh) setRefreshing(true); else setLoading(true); setError(""); try { const [profileData, todayData] = await Promise.all([apiFetch<MobileProfileResponse>("/api/mobile/profile"), apiFetch<TodayResponse>("/api/mobile/today")]); setProfile(profileData); setToday(todayData); } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load Cogni."); } finally { setLoading(false); setRefreshing(false); } }, []);
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
-  if (loading) return <LoadingState label="Preparing Cogni…" />; if (error && !profile) return <ErrorState message={error} onRetry={() => void load()} />; if (!profile?.profile.audience_segment || today?.state === "onboarding") return <Redirect href="/onboarding" />;
-
+  const {data,loading,refreshing,error,reload} = useFocusResource(loadHome);
+  const {needsProForFocusedPractice,openFocusedPractice} = useProGate();
+  if(loading) return <LoadingState label="Preparing Cogni…" />;
+  if(!data) return <ErrorState message={error || "Could not load your practice."} onRetry={()=>void reload()} />;
+  const {profile,today} = data;
+  if(!profile.profile.audience_segment || today.state === "onboarding") return <Redirect href="/onboarding" />;
   const firstName = profile.profile.full_name?.trim().split(/\s+/)[0] || "there";
-  const audience = profile.profile.audience_segment; const audienceMeta = mobileAudienceMeta(audience);
-  const lowest = [...profile.skillScores].sort((a,b) => Number(a.score) - Number(b.score)).slice(0,3);
-  const average = profile.summary.averageScore == null ? 0 : Math.round(profile.summary.averageScore * 100);
-  const streak = profile.profile.current_streak ?? 0;
-  const streakLabel = `${streak}-day streak`;
-  const stateCopy: Record<string, { eyebrow: string; title: string; body: string; cta: string }> = {
-    diagnostic: { eyebrow: "Your starting check", title: "Find your starting point", body: "A short starting check helps Cogni choose the skills worth focusing on first.", cta: "Continue starting check" },
-    lesson: { eyebrow: "Today’s focus", title: "One insight. A new perspective.", body: "Start with one short idea, then put it to work in today’s decisions.", cta: "Open today’s insight" },
-    training: { eyebrow: "Today’s focus", title: "Train your thinking", body: "Practise real-world decisions, one question at a time. Your next session is ready.", cta: "Train now" },
-    complete: { eyebrow: "Daily goal complete", title: "Today’s training complete", body: "Your core session is done. Pick a skill for another short practice round.", cta: "Choose a skill" },
-    unavailable: { eyebrow: "Today’s focus", title: "Almost ready", body: today?.message ?? "Cogni is preparing the next set.", cta: "Try again" },
-  };
-  const copy = stateCopy[today?.state ?? "unavailable"] ?? stateCopy.unavailable;
+  const meta = mobileAudienceMeta(profile.profile.audience_segment);
   const action = getTrainingAction(today);
-  function openTraining() {
-    if (refreshing) return;
-    if (action.href) router.navigate(action.href);
-    else void load(true);
-  }
-  const openProgress = () => router.push("/(tabs)/progress");
-
-  return <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-    <View style={{ gap: 10 }}>
-      <View style={{ gap: 5 }}><Title size={29}>Hello, {firstName} 👋</Title><Text style={{ color: colors.muted, fontSize: 15, lineHeight: 22 }}>{audienceMeta?.promise ?? "Build clearer judgement for the decisions you face."}</Text></View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <CompactAction label={`🔥 ${streakLabel}`} accent hint="Open your progress and streak details" onPress={openProgress} />
-        <CompactAction label={audienceMeta?.shortLabel ?? audience} hint="Open your profile and learning context" onPress={() => router.push("/(tabs)/profile")} />
-      </View>
+  const next = selectSkills(profile.skillScores,"","practised").slice(0,2);
+  const average = profile.summary.averageScore;
+  return <Screen refreshing={refreshing} onRefresh={()=>void reload()}>
+    <View style={{gap:6}}><Eyebrow>Your daily practice</Eyebrow><Title size={29}>Hello, {firstName}</Title><Body muted style={{fontSize:15,lineHeight:22}}>{meta?.promise ?? "A little practice. A clearer perspective."}</Body></View>
+    {error ? <RefreshNotice message={error} onRetry={()=>void reload()} /> : null}
+    <TrainingCard today={today} busy={refreshing} onPress={()=>action.href ? router.navigate(action.href) : void reload()} />
+    <View style={{flexDirection:"row",flexWrap:"wrap",gap:12}}><View style={{flexGrow:1,flexBasis:120}}><MetricCard label="Practice XP" value={profile.profile.xp ?? 0} hint="earned, not a grade" /></View><View style={{flexGrow:1,flexBasis:120}}><MetricCard label="Answers" value={profile.summary.answers} hint="your learning history" /></View></View>
+    <Card><Eyebrow>Your progress, in context</Eyebrow><Title size={23}>{average === null ? "A starting point, not a score yet" : `${Math.round(average*100)}% recent performance`}</Title><Body muted style={{fontSize:14,lineHeight:22}}>{average === null ? "Your first answers will start building your skill map. There is nothing to catch up on." : "Based on your latest up to 200 answers. It reflects these questions, not your ability or a ranking against others."}</Body><ActionLink label="View progress" hint="Explore your learning evidence and history" onPress={()=>router.navigate("/(tabs)/progress")} /></Card>
+    <View style={{gap:12}}><View style={{flexDirection:"row",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:8}}><Title size={23}>{next.length ? "Choose your next focus" : "Make it your own"}</Title><ActionLink label="See all skills" onPress={()=>router.navigate("/(tabs)/skills")} /></View>
+      {next.length ? <><Body muted style={{fontSize:14,lineHeight:21}}>Lower measured scores are possible practice areas—not proven weaknesses. Read them alongside the evidence.</Body>{next.map(row=><SkillTile key={row.skill_id} row={row} pro={needsProForFocusedPractice} onPress={()=>{const slug=skillDetails(row)?.slug;if(slug)openFocusedPractice(slug,"home_focus");}} />)}</> : <Body muted>Explore thinking skills, or start with the check above for a more personal starting point.</Body>}
     </View>
-
-    <Card style={{ padding: 0, overflow: "hidden", borderColor: "rgba(83,105,165,.66)", boxShadow: "0 14px 38px rgba(0,0,0,.22)" }}>
-      <LinearGradient colors={["rgba(30,43,100,.98)", "rgba(12,18,46,.99)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 19, gap: 14 }}>
-        <LinearGradient pointerEvents="none" colors={["rgba(0,229,255,.72)", "rgba(107,92,255,.44)", "rgba(255,79,216,0)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2 }} />
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View style={{ flex: 1, gap: 7 }}><Eyebrow>{copy.eyebrow}</Eyebrow><Title size={25}>{copy.title}</Title><Body muted style={{ fontSize: 15, lineHeight: 22 }}>{copy.body}</Body></View>
-          {width >= 375 && fontScale <= 1.2 ? <View accessible={false} style={{ marginRight: -8 }}><CogniOrb size={78} /></View> : null}
-        </View>
-        <PrimaryButton label={refreshing ? "Loading training…" : action.label} onPress={openTraining} loading={refreshing} accessibilityHint={action.hint} trailingArrow testID="training-primary-action" />
-      </LinearGradient>
-    </Card>
-
-    <Card style={{ padding: 17 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}><ProgressRing value={average} label="recent" /><View style={{ flex: 1, gap: 5 }}><Eyebrow>Your evidence</Eyebrow><Title size={21}>{profile.summary.averageScore != null ? `${average}% recent score` : "Your profile is forming"}</Title><Body muted style={{ fontSize: 14, lineHeight: 20 }}>{profile.summary.answers ? `${profile.summary.answers} answers are shaping your skill profile. Scores can move as Cogni collects better evidence.` : "Complete your starting check to create your first skill profile."}</Body></View></View>
-      <View style={{ alignItems: "flex-end", marginTop: -2 }}><ActionLink label="View progress" hint="Open your full progress page" onPress={openProgress} /></View>
-    </Card>
-
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${profile.profile.xp ?? 0} XP`} accessibilityHint="Open your progress" onPress={openProgress} style={({ pressed }) => ({ flexGrow: 1, flexBasis: 150, opacity: pressed ? .78 : 1 })}><MetricCard label="XP" value={profile.profile.xp ?? 0} hint="earned from practice" /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${profile.summary.answers} answers`} accessibilityHint="Open your progress" onPress={openProgress} style={({ pressed }) => ({ flexGrow: 1, flexBasis: 150, opacity: pressed ? .78 : 1 })}><MetricCard label="Answers" value={profile.summary.answers} hint="evidence collected" /></Pressable>
-    </View>
-
-    {lowest.length ? <Card><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}><Eyebrow>Recommended for you</Eyebrow><ActionLink label="See all" hint="Open all skills" onPress={() => router.push("/(tabs)/skills")} /></View><Title size={23}>Skills worth sharpening next</Title>{lowest.map((row) => { const skill = skillRelation(row.skills); return <SkillBar key={row.skill_id} label={skill?.name ?? "Skill"} score={Number(row.score)} reliability={Number(row.reliability)} />; })}<PrimaryButton label="Explore skills" secondary onPress={() => router.push("/(tabs)/skills")} /></Card> : null}
-    {error ? <Text accessibilityLiveRegion="assertive" selectable style={{ color: colors.danger, lineHeight: 22 }}>{error}</Text> : null}
   </Screen>;
 }

@@ -43,10 +43,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    void Promise.all([supabase.auth.getSession(), Linking.getInitialURL()]).then(async ([sessionResult, initialUrl]) => {
+    void Promise.all([supabase.auth.getSession(), Linking.getInitialURL()]).then(async ([, initialUrl]) => {
       if (initialUrl) await applyAuthUrl(initialUrl);
       const latest = await supabase.auth.getSession();
-      if (mounted) { setSession(latest.data.session ?? sessionResult.data.session); setLoading(false); }
+      if (mounted) { setSession(latest.data.session); setLoading(false); }
     }).catch(() => { if (mounted) setLoading(false); });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const value = useMemo<AuthValue>(() => ({ session, loading, signOut: async () => { await supabase.auth.signOut(); } }), [session, loading]);
+  const value = useMemo<AuthValue>(() => ({ session, loading, signOut: async () => { const { error } = await supabase.auth.signOut(); if (error) throw error; } }), [session, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

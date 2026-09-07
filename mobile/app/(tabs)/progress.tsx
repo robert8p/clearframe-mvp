@@ -1,6 +1,8 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { useFocusEffect } from "expo-router";
-import { Text, View } from "react-native";
+import React from "react";
+import { useFocusResource } from "@/lib/use-focus-resource";
+import { historyTrends } from "@/lib/learning-view";
+import { RefreshNotice } from "@/components/learning-surfaces";
+import { Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { apiFetch } from "@/lib/api";
 import { useProGate } from "@/lib/pro-gate";
@@ -29,91 +31,49 @@ type ProgressHistory = {
   }[];
 };
 
-type Trend = {
-  skillId: string;
-  skillName: string;
-  from: number;
-  to: number;
-  delta: number;
-  observations: number;
-};
-
-function trendRows(history: ProgressHistory | null): Trend[] {
-  if (!history) return [];
-  const grouped = new Map<string, ProgressHistory["points"]>();
-  for (const point of history.points) grouped.set(point.skillId, [...(grouped.get(point.skillId) ?? []), point]);
-  return [...grouped.entries()]
-    .map(([skillId, points]) => {
-      const first = points[0];
-      const last = points[points.length - 1];
-      return {
-        skillId,
-        skillName: last.skillName,
-        from: first.score,
-        to: last.score,
-        delta: Math.round((last.score - first.score) * 10) / 10,
-        observations: points.length,
-      };
-    })
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 6);
-}
-
 function historyWindowLabel(history: ProgressHistory) {
   if (history.access === "full") return "All available";
   return `${history.windowDays ?? history.freeDays} days`;
 }
 
+async function loadProgress(signal: AbortSignal) {
+  const [profile, historyResult] = await Promise.all([
+    apiFetch<MobileProfileResponse>("/api/mobile/profile", {signal}),
+    apiFetch<ProgressHistory>("/api/mobile/progress-history", {signal}).then(history => ({history,error:""})).catch((error:unknown) => ({history:null,error:error instanceof Error ? error.message : "Progress history is unavailable."})),
+  ]);
+  return {profile,...historyResult};
+}
 export default function ProgressScreen() {
-  const [data, setData] = useState<MobileProfileResponse | null>(null);
-  const [history, setHistory] = useState<ProgressHistory | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {fontScale,width} = useWindowDimensions();
+  const {data:resource,loading,refreshing,error,reload} = useFocusResource(loadProgress);
   const { needsProForFocusedPractice, isPro, openFocusedPractice, openPaywall } = useProGate();
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [profile, progressHistory] = await Promise.all([
-        apiFetch<MobileProfileResponse>("/api/mobile/profile"),
-        apiFetch<ProgressHistory>("/api/mobile/progress-history").catch(() => null),
-      ]);
-      setData(profile);
-      setHistory(progressHistory);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load progress.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
-  const trends = useMemo(() => trendRows(history), [history]);
-
+  const data = resource?.profile;
+  const history = resource?.history ?? null;
+  const trends = historyTrends(history?.points ?? []);
   if (loading) return <LoadingState />;
-  if (error || !data) return <ErrorState message={error || "Could not load progress."} onRetry={() => void load()} />;
+  if (!data) return <ErrorState message={error || "Could not load progress."} onRetry={() => void reload()} />;
 
-  const average = data.summary.averageScore == null ? 0 : Math.round(data.summary.averageScore * 100);
+  const average = data.summary.averageScore == null ? null : Math.round(data.summary.averageScore * 100);
   const measured = data.skillScores.filter((row) => row.attempts > 0);
   const strongest = [...measured].sort((a, b) => Number(b.score) - Number(a.score))[0];
   const next = [...measured].sort((a, b) => Number(a.score) - Number(b.score))[0];
   const nextSkill = next ? relation(next.skills) : null;
   const nextSkillSlug = nextSkill?.slug;
 
-  return <Screen>
+  return <Screen refreshing={refreshing} onRefresh={() => void reload()}>
+    {error ? <RefreshNotice message={error} onRetry={() => void reload()} /> : null}
     <View style={{ gap: 5 }}>
       <Eyebrow>Your progress</Eyebrow>
       <Title>See what’s changing</Title>
       <Body muted>Your answers help Cogni build your skill profile. Read each score alongside its evidence level, rather than as a fixed grade.</Body>
     </View>
 
-    <LinearGradient colors={["rgba(30,43,99,.97)", "rgba(12,18,45,.98)"]} style={{ borderRadius: 26, borderWidth: 1, borderColor: colors.line, padding: 18, flexDirection: "row", alignItems: "center", gap: 16 }}>
+    <LinearGradient colors={["rgba(30,43,99,.97)", "rgba(12,18,45,.98)"]} style={{ borderRadius: 26, borderWidth: 1, borderColor: colors.line, padding: 18, flexDirection: fontScale>1.25 || width<360 ? "column" : "row", alignItems: "center", gap: 16 }}>
       <ProgressRing value={average} label="recent" />
       <View style={{ flex: 1, gap: 6 }}>
         <Eyebrow>Recent performance</Eyebrow>
-        <Text style={{ color: colors.text, fontSize: 23, lineHeight: 29, fontWeight: "900" }}>{average ? "Your profile is taking shape" : "Evidence is just beginning"}</Text>
-        <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 20 }}>{measured.length} measured skills · {data.summary.answers} answers</Text>
+        <Text style={{ color: colors.text, fontSize: 23, lineHeight: 29, fontWeight: "900" }}>{average !== null ? "Your profile is taking shape" : "No score yet"}</Text>
+        <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 20 }}>{measured.length} measured skills · latest up to 200 answers</Text>
       </View>
     </LinearGradient>
 
@@ -129,18 +89,20 @@ export default function ProgressScreen() {
       <Body muted style={{ fontSize: 14, lineHeight: 20 }}>Neither is a population percentile or a permanent grade. Early movement should be treated as a signal to keep learning, not a verdict on ability.</Body>
     </Card>
 
+    {resource?.error ? <Card><Eyebrow>History unavailable</Eyebrow><Body muted>Your current scores are available, but history could not be loaded. It has not been reset.</Body><PrimaryButton label="Retry history" secondary onPress={() => void reload()} /></Card> : null}
     {history ? <Card style={{ borderColor: history.access === "full" ? "rgba(0,229,255,.34)" : colors.line }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <Eyebrow>{history.access === "full" ? "Cogni Pro history" : "Recent trend"}</Eyebrow>
+        <Eyebrow>{history.access === "full" ? "Skill history" : "Recent trend"}</Eyebrow>
         <Text style={{ color: colors.soft, fontSize: 12.5, fontWeight: "800" }}>{historyWindowLabel(history)}</Text>
       </View>
-      <Title size={23}>{trends.length ? "How your skills are moving" : "More history will appear here"}</Title>
+      <Title size={23}>{trends.length ? "How your skills are moving" : "Keep practising to see changes"}</Title>
       <Body muted>{history.access === "full"
         ? "Your complete available daily skill-change history is included."
         : `Free includes the most recent ${history.freeDays} days of skill movement. Cogni Pro unlocks the complete available history.`}</Body>
       {history.access === "full" && history.availableFrom && history.availableTo
         ? <Text style={{ color: colors.soft, fontSize: 12.5 }}>Available from {history.availableFrom} to {history.availableTo}</Text>
         : null}
+      {trends.length ? <View accessible accessibilityLabel={`${trends[0].skillName}. Last ${Math.min(14,trends[0].points.length)} recorded days, from ${trends[0].points.slice(-14)[0].date} to ${trends[0].points.slice(-1)[0].date}. Scores ${trends[0].points.slice(-14).map(point=>point.score).join(", ")}.`} style={{gap:8}}><Body muted style={{fontSize:13}}>Recent recorded days · {trends[0].skillName}</Body><View accessible={false} style={{height:58,flexDirection:"row",alignItems:"flex-end",gap:5,borderBottomWidth:1,borderColor:colors.lineStrong}}>{trends[0].points.slice(-14).map(point=><View key={point.date} style={{flex:1,height:Math.max(0,Math.min(100,point.score))*0.56,backgroundColor:colors.cyan,borderTopLeftRadius:4,borderTopRightRadius:4}} />)}</View><Text style={{color:colors.soft,fontSize:12,lineHeight:18}}>0–100 score scale. Each bar is a recorded day; gaps between dates are not shown.</Text></View> : null}
       {trends.map((trend) => <View
         accessible
         accessibilityLabel={`${trend.skillName}. Changed ${trend.delta >= 0 ? "up" : "down"} ${Math.abs(trend.delta)} points from ${trend.from} to ${trend.to}.`}
@@ -167,8 +129,8 @@ export default function ProgressScreen() {
       <Eyebrow>Next best move</Eyebrow>
       <Title size={24}>Sharpen {nextSkill.name}</Title>
       <Body muted>{needsProForFocusedPractice
-        ? "Your daily core training remains free. Cogni Pro unlocks additional focused rounds on the skill with the clearest upside."
-        : "This is currently your lowest measured skill. A focused round gives Cogni more evidence while practising the area with the clearest upside."}</Body>
+        ? "Your daily core training remains free. Cogni Pro unlocks additional focused rounds on a skill you choose to practise."
+        : "This is one of your lower measured scores. It is a possible focus—not a proven weakness or a guarantee of improvement."}</Body>
       <PrimaryButton label={needsProForFocusedPractice ? `Unlock practice for ${nextSkill.name}` : `Practise ${nextSkill.name}`} onPress={() => openFocusedPractice(nextSkillSlug, "progress_next_move")} />
     </Card> : null}
 

@@ -305,6 +305,26 @@ def main() -> int:
     wait_for("Home", timeout=45)
     assert_no_literal_controls("relaunch-copy")
 
+    # Verify the redesigned primary surfaces remain reachable at 160% system text.
+    try:
+        adb("shell", "settings", "put", "system", "font_scale", "1.6")
+        time.sleep(2)
+        tap("Home")
+        scroll_to_top()
+        wait_for("Hello, Cogni", timeout=45, scroll=True)
+        capture("home-large-text")
+        wait_for("Continue starting check", timeout=45, scroll=True)
+        capture("home-large-text-primary-action")
+        tap("Skills")
+        wait_for("Find your focus", timeout=45, scroll=True)
+        capture("skills-large-text")
+        tap("Progress")
+        wait_for("See what’s changing", timeout=45, scroll=True)
+        capture("progress-large-text")
+    finally:
+        adb("shell", "settings", "put", "system", "font_scale", "1.0")
+        time.sleep(2)
+
     # Every suite in the combined exact-artifact runner owns its authentication
     # state. Leave the app signed out so the following profile/password suite
     # can independently prove the signed-out entry route.

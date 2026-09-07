@@ -42,12 +42,13 @@ export function SkillTile({ row, onPress, pro = false }: {row:SkillScore;onPress
   </Pressable>;
 }
 
-/** Real, navigable skill names rather than decorative mock buttons. */
+/** Real skill names need room: two phone columns, one for very large text. */
 export function SkillShelf({ rows, onOpen, pro = false }: {rows:SkillScore[];onOpen:(slug:string)=>void;pro?:boolean}) {
-  const {fontScale}=useWindowDimensions();
+  const {fontScale,width}=useWindowDimensions();
+  const columns=fontScale>1.8 ? 1 : width<600 || fontScale>1.15 ? 2 : 4;
   const visible=rows.filter(row=>skillDetails(row)?.slug).slice(0,4);
   if (!visible.length) return null;
   return <View style={{gap:12}}><Title size={22}>Explore your thinking</Title><View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
-    {visible.map(row=>{const raw=skillDetails(row);if(!raw?.slug)return null;const skill={...raw,slug:raw.slug};return <Pressable key={row.skill_id} accessibilityRole="button" accessibilityLabel={`Explore ${skill.name}`} accessibilityHint={pro ? "Explore Pro focused practice" : "Start focused practice"} onPress={()=>onOpen(skill.slug)} style={({pressed})=>({flexBasis:fontScale>1.3?"45%":"21%",flexGrow:1,minWidth:64,minHeight:100,padding:10,borderRadius:19,borderWidth:1,borderColor:colors.lineStrong,backgroundColor:colors.panel,alignItems:"center",gap:10,opacity:pressed ? .8 : 1})}><SkillMotif kind={motifForSkill(skill.slug)} size={42} /><Text style={{color:colors.text,fontSize:12,lineHeight:18,fontWeight:"600",textAlign:"center"}}>{skill.name}</Text></Pressable>})}
+    {visible.map(row=>{const raw=skillDetails(row);if(!raw?.slug)return null;const skill={...raw,slug:raw.slug};return <Pressable key={row.skill_id} accessibilityRole="button" accessibilityLabel={`Explore ${skill.name}`} accessibilityHint={pro ? "Explore Pro focused practice" : "Start focused practice"} onPress={()=>onOpen(skill.slug)} style={({pressed})=>({flexBasis:columns===1?"100%":columns===2?"45%":"21%",flexGrow:1,minWidth:columns===1?0:100,minHeight:104,padding:14,borderRadius:19,borderWidth:1,borderColor:colors.lineStrong,backgroundColor:colors.panel,alignItems:"center",gap:10,opacity:pressed ? .8 : 1})}><SkillMotif kind={motifForSkill(skill.slug)} size={42} /><Text style={{color:colors.text,fontSize:13,lineHeight:20,fontWeight:"600",textAlign:"center"}}>{skill.name}</Text></Pressable>})}
   </View></View>;
 }

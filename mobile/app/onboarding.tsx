@@ -23,6 +23,7 @@ import { Body, Card, Eyebrow, LoadingState, PrimaryButton, Screen, Title } from 
 export default function OnboardingScreen() {
   const { session, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [audience, setAudience] = useState<MobileAudience | "">("");
@@ -119,7 +120,8 @@ export default function OnboardingScreen() {
             accessibilityRole="radio"
             accessibilityLabel={item.label}
             accessibilityHint={item.text}
-            accessibilityState={{ selected: audience === item.slug }}
+            accessibilityState={{ checked: audience === item.slug, disabled: busy }}
+            disabled={busy}
             key={item.slug}
             onPress={() => chooseAudience(item.slug)}
             style={({ pressed }) => ({ opacity: pressed ? .80 : 1 })}
@@ -138,7 +140,8 @@ export default function OnboardingScreen() {
         ))}
       </View>
 
-      {selectedAudience ? (
+      {selectedAudience ? <PrimaryButton secondary label={showDetails ? "Hide optional details" : "Personalise further (optional)"} disabled={busy} onPress={() => setShowDetails(value => !value)} /> : null}
+      {selectedAudience && showDetails ? (
         <Card>
           <Eyebrow>Optional — tailor scenarios further</Eyebrow>
           <Body muted style={{ fontSize: 14, lineHeight: 20 }}>

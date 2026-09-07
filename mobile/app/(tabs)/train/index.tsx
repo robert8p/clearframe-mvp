@@ -2,6 +2,7 @@ import React from "react";
 import { Redirect, router } from "expo-router";
 import { Body, Card, Eyebrow, ErrorState, LoadingState, Screen, Title } from "@/components/ui";
 import { RefreshNotice, TrainingCard } from "@/components/learning-surfaces";
+import { DailyLens, ToolkitShortcut } from "@/components/practice-tools";
 import { apiFetch, todayApiPath } from "@/lib/api";
 import { useProGate } from "@/lib/pro-gate";
 import { getTrainingAction } from "@/lib/training-action";
@@ -25,6 +26,7 @@ export default function TrainHomeScreen() {
       <Body>{today.state === "diagnostic" ? "Start with a mix of common questions and situations that matter to you. Your answers help Cogni choose what to practise next." : today.state === "complete" ? "Notice one assumption in a decision you make today. What evidence would help you check it?" : "Choose an answer, explore the explanation, then pause on the key idea. Accuracy matters less than understanding why."}</Body>
       <Body muted style={{fontSize:14,lineHeight:22}}>{today.state === "diagnostic" ? "There is no pass or fail. Your early scores become more reliable as you practise." : "Your submitted answers are saved. You can leave and come back to your next unanswered question."}</Body>
     </Card>
+    {today.state === "complete" ? <><ToolkitShortcut /><DailyLens /></> : null}
     {today.state === "lesson" && today.lesson?.scenario_context ? <Card><Eyebrow>{today.situationLabel ?? "Situation"}</Eyebrow><Body>{today.lesson.scenario_context}</Body></Card> : null}
   </Screen>;
 }

@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { EntitlementProvider } from "@/lib/entitlements";
+import { NotebookProvider } from "@/lib/notebook";
 import { FeedbackProvider } from "@/lib/feedback";
 import { useReducedMotion } from "@/lib/accessibility";
 import { SplashScreenController } from "@/components/splash-screen-controller";
@@ -42,6 +43,7 @@ function RootNavigator() {
     >
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="demo" options={{ title: "Try Cogni" }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
@@ -52,6 +54,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ title: "Your learning context" }} />
         <Stack.Screen name="paywall" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="toolkit" options={{ title: "Thinking toolkit" }} />
         <Stack.Screen name="support" options={{ title: "Cogni Support" }} />
       </Stack.Protected>
 
@@ -76,11 +79,13 @@ export default function RootLayout() {
     <StartupErrorBoundary>
       <AuthProvider>
         <EntitlementProvider>
+          <NotebookProvider>
           <FeedbackProvider>
             <SplashScreenController />
             <StatusBar style="light" />
             <RootNavigator />
           </FeedbackProvider>
+          </NotebookProvider>
         </EntitlementProvider>
       </AuthProvider>
     </StartupErrorBoundary>

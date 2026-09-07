@@ -1,3 +1,4 @@
+import { useNotebook } from "@/lib/notebook";
 import React, { useCallback, useState } from "react";
 import { Alert, Linking, Switch, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
@@ -67,6 +68,7 @@ function PreferenceRow({
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
+  const notebook = useNotebook();
   const { isPro, stateReliable, config, entitlement, billingStatus, managementUrl, restore, openPaywall } = useProGate();
   const { ready: feedbackReady, soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled, playFeedback } = useFeedback();
   const [data, setData] = useState<MobileProfileResponse | null>(null); const [loading, setLoading] = useState(true); const [pending, setPending] = useState<"save" | "restore" | "delete" | "signout" | null>(null); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
@@ -155,7 +157,10 @@ export default function ProfileScreen() {
     setPending("delete"); setError("");
     try {
       await apiFetch<{ ok: boolean }>("/api/mobile/account", { method: "DELETE" });
+      let localClearFailed = false;
+      try { await notebook.clear(); } catch { localClearFailed = true; }
       await supabase.auth.signOut({ scope: "local" });
+      if (localClearFailed) Alert.alert("Online account deleted", "Device storage could not be cleared. Remove Cogni’s app data in Android Settings to erase unreadable local copies.");
       router.replace("/");
     } catch (caught) {
       Alert.alert("Deletion incomplete", caught instanceof Error ? caught.message : "Could not delete your account. Please try again.");
@@ -247,6 +252,7 @@ export default function ProfileScreen() {
       <Eyebrow>Account</Eyebrow><Body muted>Your session is stored securely on this device. You can also change your password or permanently remove your account.</Body>
       <PrimaryButton label="Cogni Support" secondary onPress={() => router.push("/support")} />
       <PrimaryButton label="Change password" secondary onPress={() => router.push({ pathname: "/auth/recovery", params: { source: "profile" } })} />
+      <PrimaryButton label="Saved ideas & weekly rhythm" secondary onPress={() => router.push("/toolkit")} />
       <PrimaryButton label={pending === "signout" ? "Signing out…" : "Sign out"} loading={pending === "signout"} secondary disabled={busy} onPress={() => void logout()} />
       <PrimaryButton label={pending === "delete" ? "Deleting account…" : "Delete account"} loading={pending === "delete"} secondary disabled={busy} onPress={confirmDeleteAccount} />
     </Card>

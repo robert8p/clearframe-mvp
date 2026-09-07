@@ -1,0 +1,252 @@
+name: Cogni 0.4.5 Nightfall Android Expo release
+'on':
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-expo.yml]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: cogni-045-expo
+  cancel-in-progress: false
+env:
+  EXPO_PUBLIC_SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+  CI: '1'
+  TZ: Europe/London
+jobs:
+  source:
+    if: github.ref == 'refs/heads/release/cogni-0.4.5'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      sha: ${{ steps.apply.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Commit only the checksum-verified visual implementation
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,subprocess,os,re
+          from pathlib import Path
+          root=Path.cwd(); changes={}; paths=[]
+          manifests=[root/'.github'/('design-045-'+name+'.json') for name in ['core','screens','tests']]
+          ledger=root/'.github/design-045-applied.json'
+          manifest_digest=hashlib.sha256(b''.join(p.read_bytes() for p in manifests)).hexdigest()
+          if ledger.exists():
+              assert json.loads(ledger.read_text())['manifestDigest']==manifest_digest,'Design manifest changed after application'
+              print('Visual design already committed; testing the current exact source.')
+          else:
+              for manifest in manifests:
+                  for item in json.loads(manifest.read_text()):
+                      name=item['path']; path=root/name
+                      assert name not in paths and '..' not in Path(name).parts
+                      assert name.startswith(('mobile/app/','mobile/components/','mobile/scripts/','.github/scripts/')) or name in ['mobile/app.json','mobile/lib/theme.ts']
+                      paths.append(name); assert path.is_file() and not path.is_symlink()
+                      text=path.read_text(); digest=hashlib.sha256(text.encode()).hexdigest()
+                      if digest==item['after']: continue
+                      assert digest==item['before'],'Source differs from reviewed baseline: '+name
+                      edits=sorted(item['edits'],key=lambda e:e['start']); end=0
+                      for edit in edits:
+                          assert end<=edit['start']<=edit['end']<=len(text)
+                          end=edit['end']
+                      for edit in reversed(edits): text=text[:edit['start']]+edit['text']+text[edit['end']:]
+                      assert hashlib.sha256(text.encode()).hexdigest()==item['after'],'Patched source checksum mismatch: '+name
+                      changes[path]=text
+              assert len(paths)==24,'Incomplete visual change set'
+              for path,text in changes.items(): path.write_text(text)
+              ledger.write_text(json.dumps({'manifestDigest':manifest_digest,'baseline':'308eb6fef139f61cd633f96a89ebb4ab408dc096','files':paths},indent=2)+'\n')
+              subprocess.run(['git','add','--',*paths,str(ledger.relative_to(root))],check=True)
+              subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+              subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+              subprocess.run(['git','commit','-m','feat: apply Cogni 0.4.5 Nightfall visual design to native screens'],check=True)
+              current=subprocess.check_output(['git','ls-remote','origin','refs/heads/release/cogni-0.4.5'],text=True).split()[0]
+              assert current==os.environ['GITHUB_SHA'],'Release branch changed; refusing to overwrite newer work'
+              subprocess.run(['git','push','origin','HEAD:refs/heads/release/cogni-0.4.5'],check=True)
+          app=json.loads((root/'mobile/app.json').read_text())['expo']
+          assert app['version']=='0.4.5' and app['android']['package']=='app.gocogni.cogni'
+          assert app['extra']['eas']['projectId']=='24fc0fea-5e66-4365-a82c-ac668aded7d0'
+          sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha='+sha+'\n')
+          Path('/tmp/cogni-045-source-commit.txt').write_text(sha)
+          print('Committed application source:',sha)
+          PY
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Validate source, learning behavior, accessibility and packaged assets
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          npm ci --include=dev --no-audit --no-fund
+          npx expo install --check
+          npm run validate 2>&1 | tee /tmp/cogni-045-source-checks.txt
+          npx expo export --platform android --output-dir /tmp/cogni-045-export 2>&1 | tee /tmp/cogni-045-source-export.txt
+          git diff --exit-code -- app components lib plugins app.json eas.json package.json package-lock.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-045-source-${{ github.run_attempt }}
+          path: /tmp/cogni-045-source-*
+          retention-days: 30
+  backend:
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Retest unchanged server scoring and entitlements
+        run: |
+          set -euo pipefail
+          deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
+          deno check --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts
+          deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts
+          deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/monetization_test.ts
+          deno test --config supabase/functions/revenuecat-webhook/deno.json --node-modules-dir=auto supabase/functions/revenuecat-webhook/logic_test.ts
+  expo:
+    needs: [source,backend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      SOURCE_COMMIT: ${{ needs.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --include=dev --no-audit --no-fund
+      - name: Request Android-only signed Expo preview
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          git diff --exit-code
+          mkdir -p /tmp/cogni-045-expo
+          npx eas-cli@21.7.1 build --platform android --profile preview --non-interactive --no-wait --json > /tmp/cogni-045-expo/request.json
+          python3 - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          items=json.loads(Path('/tmp/cogni-045-expo/request.json').read_text())
+          assert isinstance(items,list) and len(items)==1
+          b=items[0];assert re.fullmatch(r'[0-9a-f-]{36}',b['id'])
+          assert b['platform']=='ANDROID' and b['gitCommitHash']==os.environ['SOURCE_COMMIT']
+          summary={'id':b['id'],'version':'0.4.5','sourceCommit':b['gitCommitHash'],'buildPage':'https://expo.dev/accounts/cogniapp/projects/cogni/builds/'+b['id'],'status':'requested-not-yet-downloadable'}
+          Path('/tmp/cogni-045-expo/request-summary.json').write_text(json.dumps(summary,indent=2))
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('EAS_BUILD_ID='+b['id']+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cogni-045-expo-request-${{ github.run_attempt }}
+          path: /tmp/cogni-045-expo/request-summary.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Await actual cloud completion and retrieve the exact APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,time
+          from pathlib import Path
+          from urllib.parse import urlparse
+          root=Path('/tmp/cogni-045-expo');errors=0
+          for attempt in range(200):
+              try:
+                  p=subprocess.run(['npx','eas-cli@21.7.1','build:view',os.environ['EAS_BUILD_ID'],'--json'],text=True,capture_output=True,timeout=90)
+                  if p.returncode:raise RuntimeError('Status service unavailable')
+                  b=json.loads(p.stdout)
+              except (subprocess.TimeoutExpired,RuntimeError,json.JSONDecodeError):
+                  errors+=1;print('Transient Expo status read failure:',errors,flush=True)
+                  if errors>=6:raise RuntimeError('Repeated Expo status read failures')
+                  time.sleep(20);continue
+              errors=0;assert b['id']==os.environ['EAS_BUILD_ID']
+              (root/'build.json').write_text(json.dumps(b))
+              print('Expo Android:',b['status'],flush=True)
+              if b['status']=='FINISHED':break
+              if b['status'] in ['ERRORED','CANCELED']:raise RuntimeError(str(b.get('error') or b['status']))
+              time.sleep(30)
+          else:raise TimeoutError('Expo build has not finished; not downloadable')
+          assert b['gitCommitHash']==os.environ['SOURCE_COMMIT'] and b['appVersion']=='0.4.5'
+          assert b['distribution']=='INTERNAL' and b['platform']=='ANDROID'
+          url=b['artifacts']['buildUrl'];u=urlparse(url)
+          assert u.scheme=='https' and (u.hostname=='expo.dev' or u.hostname.endswith('.expo.dev'))
+          subprocess.run(['curl','--fail','--location','--retry','5','--max-time','300',url,'--output',str(root/'Cogni-0.4.5-preview.apk')],check=True)
+          summary={'id':b['id'],'version':b['appVersion'],'buildNumber':b['appBuildVersion'],'sourceCommit':b['gitCommitHash'],'buildPage':'https://expo.dev/accounts/cogniapp/projects/cogni/builds/'+b['id'],'downloadUrl':url,'status':'FINISHED','installedTests':'not-yet-run'}
+          (root/'completion.json').write_text(json.dumps(summary,indent=2));print(json.dumps(summary,indent=2))
+          PY
+      - uses: android-actions/setup-android@v3
+      - name: Check exact APK identity, signing, permissions and configuration
+        run: |
+          set -euo pipefail
+          OUT=/tmp/cogni-045-expo
+          APK="$OUT/Cogni-0.4.5-preview.apk"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" > "$OUT/badging.txt"
+          "$AAPT" dump permissions "$APK" > "$OUT/permissions.txt"
+          "$SIGNER" verify --verbose --print-certs "$APK" > "$OUT/signature.txt"
+          "$ZIPALIGN" -c -P 16 4 "$APK"
+          grep -q "package: name='app.gocogni.cogni'" "$OUT/badging.txt"
+          grep -q "versionName='0.4.5'" "$OUT/badging.txt"
+          grep -q "targetSdkVersion:'36'" "$OUT/badging.txt"
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$OUT/signature.txt"
+          tr -d ':' < "$OUT/signature.txt" | tr '[:upper:]' '[:lower:]' > /tmp/normalized-signer.txt
+          grep -q 'e0bfda379dfa0e11aee798e443ce3b33d006d83b7857062f8f639ca7f7572c7e' /tmp/normalized-signer.txt
+          for permission in RECORD_AUDIO SYSTEM_ALERT_WINDOW READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE POST_NOTIFICATIONS; do
+            ! grep -q "android.permission.$permission" "$OUT/permissions.txt"
+          done
+          unzip -t "$APK" >/dev/null
+          unzip -Z1 "$APK" > /tmp/apk-files.txt
+          grep -q '^lib/arm64-v8a/' /tmp/apk-files.txt
+          grep -q '^lib/x86_64/' /tmp/apk-files.txt
+          BUNDLE=$(awk '/(^|\/)index\.android\.bundle$/{print;exit}' /tmp/apk-files.txt)
+          test -n "$BUNDLE"
+          unzip -p "$APK" "$BUNDLE" > /tmp/cogni-bundle
+          strings -a /tmp/cogni-bundle > /tmp/cogni-bundle-strings
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_URL" /tmp/cogni-bundle-strings
+          grep -Fq "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" /tmp/cogni-bundle-strings
+          grep -Fq 'Sharpen how you think.' /tmp/cogni-bundle-strings
+          for name in SUPABASE_SERVICE_ROLE_KEY SUPABASE_SECRET_KEY REVENUECAT_SECRET_API_KEY REVENUECAT_WEBHOOK_HMAC_SECRET REVENUECAT_WEBHOOK_AUTHORIZATION; do
+            ! grep -Fq "$name" /tmp/cogni-bundle-strings
+          done
+          python3 - <<'PY'
+          import hashlib,json,re
+          from pathlib import Path
+          root=Path('/tmp/cogni-045-expo');b=json.loads((root/'completion.json').read_text())
+          version=int(re.search(r"versionCode='(\d+)'",(root/'badging.txt').read_text()).group(1))
+          assert version>63 and str(version)==b['buildNumber']
+          b['sha256']=hashlib.sha256((root/'Cogni-0.4.5-preview.apk').read_bytes()).hexdigest()
+          b['apkIdentityAndSigning']='passed';b['versionCode']=version
+          (root/'metadata.json').write_text(json.dumps(b,indent=2));print(json.dumps(b,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-045-expo-apk-${{ github.run_attempt }}
+          path: /tmp/cogni-045-expo/
+          retention-days: 30
+          if-no-files-found: warn

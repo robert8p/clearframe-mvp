@@ -1,0 +1,142 @@
+name: Cogni 0.4.5 bounded renderer verification
+on:
+  push:
+    branches: [release/cogni-0.4.5]
+    paths: [.github/workflows/cogni-045-render-check.yml]
+permissions:
+  contents: read
+jobs:
+  stop-stalled-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Cancel only this release's stalled test run, leaving its cleanup enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          repo=os.environ['GITHUB_REPOSITORY'];assert repo=='robert8p/clearframe-mvp'
+          endpoint=f'repos/{repo}/actions/runs/34151959048'
+          r=json.loads(subprocess.check_output(['gh','api',endpoint],text=True))
+          assert r['head_sha']=='28ed42069ea904d2ece14ca52d3ef70fd2df2ccf'
+          assert r['head_branch']=='release/cogni-0.4.5' and r['path']=='.github/workflows/cogni-045-native.yml'
+          if r['status']!='completed':subprocess.run(['gh','api','--method','POST',endpoint+'/cancel'],check=True)
+          print('Stopped only the stalled Nightfall installed-test run; Expo build is untouched.')
+          PY
+  render:
+    strategy:
+      fail-fast: false
+      matrix:
+        release: [baseline, nightfall]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RELEASE: ${{ matrix.release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: df97ce58b85e9a2060a8aa95ea02c9e2166e2534
+          persist-credentials: false
+      - name: Download and checksum exact old or new Expo APK
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cogni-render
+          if [ "$RELEASE" = baseline ]; then
+            URL=https://expo.dev/artifacts/eas/wa9VtnIxV6A2AavEjVI0AjXX6HF--BOWTh7Ge4UrnrQ.apk
+            SHA=fd389171211ded80358a8f8488dff67065d9cf4e990b65d71b44ffb64acd0407
+          else
+            URL=https://expo.dev/artifacts/eas/I3gSpUZYogOTT-XRAGsNHZOF7NjL6tbVkoXODgFFM38.apk
+            SHA=b427f68cea176cd8fb0e062307dba86f5983bbfc28f311eeedd884a5bd716bf2
+          fi
+          curl --fail --location --retry 3 --max-time 180 "$URL" --output /tmp/cogni.apk
+          echo "$SHA  /tmp/cogni.apk" | sha256sum --check --strict
+      - name: Prepare native diagnostics with time-limited device commands
+        run: |
+          cat > /tmp/render-check.py <<'PY'
+          import subprocess,time,json,re,os,xml.etree.ElementTree as ET
+          from pathlib import Path
+          out=Path('/tmp/cogni-render');result={'release':os.environ['RELEASE'],'physicalDeviceTested':False,'renderer':'software; Vulkan disabled'}
+          def adb(*args,timeout=25):
+              p=subprocess.run(['adb','-s','emulator-5554',*args],capture_output=True,timeout=timeout)
+              if p.returncode:raise RuntimeError(p.stderr.decode(errors='replace'))
+              return p.stdout
+          def diagnostic(label):
+              commands=[('device', ['adb','devices']),('host-memory',['free','-m']),('host-processes',['ps','-eo','pid,ppid,rss,comm']),('kernel',['sudo','dmesg','--ctime']),('logcat',['adb','-s','emulator-5554','logcat','-d','-t','500','-v','threadtime']),('activity',['adb','-s','emulator-5554','shell','dumpsys','activity','activities'])]
+              for name,cmd in commands:
+                  try:
+                      p=subprocess.run(cmd,capture_output=True,timeout=12)
+                      (out/f'{label}-{name}.txt').write_bytes(p.stdout+p.stderr)
+                  except Exception as error:(out/f'{label}-{name}.txt').write_text(str(error))
+          def capture(label):
+              print('Capture:',label,flush=True);diagnostic(label)
+              (out/(label+'.png')).write_bytes(adb('exec-out','screencap','-p'))
+          def nodes():
+              adb('shell','uiautomator','dump','--compressed','/sdcard/cogni-check.xml')
+              raw=adb('shell','cat','/sdcard/cogni-check.xml');(out/'hierarchy.xml').write_bytes(raw)
+              return list(ET.fromstring(raw).iter('node'))
+          def tap(label):
+              for attempt in range(7):
+                  for node in nodes():
+                      if label in [node.attrib.get('content-desc'),node.attrib.get('text')] and node.attrib.get('enabled')=='true':
+                          b=list(map(int,re.findall(r'\d+',node.attrib['bounds'])))
+                          if b[2]<=b[0] or b[3]<=b[1]:continue
+                          adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));time.sleep(1.5);return
+                  adb('shell','input','swipe','540','1900','540','800','350');time.sleep(.5)
+              raise RuntimeError('No action: '+label)
+          try:
+              capture('android-launcher')
+              adb('install','-r','/tmp/cogni.apk',timeout=150)
+              adb('logcat','-c')
+              adb('shell','am','start','-W','-n','app.gocogni.cogni/.MainActivity',timeout=45)
+              time.sleep(6);capture('welcome')
+              assert adb('shell','pidof','app.gocogni.cogni').strip()
+              title='Sharpen how you think.' if os.environ['RELEASE']=='nightfall' else 'Make room for a clearer perspective.'
+              assert any(title in n.attrib.get('text','') for n in nodes()),'Welcome title missing'
+              result['welcome']='passed'
+              tap('Try a sample decision');capture('sample')
+              tap('Check an original source supports the claim');capture('sample-selected')
+              tap('See the reasoning');capture('sample-feedback')
+              assert any('Confidence is not evidence.' in n.attrib.get('text','') for n in nodes()),'Reasoning missing'
+              result['sample']='passed'
+              tap('Back to welcome')
+              adb('shell','settings','put','system','font_scale','1.6');time.sleep(2)
+              for i in range(4):adb('shell','input','swipe','540','800','540','1900','300')
+              capture('welcome-large');tap('Try a sample decision');capture('sample-large')
+              result['largeTextNavigation']='passed';result['status']='passed'
+          except Exception as error:
+              result['status']='failed';result['error']=str(error);raise
+          finally:
+              diagnostic('final');(out/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result),flush=True)
+          PY
+      - name: Enable acceleration and show installed rendering support
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          free -m
+      - uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 16
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu software -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
+          script: python3 -u /tmp/render-check.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-render-${{ matrix.release }}-${{ github.run_attempt }}
+          path: /tmp/cogni-render/
+          retention-days: 30
+          if-no-files-found: warn

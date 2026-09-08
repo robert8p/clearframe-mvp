@@ -1,0 +1,73 @@
+name: Cogni session content verified integration
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-session-content-retest.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: cogni-session-content-compatibility
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v6
+    - uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+    - name: Apply reviewed patch with the complete saved-question type
+      run: |
+        python3 - <<'PY'
+        from pathlib import Path
+        import re,textwrap
+        p=Path('supabase/functions/mobile-api/session-content.ts');s=p.read_text()
+        old='type GradingChallenge = { id: string; difficulty: number;'
+        assert s.count(old)==1
+        p.write_text(s.replace(old,'type GradingChallenge = { id: string; prompt: string; difficulty: number;',1))
+        source=Path('.github/workflows/cogni-session-content-compatibility.yml').read_text()
+        blocks=re.findall(r"python3 - <<'PY'\n(.*?)\n        PY",source,re.S)
+        assert len(blocks)==2
+        exec(compile(textwrap.dedent(blocks[0]),'reviewed-bounded-patch','exec'))
+        PY
+    - name: Type-check and test without skipping type errors
+      run: |
+        set -euo pipefail
+        mkdir -p /tmp/cogni-session-content
+        deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts 2>&1 | tee /tmp/cogni-session-content/typecheck.txt
+        deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/ 2>&1 | tee /tmp/cogni-session-content/tests.txt
+        test -z "$(git diff 01f65ecd1aa372149c46a688a66e66877f58aace --name-only -- mobile)"
+    - name: Commit only the tested server integration
+      run: |
+        set -euo pipefail
+        test "$(git diff --name-only | wc -l)" -eq 3
+        git config user.name 'github-actions[bot]'
+        git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+        git add supabase/functions/mobile-api/engine.ts supabase/functions/mobile-api/index.ts supabase/functions/mobile-api/session-content.ts
+        git commit -m 'fix(content): bind displayed questions and grading to tested immutable snapshots'
+        git push origin HEAD:release/cogni-content-clarity
+        git rev-parse HEAD | tee /tmp/cogni-session-content/source-commit.txt
+    - name: Verify latest existing Android release runs
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python3 - <<'PY'
+        from pathlib import Path
+        import re,textwrap
+        source=Path('.github/workflows/cogni-session-content-compatibility.yml').read_text()
+        blocks=re.findall(r"python3 - <<'PY'\n(.*?)\n        PY",source,re.S)
+        assert len(blocks)==2
+        exec(compile(textwrap.dedent(blocks[1]),'existing-android-verification','exec'))
+        PY
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cogni-session-content-verified-${{ github.run_id }}
+        path: |
+          /tmp/cogni-session-content/
+          supabase/functions/mobile-api/*.ts
+          supabase/functions/mobile-api/deno.json
+        if-no-files-found: error
+        retention-days: 7

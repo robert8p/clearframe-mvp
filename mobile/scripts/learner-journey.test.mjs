@@ -26,10 +26,10 @@ function mount(relative, { props = {}, request = async () => outcome, clock = ()
   };
   react.useCallback = (fn, deps) => react.useMemo(() => fn, deps);
   const feedback = { playFeedback: cue => cues.push(cue) };
-  const ui = Object.fromEntries(['Screen', 'Body', 'Card', 'Eyebrow', 'Title', 'PrimaryButton', 'ProgressBar', 'ActionLink', 'ErrorState', 'LoadingState'].map(name => [name, name]));
+  const ui = Object.fromEntries(['Screen', 'Body', 'Card', 'EditorialPanel', 'SectionHeader', 'Eyebrow', 'Title', 'PrimaryButton', 'ProgressBar', 'ActionLink', 'ErrorState', 'LoadingState'].map(name => [name, name]));
   const imports = {
     react,
-    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Keyboard: { dismiss() {} }, AccessibilityInfo: { announceForAccessibility() {} } },
+    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Keyboard: { dismiss() {} }, AccessibilityInfo: { announceForAccessibility() {} }, Animated: { View: 'Animated.View', Value: class { constructor(value){ this.value=value; } setValue(value){ this.value=value; } stopAnimation(){} interpolate(){ return 1; } }, sequence(){ return { start(){} }; }, spring(){ return {}; }, timing(){ return {}; }, loop(){ return { start(){}, stop(){} }; } } },
     'expo-linear-gradient': { LinearGradient: 'LinearGradient' },
     '@/components/brand': { CogniMark: 'CogniMark' },
     '@/components/form-field': { FormField: 'FormField' },
@@ -37,8 +37,9 @@ function mount(relative, { props = {}, request = async () => outcome, clock = ()
     '@/lib/accessibility': { useReducedMotion: () => true },
     '@/lib/notebook': { useNotebook: () => ({ recordPracticeDay: async () => {} }) },
     '@/components/practice-tools': { SaveIdeaButton: 'SaveIdeaButton', DeviceToolsNotice: 'DeviceToolsNotice' },
+    '@/components/visuals': { CogniIcon: 'CogniIcon', SkillMotif: 'SkillMotif', motifForSkill: () => 'reasoning' },
     '@/lib/feedback': { useFeedback: () => feedback },
-    '@/lib/theme': { colors: {} },
+    '@/lib/theme': { colors: {}, radius: { sm:12, md:18, lg:24, xl:30, pill:999 }, typography: {} },
     '@/components/ui': ui,
     'expo-router': { router: { replace() {} }, Redirect: 'Redirect', useFocusEffect: callback => react.useEffect(callback, [callback]) },
   };

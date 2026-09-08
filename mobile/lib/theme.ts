@@ -35,7 +35,7 @@ export const colors = {
 } as const;
 
 export const gradients = {
-  primary: ["#08BFE8", "#3E6CFF", "#8765F2"] as const,
+  primary: ["#00738B", "#3151B8", "#5A3AAF"] as const,
   hero: ["rgba(7,16,34,0)", "rgba(7,16,34,.24)", "#071022"] as const,
   ambient: ["rgba(78,108,221,.30)", "rgba(42,152,193,.13)", "rgba(7,16,34,0)"] as const,
   panel: ["rgba(27,48,85,.96)", "rgba(12,27,52,.98)"] as const,

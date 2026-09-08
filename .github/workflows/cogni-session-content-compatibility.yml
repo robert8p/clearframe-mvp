@@ -1,0 +1,85 @@
+name: Cogni immutable session content verification
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-session-content-compatibility.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: cogni-session-content-compatibility
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v6
+    - uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+    - name: Apply bounded server-only patch without overwriting later edits
+      run: |
+        python3 - <<'PY'
+        from pathlib import Path
+        import subprocess
+        root=Path('supabase/functions/mobile-api')
+        for name,expected in [('engine.ts','10a1814825e5751aab3e159f109f2e6577c9128f'),('index.ts','6d0f35d9529148d03b5597c4d45cbcfc44d477e7')]:
+          assert subprocess.check_output(['git','hash-object',str(root/name)],text=True).strip()==expected, 'Source changed: '+name
+        p=root/'engine.ts';s=p.read_text();s='import { loadSessionQuestions } from "./session-content.ts";\n'+s
+        old='  const { data, error } = ids.length ? await admin.from("challenges").select(CHALLENGE_FIELDS).in("id", ids).eq("is_published", true) : { data: [], error: null };\n  if (error) throw error;\n  const byId = new Map(((data ?? []) as Challenge[]).map((challenge) => [challenge.id, challenge]));'
+        assert s.count(old)==2
+        for session,mode in [('session.id','training'),('sessionId','practice')]:
+          new=f'  const data = await loadSessionQuestions(admin, userId, {session}, ids, "{mode}");\n  const byId = new Map((data as unknown as Challenge[]).map((challenge) => [challenge.id, challenge]));'
+          s=s.replace(old,new,1)
+        p.write_text(s)
+        p=root/'index.ts';s=p.read_text();s='import { loadSessionQuestions, loadSessionAnswer } from "./session-content.ts";\n'+s
+        start=s.index('    const { data, error } = diagnostic.challengeIds.length ?')
+        end=s.index('    return { state: "diagnostic",',start)
+        s=s[:start]+'    const sessionId = diagnostic.resumableSessionKey ?? crypto.randomUUID();\n    const data = await loadSessionQuestions(admin, user.id, sessionId, diagnostic.challengeIds, "diagnostic");\n    const byId = new Map(data.map((challenge) => [String(challenge.id), challenge]));\n'+s[end:]
+        old='sessionId: diagnostic.resumableSessionKey ?? crypto.randomUUID(),';assert s.count(old)==1;s=s.replace(old,'sessionId,',1)
+        start=s.index('  const [{ data: challenge, error: challengeError }, { data: key, error: keyError }] = await Promise.all([')
+        end=s.index('  const type = challenge.interaction_type',start)
+        s=s[:start]+'  const { challenge, key } = await loadSessionAnswer(admin, user.id, sessionId, challengeId, mode);\n'+s[end:]
+        p.write_text(s)
+        PY
+    - name: Type-check API and run complete server regression tests
+      run: |
+        set -euo pipefail
+        mkdir -p /tmp/cogni-session-content
+        deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts 2>&1 | tee /tmp/cogni-session-content/typecheck.txt
+        deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/ 2>&1 | tee /tmp/cogni-session-content/tests.txt
+        test -z "$(git diff 01f65ecd1aa372149c46a688a66e66877f58aace --name-only -- mobile)"
+    - name: Commit only tested backend integration
+      run: |
+        set -euo pipefail
+        test "$(git diff --name-only | wc -l)" -eq 2
+        git config user.name 'github-actions[bot]'
+        git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+        git add supabase/functions/mobile-api/engine.ts supabase/functions/mobile-api/index.ts
+        git commit -m 'fix(content): preserve displayed questions and answer explanations across bank revisions'
+        git push origin HEAD:release/cogni-content-clarity
+        git rev-parse HEAD | tee /tmp/cogni-session-content/source-commit.txt
+    - name: Recover latest existing Android verification status
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python3 - <<'PY'
+        import urllib.request,json,os
+        from pathlib import Path
+        url='https://api.github.com/repos/robert8p/clearframe-mvp/actions/runs?branch=release%2Fcogni-0.4.5&per_page=100'
+        r=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+        with urllib.request.urlopen(r,timeout=60) as response:data=json.load(response)
+        items=[{k:r[k] for k in ('id','name','status','conclusion','head_sha','created_at','updated_at')} for r in data['workflow_runs']]
+        Path('/tmp/cogni-session-content/android-release-runs.json').write_text(json.dumps(items,indent=2))
+        print(json.dumps(items))
+        PY
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cogni-session-content-verification-${{ github.run_id }}
+        path: |
+          /tmp/cogni-session-content/
+          supabase/functions/mobile-api/
+        if-no-files-found: error
+        retention-days: 7

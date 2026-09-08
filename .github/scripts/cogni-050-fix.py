@@ -1,3 +1,4 @@
+# Idempotent compatibility repair for the Cogni 0.5.0 visual release.
 from pathlib import Path
 
 root=Path(__file__).resolve().parents[2]

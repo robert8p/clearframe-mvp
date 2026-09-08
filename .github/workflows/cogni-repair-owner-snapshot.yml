@@ -1,0 +1,48 @@
+name: Cogni repair owner snapshot
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-repair-owner-snapshot.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+    - name: Retrieve encrypted content and verify existing release checks
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python3 - <<'PY'
+        import re,json,urllib.request,os
+        from pathlib import Path
+        out=Path('/tmp/cogni-repair-owner');out.mkdir()
+        source=Path('.github/workflows/cogni-content-snapshot.yml').read_text()
+        key=re.search(r'SUPABASE_ANON_JWT: ([A-Za-z0-9_.-]+)',source).group(1)
+        request=urllib.request.Request('https://dhklfrqhsmofqrawfdjz.supabase.co/functions/v1/cogni-repair-export',headers={'apikey':key,'Authorization':'Bearer '+key})
+        with urllib.request.urlopen(request,timeout=120) as response: payload=json.load(response)
+        assert payload['algorithm']=='RSA-OAEP-256+A256GCM+gzip'
+        assert set(payload)=={'version','algorithm','iv','wrappedKey','ciphertext'}
+        (out/'content-encrypted.json').write_text(json.dumps(payload))
+        print('Encrypted content recovered. No user tables, private keys or plaintext answers in the artifact.')
+        def gh(path):
+          request=urllib.request.Request('https://api.github.com/repos/robert8p/clearframe-mvp/'+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(request,timeout=60) as response:return json.load(response)
+        reports=[]
+        for run_id in (34151558176,34151959048):
+          r=gh('actions/runs/'+str(run_id));jobs=gh('actions/runs/'+str(run_id)+'/jobs?per_page=100');art=gh('actions/runs/'+str(run_id)+'/artifacts?per_page=100')
+          reports.append({'id':run_id,'name':r['name'],'status':r['status'],'conclusion':r['conclusion'],'head_sha':r['head_sha'],'updated_at':r['updated_at'],'jobs':[{'id':j['id'],'name':j['name'],'status':j['status'],'conclusion':j['conclusion']} for j in jobs['jobs']],'artifacts':[{'id':a['id'],'name':a['name'],'size_in_bytes':a['size_in_bytes'],'expired':a['expired']} for a in art['artifacts']]})
+        (out/'existing-release-checks.json').write_text(json.dumps(reports,indent=2))
+        print(json.dumps(reports))
+        PY
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cogni-repair-owner-snapshot-${{ github.run_id }}
+        path: /tmp/cogni-repair-owner/
+        retention-days: 1
+        if-no-files-found: error

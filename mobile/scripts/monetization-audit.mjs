@@ -10,7 +10,7 @@ const requireText = (source, needle, message) => { if (!source.includes(needle))
 const forbidText = (source, needle, message) => { if (source.includes(needle)) failures.push(message); };
 
 const appConfig = JSON.parse(readMobile("app.json"));
-if (appConfig.expo?.version !== "0.4.5") failures.push("Cogni monetisation candidate must match the 0.4.5 preview version.");
+if (appConfig.expo?.version !== "0.5.0") failures.push("Cogni monetisation candidate must match the 0.5.0 visual release version.");
 if (appConfig.expo?.android?.package !== "app.gocogni.cogni") failures.push("Android application identity changed.");
 if (appConfig.expo?.ios?.bundleIdentifier !== "app.gocogni.cogni") failures.push("iOS application identity changed.");
 if (!(appConfig.expo?.android?.permissions ?? []).includes("com.android.vending.BILLING")) failures.push("Android billing permission is missing.");

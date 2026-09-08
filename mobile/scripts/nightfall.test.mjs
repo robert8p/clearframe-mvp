@@ -13,7 +13,7 @@ test('Illustration is bundled, decorative and independent of learning content',(
   assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),'2ea4004cf994b9f82bba4b5179d71efe020464bb59bf6a2b0e5c47be08386ea9');
 });
 test('New skill tiles use real data and real navigation with scalable labels',()=>{
-  const source=read('components/learning-surfaces.tsx');assert(source.includes('rows.filter(row=>skillDetails(row)?.slug)'));assert(source.includes('onOpen(skill.slug)'));assert(source.includes('fontScale>1.45'));assert(source.includes('fontScale>1.3?undefined:2'));assert(!source.includes('numberOfLines={1}'));
+  const source=read('components/learning-surfaces.tsx');assert(source.includes('rows.filter(row=>skillDetails(row)?.slug)'));assert(source.includes('onOpen(slug)'));assert(source.includes('fontScale>1.45'));assert(source.includes('fontScale>1.3?undefined:2'));assert(!source.includes('numberOfLines={1}'));
 });
 test('Redesign does not turn mockup statistics into product data',()=>{
   for(const name of ['app/(tabs)/home.tsx','app/(tabs)/progress.tsx','components/practice-tools.tsx']){const s=read(name);assert(!s.includes('Overall mastery'));assert(!s.includes('+12%'));assert(!s.includes('72%'));}

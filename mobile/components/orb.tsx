@@ -58,7 +58,7 @@ export function CogniOrb({ size = 180 }: { size?: number }) {
       </Animated.View>
       <Animated.View style={{ position: "absolute", width: size + 22, height: size + 22, borderRadius: (size + 22) / 2, backgroundColor: "rgba(86,74,255,.14)", opacity: glowOpacity, boxShadow: glow.violet }} />
       <Animated.View style={{ transform: [{ translateY }, { scale }], borderRadius: size / 2, boxShadow: "0 0 56px rgba(58,88,255,0.36)" }}>
-        <LinearGradient colors={[...gradients.orb]} start={{ x: 0.03, y: 0.03 }} end={{ x: 0.96, y: 0.96 }} style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center", padding: Math.max(5, size * 0.045) }}>
+        <LinearGradient colors={gradients.orb} start={{ x: 0.03, y: 0.03 }} end={{ x: 0.96, y: 0.96 }} style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center", padding: Math.max(5, size * 0.045) }}>
           <View style={{ flex: 1, alignSelf: "stretch", borderRadius: size / 2, backgroundColor: "rgba(6,11,30,.88)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,.12)" }}>
             <CogniMark size={Math.max(42, size * 0.46)} animated={false} />
           </View>

@@ -43,6 +43,7 @@ export const gradients = {
   success: ["rgba(29,100,84,.68)", "rgba(14,49,54,.82)"] as const,
   warm: ["#F6B78A", "#C790F6"] as const,
   progress: ["#66EEFF", "#72A5FF", "#A37DFF"] as const,
+  orb: ["#4DD5E7", "#546BFF", "#8F65E9"] as const,
 } as const;
 
 export const glow = {

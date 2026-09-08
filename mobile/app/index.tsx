@@ -18,7 +18,7 @@ export default function WelcomeScreen(){
     <View style={{marginHorizontal:-20,height:heroHeight,borderBottomLeftRadius:34,borderBottomRightRadius:34,overflow:"hidden",backgroundColor:colors.bgDeep}}>
       <HeroArtwork height={heroHeight}/>
       <LinearGradient colors={["rgba(4,9,22,.10)","rgba(4,9,22,.03)","rgba(7,16,34,.48)","#071022"]} locations={[0,.34,.67,1]} style={{position:"absolute",inset:0}}/>
-      <View style={{position:"absolute",left:22,right:22,top:14,gap:3}}><CogniLogo animated={false}/><Text style={{color:"rgba(231,237,255,.78)",fontSize:13.5,lineHeight:20,letterSpacing:1.1,...typography.body}}>Practice a brighter you.</Text></View>
+      <View style={{position:"absolute",left:22,right:22,top:14,gap:3}}><CogniLogo animated={false}/><Text style={{color:"rgba(231,237,255,.78)",fontSize:13.5,lineHeight:20,...typography.body,letterSpacing:1.1}}>Practice a brighter you.</Text></View>
       <View style={{position:"absolute",left:22,right:22,bottom:24,gap:10}}><Title size={fontScale>1.35?36:42}>Sharpen how you think.</Title><Body style={{maxWidth:520,fontSize:17,lineHeight:25}}>Real-life thinking practice for a calmer, clearer, more capable you.</Body></View>
     </View>
 

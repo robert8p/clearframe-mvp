@@ -45,7 +45,7 @@ export async function loadSessionQuestions(admin: SupabaseClient, userId: string
   return ids.map((id) => publicSessionQuestion(byId.get(id)!));
 }
 
-type GradingChallenge = { id: string; difficulty: number; is_diagnostic: boolean; interaction_type: string; interaction_config: JsonObject; options: string[] };
+type GradingChallenge = { id: string; prompt: string; difficulty: number; is_diagnostic: boolean; interaction_type: string; interaction_config: JsonObject; options: string[] };
 type GradingKey = { correct_index: number | null; correct_answer: unknown; explanation: string; thinking_principle: string; application: string; error_patterns: JsonObject };
 export async function loadSessionAnswer(admin: SupabaseClient, userId: string, sessionId: string, challengeId: string, mode: ContentMode): Promise<{ challenge: GradingChallenge; key: GradingKey }> {
   const [snapshot] = await readSnapshots(admin, userId, sessionId, [challengeId], mode, true);

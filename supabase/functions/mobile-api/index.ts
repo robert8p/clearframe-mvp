@@ -1,3 +1,4 @@
+import { loadSessionQuestions, loadSessionAnswer } from "./session-content.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient, type User } from "npm:@supabase/supabase-js@2.110.8";
 import {
@@ -161,10 +162,10 @@ async function today(admin: SupabaseClient, user: User, timeZone: string) {
   if (!isAudience(profile?.audience_segment)) return { state: "onboarding", profile };
   const diagnostic = await getDiagnosticProgress(admin, user.id);
   if (!diagnostic.completedSessionKey) {
-    const { data, error } = diagnostic.challengeIds.length ? await admin.from("challenges").select("id,title,prompt,options,challenge_type,interaction_type,interaction_config,difficulty,confidence_required,audience_segments,scenario_context,scenario_category,function_tags,industry_tags,goal_tags,complexity_level").in("id", diagnostic.challengeIds).eq("is_published", true) : { data: [], error: null };
-    if (error) throw error;
-    const byId = new Map((data ?? []).map((challenge: { id: string }) => [challenge.id, challenge]));
-    return { state: "diagnostic", sessionId: diagnostic.resumableSessionKey ?? crypto.randomUUID(), answeredChallengeIds: diagnostic.answeredChallengeIds, challenges: diagnostic.challengeIds.map((id) => byId.get(id)).filter(Boolean), modeLabel: "Starting check", profile };
+    const sessionId = diagnostic.resumableSessionKey ?? crypto.randomUUID();
+    const data = await loadSessionQuestions(admin, user.id, sessionId, diagnostic.challengeIds, "diagnostic");
+    const byId = new Map(data.map((challenge) => [String(challenge.id), challenge]));
+    return { state: "diagnostic", sessionId, answeredChallengeIds: diagnostic.answeredChallengeIds, challenges: diagnostic.challengeIds.map((id) => byId.get(id)).filter(Boolean), modeLabel: "Starting check", profile };
   }
   const session = await getOrCreateDailyTrainingSession(admin, user.id, timeZone, moment);
   if (!session.id || !session.challenges.length) return { state: "unavailable", profile, message: "Cogni couldn't prepare today's training yet." };
@@ -232,12 +233,7 @@ async function submitAnswer(admin: SupabaseClient, user: User, body: unknown, ti
     if (diagnostic.resumableSessionKey && diagnostic.resumableSessionKey !== sessionId) throw new HttpError(409, "Continue the starting check you already began.");
     if (diagnostic.answeredChallengeIds.includes(challengeId)) throw new HttpError(409, "This starting-check challenge has already been submitted.");
   }
-  const [{ data: challenge, error: challengeError }, { data: key, error: keyError }] = await Promise.all([
-    admin.from("challenges").select("id,difficulty,is_diagnostic,interaction_type,interaction_config,options").eq("id", challengeId).eq("is_published", true).single(),
-    admin.from("challenge_answer_keys").select("correct_index,correct_answer,explanation,thinking_principle,application,error_patterns").eq("challenge_id", challengeId).single(),
-  ]);
-  if (challengeError || !challenge) throw new HttpError(404, "Challenge not found.");
-  if (keyError || !key) throw new HttpError(500, "This challenge cannot be graded right now.");
+  const { challenge, key } = await loadSessionAnswer(admin, user.id, sessionId, challengeId, mode);
   const type = challenge.interaction_type ?? "single_choice", options = Array.isArray(challenge.options) ? challenge.options.map(String) : [];
   const evaluation = evaluateAnswer(type, options, asObject(challenge.interaction_config), selectedIndex, input.responsePayload, key.correct_index ?? null, key.correct_answer ?? key.correct_index);
   const scoreFraction = Number(evaluation.scoreFraction.toFixed(4)), xp = Math.max(7, Math.min(12, Math.round(7 + scoreFraction * 5)));

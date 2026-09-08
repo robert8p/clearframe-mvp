@@ -1,3 +1,4 @@
+import { loadSessionQuestions } from "./session-content.ts";
 import { completedDiagnosticVersion, hasCurrentDiagnosticAnswers } from "./content-versioning.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.110.8";
 
@@ -302,9 +303,8 @@ async function loadTrainingSession(admin: SupabaseClient, userId: string, sessio
   if (assignmentError) throw assignmentError;
   if (responseError) throw responseError;
   const ids = (assignments ?? []).map((row: { challenge_id: string }) => row.challenge_id);
-  const { data, error } = ids.length ? await admin.from("challenges").select(CHALLENGE_FIELDS).in("id", ids).eq("is_published", true) : { data: [], error: null };
-  if (error) throw error;
-  const byId = new Map(((data ?? []) as Challenge[]).map((challenge) => [challenge.id, challenge]));
+  const data = await loadSessionQuestions(admin, userId, session.id, ids, "training");
+  const byId = new Map((data as unknown as Challenge[]).map((challenge) => [challenge.id, challenge]));
   return { id: session.id, sessionDate: session.session_date, status: session.status, challenges: ids.map((id) => byId.get(id)).filter(Boolean) as Challenge[], answeredChallengeIds: (responses ?? []).map((row: { challenge_id: string }) => row.challenge_id) } satisfies DailyTrainingSession;
 }
 
@@ -508,9 +508,8 @@ async function loadPractice(admin: SupabaseClient, userId: string, sessionId: st
   if (assignmentError) throw assignmentError;
   if (responseError) throw responseError;
   const ids = (assignments ?? []).map((row: { challenge_id: string }) => row.challenge_id);
-  const { data, error } = ids.length ? await admin.from("challenges").select(CHALLENGE_FIELDS).in("id", ids).eq("is_published", true) : { data: [], error: null };
-  if (error) throw error;
-  const byId = new Map(((data ?? []) as Challenge[]).map((challenge) => [challenge.id, challenge]));
+  const data = await loadSessionQuestions(admin, userId, sessionId, ids, "practice");
+  const byId = new Map((data as unknown as Challenge[]).map((challenge) => [challenge.id, challenge]));
   return { id: sessionId, challenges: ids.map((id) => byId.get(id)).filter(Boolean) as Challenge[], answeredChallengeIds: (responses ?? []).map((row: { challenge_id: string }) => row.challenge_id) };
 }
 export async function getOrCreatePracticeSession(admin: SupabaseClient, userId: string, skillSlug: string, moment: ContextMoment, count = 3): Promise<PracticeSession | null> {

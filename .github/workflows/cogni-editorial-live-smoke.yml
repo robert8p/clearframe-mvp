@@ -1,0 +1,99 @@
+name: Cogni editorial live API verification
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-editorial-live-smoke.yml]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Verify live learning without using or changing a real learner account
+      run: |
+        python3 - <<'PY'
+        import json,secrets,urllib.request,urllib.error,os,time
+        from pathlib import Path
+        base='https://dhklfrqhsmofqrawfdjz.supabase.co'
+        key='sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b'
+        email=f"cogni.editorial.qa.{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}.{secrets.token_hex(4)}@example.com"
+        password='Cg'+secrets.token_hex(24)+'9a'
+        token=None;report={'checks':{},'test_user_removed':False};out=Path('/tmp/cogni-editorial-smoke');out.mkdir()
+        def post(path,payload,bearer=None):
+          headers={'apikey':key,'Content-Type':'application/json'}
+          if bearer:headers['Authorization']='Bearer '+bearer
+          req=urllib.request.Request(base+path,data=json.dumps(payload).encode(),headers=headers,method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=60) as response:return response.status,json.load(response)
+          except urllib.error.HTTPError as e:
+            try:body=json.load(e)
+            except Exception:body={}
+            return e.code,body
+        def api(path,method='GET',body=None):return post('/functions/v1/mobile-api',{'path':path,'method':method,'body':body,'context':{'timeZone':'Europe/London'}},token)
+        def check(name,condition):
+          report['checks'][name]=bool(condition)
+          if not condition:raise AssertionError(name)
+        def safe_question(q):
+          assert isinstance(q.get('prompt'),str) and len(q['prompt'])>10 and len(q['options'])>=2
+          assert not any(k in q for k in ('answer_key','correctIndex','correctAnswer','correct_index','correct_answer','explanation'))
+          assert not any('correct' in k.lower() or 'answer' in k.lower() for k in (q.get('interaction_config') or {}))
+        def arbitrary_answer(q,sid,mode):
+          b={'challengeId':q['id'],'sessionId':sid,'mode':mode,'confidence':50,'responseTimeMs':8000}
+          typ=q['interaction_type'];cfg=q.get('interaction_config') or {}
+          if typ in ('single_choice','triage'):b['selectedIndex']=0
+          elif typ=='multi_select':b['responsePayload']=list(range(int(cfg['requiredSelections'])))
+          elif typ=='ranking':b['responsePayload']=list(range(len(q['options'])))
+          elif typ=='classification':b['responsePayload']={str(i):cfg['categories'][0]['id'] for i in range(len(q['options']))}
+          else:raise AssertionError('Unknown format')
+          return b
+        try:
+          status,auth=post('/auth/v1/signup',{'email':email,'password':password,'data':{'full_name':'Cogni Editorial QA'}})
+          check('temporary_signup',status==200)
+          token=auth.get('access_token')
+          status,auth=post('/auth/v1/token?grant_type=password',{'email':email,'password':password})
+          check('temporary_login',status==200 and bool(auth.get('access_token')));token=auth['access_token']
+          status,_=api('/api/mobile/profile','POST',{'fullName':'Cogni Editorial QA','audienceSegment':'casual','functionArea':'everyday_decisions','primaryGoal':'think_more_clearly'})
+          check('profile_setup',status==200)
+          status,today=api('/api/mobile/today');check('starting_check_load',status==200 and today.get('state')=='diagnostic' and len(today.get('challenges',[]))==12)
+          for q in today['challenges']:safe_question(q)
+          check('answer_keys_not_exposed',True)
+          sid=today['sessionId'];first=today['challenges'][0];body=arbitrary_answer(first,sid,'diagnostic')
+          status,answer=api('/api/mobile/answer','POST',body)
+          check('saved_question_grades',status==200 and isinstance(answer.get('correct'),bool) and len(answer.get('explanation',''))>20 and isinstance(answer.get('correctIndex'),int))
+          status,_=api('/api/mobile/answer','POST',body);check('duplicate_answer_rejected',status==409)
+          status,resume=api('/api/mobile/today');check('starting_check_resumes',status==200 and resume.get('sessionId')==sid and first['id'] in resume.get('answeredChallengeIds',[]))
+          old={q['id']:(q['prompt'],q['options']) for q in today['challenges']}
+          check('saved_content_stable',all(old[q['id']]==(q['prompt'],q['options']) for q in resume['challenges']))
+          for q in today['challenges'][1:]:
+            status,answer=api('/api/mobile/answer','POST',arbitrary_answer(q,sid,'diagnostic'))
+            check('diagnostic_answer_'+str(len([k for k in report['checks'] if k.startswith('diagnostic_answer_')])+1),status==200 and len(answer.get('explanation',''))>20)
+          status,today=api('/api/mobile/today');check('diagnostic_completion_preserved',status==200 and today.get('state') in ('lesson','training','complete'))
+          session=today['session'];check('training_session_loaded',bool(session.get('id')) and bool(session.get('challenges')))
+          for q in session['challenges']:safe_question(q)
+          first=session['challenges'][0]
+          status,answer=api('/api/mobile/answer','POST',arbitrary_answer(first,session['id'],'training'))
+          check('training_snapshot_grades',status==200 and isinstance(answer.get('correct'),bool) and len(answer.get('explanation',''))>20)
+          status,result=post('/rest/v1/rpc/cogni_session_content_v1',{'p_user_id':auth['user']['id'],'p_session_id':sid,'p_challenge_ids':[first['id']],'p_mode':'diagnostic','p_legacy_if_missing':False},token)
+          check('snapshot_keys_inaccessible_to_learner',status in (401,403,404))
+          report['verified_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime());report['result']='passed'
+        finally:
+          if token:
+            for attempt in range(3):
+              status,_=api('/api/mobile/account','DELETE')
+              if status==200:break
+              time.sleep(2)
+            report['test_user_removed']=status==200
+            status,auth2=post('/auth/v1/token?grant_type=password',{'email':email,'password':password})
+            report['deleted_user_cannot_login']=status==400 and not auth2.get('access_token')
+          (out/'verification.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report))
+          if token and not report['test_user_removed']:raise AssertionError('Temporary account cleanup failed')
+        PY
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cogni-editorial-live-verification-${{ github.run_id }}-${{ github.run_attempt }}
+        path: /tmp/cogni-editorial-smoke/verification.json
+        if-no-files-found: error
+        retention-days: 14

@@ -1,0 +1,35 @@
+name: Cogni resumed content review snapshot
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-content-review-resume.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+    - name: Retrieve owner-encrypted content snapshot
+      run: |
+        python3 - <<'PY'
+        import re,json,urllib.request
+        from pathlib import Path
+        source=Path('.github/workflows/cogni-content-snapshot.yml').read_text()
+        key=re.search(r'SUPABASE_ANON_JWT: ([A-Za-z0-9_.-]+)',source).group(1)
+        request=urllib.request.Request('https://dhklfrqhsmofqrawfdjz.supabase.co/functions/v1/cogni-editorial-export',headers={'apikey':key,'Authorization':'Bearer '+key})
+        with urllib.request.urlopen(request,timeout=120) as response: payload=json.load(response)
+        assert payload['algorithm']=='RSA-OAEP-256+A256GCM+gzip'
+        assert set(payload)=={'version','algorithm','iv','wrappedKey','ciphertext'}
+        Path('/tmp/cogni-content-encrypted.json').write_text(json.dumps(payload))
+        print('Encrypted editorial snapshot retrieved; no user tables or plaintext answer keys exported.')
+        PY
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cogni-content-review-snapshot-${{ github.run_attempt }}
+        path: /tmp/cogni-content-encrypted.json
+        retention-days: 1
+        if-no-files-found: error

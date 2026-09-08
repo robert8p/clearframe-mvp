@@ -27,6 +27,10 @@ patch('mobile/components/question-runner.tsx',[
 ])
 patch('mobile/app/onboarding.tsx', [('selectedAudience==="casual"','selectedAudience === "casual"')])
 patch('mobile/app/(tabs)/_layout.tsx', [('tabBarHideOnKeyboard:true','tabBarHideOnKeyboard: true')])
+patch('mobile/scripts/monetization-audit.mjs',[
+ ('appConfig.expo?.version !== "0.4.5"','appConfig.expo?.version !== "0.5.0"'),
+ ('Cogni monetisation candidate must match the 0.4.5 preview version.','Cogni monetisation candidate must match the 0.5.0 visual release version.'),
+])
 old=root/'.github/workflows/cogni-050-release.yml'
 if old.exists(): old.unlink()
 
@@ -36,5 +40,5 @@ if subprocess.run(['git','diff','--quiet'],cwd=root).returncode:
     subprocess.run(['git','config','user.name','github-actions[bot]'],cwd=root,check=True)
     subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],cwd=root,check=True)
     subprocess.run(['git','add','-A'],cwd=root,check=True)
-    subprocess.run(['git','commit','-m','fix(mobile): preserve exact multi-select submission invariant'],cwd=root,check=True)
+    subprocess.run(['git','commit','-m','fix(mobile): align release audits with Cogni 0.5.0'],cwd=root,check=True)
     subprocess.run(['git','push','origin','HEAD:refs/heads/release/cogni-0.5.0'],cwd=root,check=True)

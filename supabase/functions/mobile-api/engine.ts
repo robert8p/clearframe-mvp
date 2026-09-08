@@ -1,3 +1,4 @@
+import { completedDiagnosticVersion, hasCurrentDiagnosticAnswers } from "./content-versioning.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.110.8";
 
 export const AUDIENCES = [
@@ -246,7 +247,7 @@ export async function profilePayload(admin: SupabaseClient, userId: string, emai
   return { profile: { ...profile, email }, skillScores: skillScores ?? [], summary: { answers: countResult.count ?? 0, averageScore } };
 }
 
-type DiagnosticRow = { id: string; sort_order: number; diagnostic_role: string | null; audience_segments: string[] | null };
+type DiagnosticRow = { id: string; sort_order: number; diagnostic_role: string | null; audience_segments: string[] | null; is_published: boolean; interaction_config?: Record<string, unknown> | null };
 type DiagnosticResponse = { challenge_id: string; session_key: string | null; created_at: string };
 export type DiagnosticProgress = { challengeIds: string[]; challengeCount: number; completedSessionKey: string | null; resumableSessionKey: string | null; answeredChallengeIds: string[] };
 function buildDiagnosticIds(rows: DiagnosticRow[], audience: string | null) {
@@ -262,13 +263,13 @@ function legacyDiagnosticIds(rows: DiagnosticRow[]) { return rows.filter((row) =
 export async function getDiagnosticProgress(admin: SupabaseClient, userId: string, knownChallengeIds?: string[]): Promise<DiagnosticProgress> {
   const [{ data: profile, error: profileError }, { data: definition, error: definitionError }] = await Promise.all([
     admin.from("profiles").select("audience_segment").eq("id", userId).single(),
-    admin.from("challenges").select("id,sort_order,diagnostic_role,audience_segments").eq("is_published", true).eq("is_diagnostic", true).order("sort_order"),
+    admin.from("challenges").select("id,sort_order,diagnostic_role,audience_segments,is_published,interaction_config").eq("is_diagnostic", true).order("sort_order"),
   ]);
   if (profileError) throw profileError;
   if (definitionError) throw definitionError;
   const rows = (definition ?? []) as DiagnosticRow[];
   const allIds = rows.map((row) => row.id);
-  let currentIds = knownChallengeIds?.length ? knownChallengeIds : buildDiagnosticIds(rows, profile?.audience_segment ?? null);
+  let currentIds = knownChallengeIds?.length ? knownChallengeIds : buildDiagnosticIds(rows.filter((row) => row.is_published), profile?.audience_segment ?? null);
   if (!currentIds.length) return { challengeIds: [], challengeCount: 0, completedSessionKey: null, resumableSessionKey: null, answeredChallengeIds: [] };
   const { data, error } = allIds.length ? await admin.from("user_responses").select("challenge_id,session_key,created_at").eq("user_id", userId).in("challenge_id", allIds).order("created_at", { ascending: false }).limit(1200) : { data: [], error: null };
   if (error) throw error;
@@ -282,9 +283,9 @@ export async function getDiagnosticProgress(admin: SupabaseClient, userId: strin
     grouped.set(key, existing);
   }
   const sessions = [...grouped.entries()].map(([sessionKey, value]) => ({ sessionKey, answeredChallengeIds: [...value.answered], latestAt: value.latestAt })).sort((a, b) => b.latestAt.localeCompare(a.latestAt));
-  const completed = sessions.find((session) => session.answeredChallengeIds.length >= 12) ?? null;
+  const completed = sessions.find((session) => completedDiagnosticVersion(session.answeredChallengeIds, rows) !== null) ?? null;
   if (completed) return { challengeIds: currentIds, challengeCount: currentIds.length, completedSessionKey: completed.sessionKey, resumableSessionKey: null, answeredChallengeIds: completed.answeredChallengeIds };
-  const partial = sessions.find((session) => session.answeredChallengeIds.length > 0) ?? null;
+  const partial = sessions.find((session) => hasCurrentDiagnosticAnswers(session.answeredChallengeIds, currentIds)) ?? null;
   if (partial && !knownChallengeIds) {
     const legacy = new Set(legacyDiagnosticIds(rows));
     if (partial.answeredChallengeIds.some((id) => legacy.has(id) && !currentIds.includes(id))) currentIds = legacyDiagnosticIds(rows);

@@ -1,0 +1,66 @@
+name: Cogni content compatibility
+on:
+  push:
+    branches: [release/cogni-content-clarity]
+    paths: [.github/workflows/cogni-content-compatibility.yml]
+permissions:
+  contents: write
+concurrency:
+  group: cogni-content-compatibility
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/release/cogni-content-clarity'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: release/cogni-content-clarity
+    - uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+    - name: Apply bounded compatibility patch to the verified engine
+      run: |
+        python3 - <<'PY'
+        from pathlib import Path
+        import subprocess
+        p=Path('supabase/functions/mobile-api/engine.ts')
+        s=p.read_text()
+        assert subprocess.check_output(['git','hash-object',str(p)],text=True).strip()=='426800d4dfca79451ae7f9de323d21888b662750','Engine changed; require a fresh review'
+        s='import { completedDiagnosticVersion, hasCurrentDiagnosticAnswers } from "./content-versioning.ts";\n'+s
+        changes=[
+          ('diagnostic_role: string | null; audience_segments: string[] | null };','diagnostic_role: string | null; audience_segments: string[] | null; is_published: boolean; interaction_config?: Record<string, unknown> | null };'),
+          ('.select("id,sort_order,diagnostic_role,audience_segments").eq("is_published", true).eq("is_diagnostic", true)', '.select("id,sort_order,diagnostic_role,audience_segments,is_published,interaction_config").eq("is_diagnostic", true)'),
+          ('buildDiagnosticIds(rows, profile?.audience_segment ?? null)', 'buildDiagnosticIds(rows.filter((row) => row.is_published), profile?.audience_segment ?? null)'),
+          ('sessions.find((session) => session.answeredChallengeIds.length >= 12)', 'sessions.find((session) => completedDiagnosticVersion(session.answeredChallengeIds, rows) !== null)'),
+          ('sessions.find((session) => session.answeredChallengeIds.length > 0)', 'sessions.find((session) => hasCurrentDiagnosticAnswers(session.answeredChallengeIds, currentIds))'),
+        ]
+        for old,new in changes:
+          assert s.count(old)==1, f'Unexpected patch anchor count: {old}'
+          s=s.replace(old,new,1)
+        p.write_text(s)
+        PY
+    - name: Type-check live API and run server regression tests
+      run: |
+        deno check --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/index.ts
+        deno test --config supabase/functions/mobile-api/deno.json --node-modules-dir=auto supabase/functions/mobile-api/engine_test.ts supabase/functions/mobile-api/monetization_test.ts supabase/functions/mobile-api/content-versioning_test.ts
+    - name: Commit only the tested compatibility change
+      run: |
+        set -euo pipefail
+        test "$(git diff --name-only | wc -l)" -eq 1
+        test "$(git diff --name-only)" = supabase/functions/mobile-api/engine.ts
+        git config user.name 'github-actions[bot]'
+        git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+        git add supabase/functions/mobile-api/engine.ts
+        git commit -m 'fix(content): retain completed initial checks when retiring legacy questions'
+        git push origin HEAD:release/cogni-content-clarity
+        git rev-parse HEAD | tee /tmp/cogni-content-compatible-commit.txt
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cogni-content-compatible-source-${{ github.run_attempt }}
+        path: |
+          /tmp/cogni-content-compatible-commit.txt
+          supabase/functions/mobile-api/
+        if-no-files-found: error
+        retention-days: 14

@@ -1,57 +1,53 @@
-import React, { useState } from "react";
-import { Image, View, type ViewStyle } from "react-native";
+import React from "react";
+import { Image, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { colors } from "@/lib/theme";
+import { colors, radius } from "@/lib/theme";
 
-// Decorative layers never join the accessibility tree or intercept a gesture.
-const decorative = { accessible: false, importantForAccessibility: "no-hide-descendants" as const, pointerEvents: "none" as const };
-const stars = [[.08,.12],[.18,.26],[.29,.1],[.36,.38],[.48,.13],[.56,.28],[.64,.1],[.78,.2],[.91,.09],[.94,.36],[.14,.44],[.7,.39],[.4,.06],[.84,.46]];
-function Triangle({ x, y, w, h, fill }: {x:number;y:number;w:number;h:number;fill:string}) {
-  return <View style={{position:"absolute",left:x,top:y,width:0,height:0,borderLeftWidth:w/2,borderRightWidth:w/2,borderBottomWidth:h,borderLeftColor:"transparent",borderRightColor:"transparent",borderBottomColor:fill}} />;
+const decorative={accessible:false,importantForAccessibility:"no-hide-descendants" as const,pointerEvents:"none" as const};
+
+/** Portrait artwork taken from the approved concept and bundled for deterministic offline rendering. */
+export function HeroArtwork({height=340,style}:{height?:number;style?:StyleProp<ImageStyle>}) {
+  return <Image {...decorative} source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={[{width:"100%",height},style]}/>;
 }
-/** Crisp native illustration. No network, canvas, video, autoplay or new native library. */
-export function MountainScene({ height = 182 }: { height?: number }) {
-  const [width,setWidth]=useState(360);
-  const horizon=height*.78;
-  return <View {...decorative} onLayout={e=>setWidth(e.nativeEvent.layout.width)} style={{height,width:"100%",overflow:"hidden",backgroundColor:"#1b2858"}}>
-    <LinearGradient colors={["#111d49","#4b4388","#c798b2","#527ea2"]} style={{position:"absolute",inset:0}} />
-    <View style={{position:"absolute",right:width*.12,top:height*.15,width:48,height:48,borderRadius:24,backgroundColor:"#ccdfff",boxShadow:"0 0 32px rgba(159,202,255,.45)"}} />
-    <View style={{position:"absolute",right:width*.12-6,top:height*.15-5,width:46,height:46,borderRadius:24,backgroundColor:"#414478"}} />
-    {stars.map(([x,y],i)=><View key={i} style={{position:"absolute",left:width*x,top:height*y,width:i%3?1.5:2.5,height:i%3?1.5:2.5,borderRadius:2,backgroundColor:i%2?"#c7d6ff":"#f6e3ff"}} />)}
-    {[[-.12,.51,.54,.34,"#635e9d"],[.23,.32,.52,.5,"#756ca9"],[.54,.46,.65,.4,"#8a729f"]].map(([x,y,w,h,fill],i)=><Triangle key={`far-${i}`} x={Number(x)*width} y={Number(y)*height} w={Number(w)*width} h={Number(h)*height} fill={String(fill)} />)}
-    <Triangle x={width*.33} y={height*.32} w={width*.22} h={height*.24} fill="#c4badb" />
-    <Triangle x={width*.02} y={height*.52} w={width*.59} h={height*.36} fill="#394c86" />
-    <Triangle x={width*.34} y={height*.49} w={width*.56} h={height*.42} fill="#405785" />
-    <Triangle x={width*.05} y={height*.64} w={width*.52} h={height*.3} fill="#203e66" />
-    <LinearGradient colors={["#375a87","#102b4a"]} style={{position:"absolute",top:horizon,left:0,right:0,bottom:0}} />
-    {[.08,.25,.38,.52,.72].map((x,i)=><View key={`water-${i}`} style={{position:"absolute",left:width*x,top:horizon+6+i*5,height:1,width:width*(.16+i*.018),backgroundColor:"rgba(143,211,255,.28)"}} />)}
-    {[.01,.055,.095,.15,.81,.86,.9,.95,.99].map((x,i)=>{
-      const treeH=height*(.21+(i%3)*.045), treeW=treeH*.48, y=horizon-treeH+9;
-      return <View key={`pine-${i}`} style={{position:"absolute",left:width*x,top:y,width:treeW,height:treeH+12}}>
-        <Triangle x={0} y={treeH*.34} w={treeW} h={treeH*.65} fill="#10293d" />
-        <Triangle x={treeW*.12} y={treeH*.17} w={treeW*.76} h={treeH*.58} fill="#12304a" />
-        <Triangle x={treeW*.25} y={0} w={treeW*.5} h={treeH*.5} fill="#15324a" />
-        <View style={{position:"absolute",left:treeW*.46,top:treeH*.65,width:2,height:treeH*.45,backgroundColor:"#0d263c"}} />
-      </View>;
-    })}
-    <LinearGradient colors={["transparent","#0e1a35"]} style={{position:"absolute",left:0,right:0,bottom:0,height:height*.35}} />
-  </View>;
+
+/** Atmospheric concept-derived artwork for editorial panels and image-led cards. */
+export function LandscapeArtwork({height=188}:{height?:number}) {
+  return <View {...decorative} style={{height,width:"100%",overflow:"hidden",backgroundColor:colors.bgRaised}}><Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:"100%",height}}/><LinearGradient colors={["rgba(6,13,31,.04)","rgba(7,16,34,.78)"]} locations={[.25,1]} style={{position:"absolute",inset:0}}/></View>;
 }
-/** Precomposed PNG keeps the approved portrait and fades without overlapping native gradients. */
+
+/** Compatibility export: old cards that ask for a mountain scene now receive real artwork. */
+export function MountainScene({height=182}:{height?:number}) { return <LandscapeArtwork height={height}/>; }
+
 export function WelcomeArtwork() {
-  return <View {...decorative} style={{position:"absolute",top:0,left:0,right:0,height:310,overflow:"hidden"}}>
-    <Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:"100%",height:310}} />
-  </View>;
+  return <View {...decorative} style={{position:"absolute",inset:0,overflow:"hidden"}}><HeroArtwork height={470}/><LinearGradient colors={["rgba(4,9,22,.04)","rgba(7,16,34,.10)","#071022"]} locations={[0,.48,1]} style={{position:"absolute",inset:0}}/></View>;
 }
-export type MotifKind = "perspective" | "reasoning" | "decisions" | "growth";
-export function SkillMotif({ kind = "reasoning", size = 50 }: {kind?:MotifKind;size?:number}) {
+
+export type MotifKind="perspective"|"reasoning"|"decisions"|"growth";
+export function SkillMotif({kind="reasoning",size=50}:{kind?:MotifKind;size?:number}) {
   const tint=kind==="growth"?colors.green:kind==="decisions"?colors.amber:kind==="perspective"?colors.cyan:colors.purple;
-  const line:ViewStyle={position:"absolute",borderColor:tint,borderWidth:1.7};
-  return <LinearGradient {...decorative} colors={kind==="growth"?["#234c50","#12293c"]:kind==="decisions"?["#4b3e58","#212646"]:["#30386c","#152641"]} start={{x:0,y:0}} end={{x:1,y:1}} style={{width:size,height:size,borderRadius:size*.28,borderWidth:1,borderColor:"rgba(162,180,255,.3)",alignItems:"center",justifyContent:"center"}}>
-    {kind==="perspective" ? <><View style={{...line,width:size*.52,height:size*.52,borderRadius:size*.26}} /><View style={{...line,width:size*.2,height:size*.2,borderRadius:size*.1,backgroundColor:tint}} /></> : kind==="growth" ? <><View style={{...line,width:size*.34,height:size*.52,borderTopLeftRadius:size*.32,borderBottomRightRadius:size*.32,transform:[{rotate:"30deg"}],backgroundColor:"rgba(120,231,189,.13)"}} /><View style={{width:1.7,height:size*.42,backgroundColor:tint,transform:[{rotate:"30deg"}]}} /></> : kind==="decisions" ? <><View style={{...line,width:size*.56,height:size*.56,borderRadius:size*.28}} /><View style={{width:0,height:0,borderLeftWidth:size*.075,borderRightWidth:size*.075,borderBottomWidth:size*.34,borderLeftColor:"transparent",borderRightColor:"transparent",borderBottomColor:tint,transform:[{rotate:"35deg"}]}} /></> : <><View style={{...line,left:size*.21,top:size*.25,width:size*.29,height:size*.46,borderRadius:size*.15}} /><View style={{...line,left:size*.5,top:size*.25,width:size*.29,height:size*.46,borderRadius:size*.15}} /><View style={{width:size*.28,height:1.5,backgroundColor:tint,transform:[{rotate:"-30deg"}]}} /></>}
+  const bg=kind==="growth"?["rgba(38,93,90,.86)","rgba(16,42,56,.90)"]:kind==="decisions"?["rgba(88,67,92,.86)","rgba(35,39,69,.90)"]:["rgba(47,60,111,.90)","rgba(18,42,69,.92)"];
+  const line:ViewStyle={position:"absolute",borderColor:tint,borderWidth:1.6};
+  return <LinearGradient {...decorative} colors={bg as [string,string]} start={{x:0,y:0}} end={{x:1,y:1}} style={{width:size,height:size,borderRadius:size*.29,borderWidth:1,borderColor:"rgba(194,214,245,.20)",alignItems:"center",justifyContent:"center"}}>
+    {kind==="perspective"?<><View style={{...line,width:size*.50,height:size*.32,borderRadius:size*.28,transform:[{rotate:"-8deg"}]}}/><View style={{width:size*.12,height:size*.12,borderRadius:size*.06,backgroundColor:tint}}/></>:kind==="growth"?<><View style={{...line,width:size*.31,height:size*.49,borderTopLeftRadius:size*.28,borderBottomRightRadius:size*.28,transform:[{rotate:"32deg"}],backgroundColor:"rgba(126,230,185,.10)"}}/><View style={{width:1.6,height:size*.38,backgroundColor:tint,transform:[{rotate:"32deg"}]}}/></>:kind==="decisions"?<><View style={{...line,width:size*.50,height:size*.50,borderRadius:size*.25}}/><View style={{width:0,height:0,borderLeftWidth:size*.06,borderRightWidth:size*.06,borderBottomWidth:size*.28,borderLeftColor:"transparent",borderRightColor:"transparent",borderBottomColor:tint,transform:[{rotate:"35deg"}]}}/></>:<><View style={{...line,left:size*.22,top:size*.25,width:size*.25,height:size*.44,borderRadius:size*.13}}/><View style={{...line,right:size*.22,top:size*.25,width:size*.25,height:size*.44,borderRadius:size*.13}}/><View style={{width:size*.25,height:1.5,backgroundColor:tint,transform:[{rotate:"-30deg"}]}}/></>}
   </LinearGradient>;
 }
-export function motifForSkill(name:string):MotifKind {
-  const value=name.toLowerCase();
-  return /decision|risk|judg/.test(value)?"decisions":/perspective|bias|evidence/.test(value)?"perspective":/growth|creative|adapt|reflect/.test(value)?"growth":"reasoning";
+
+export function motifForSkill(name:string):MotifKind {const v=name.toLowerCase();return /decision|risk|judg/.test(v)?"decisions":/perspective|bias|evidence/.test(v)?"perspective":/growth|creative|adapt|reflect|mindset/.test(v)?"growth":"reasoning";}
+
+/** Small image-led thumbnail for saved ideas/editorial rows. */
+export function InsightArtwork({kind="perspective",size=58}:{kind?:MotifKind;size?:number}) {
+  return <View {...decorative} style={{width:size,height:size,borderRadius:radius.md,overflow:"hidden",backgroundColor:colors.panel2}}><Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:size,height:size,transform:[{scale:kind==="growth"?1.35:kind==="decisions"?1.18:1.5}]}}/><LinearGradient colors={kind==="growth"?["rgba(44,159,128,.04)","rgba(18,57,58,.44)"]:kind==="decisions"?["rgba(213,158,92,.03)","rgba(57,41,70,.45)"]:["rgba(63,169,219,.02)","rgba(21,41,76,.46)"]} style={{position:"absolute",inset:0}}/></View>;
+}
+
+export type CogniIconName="home"|"skills"|"train"|"progress"|"profile"|"bookmark"|"arrow"|"spark";
+export function CogniIcon({name,size=22,color=colors.muted}:{name:CogniIconName;size?:number;color?:string}) {
+  const stroke=Math.max(1.5,size*.085);const base={borderColor:color,borderWidth:stroke} as const;
+  if(name==="progress") return <View {...decorative} style={{width:size,height:size,flexDirection:"row",alignItems:"flex-end",justifyContent:"center",gap:size*.11}}>{[.38,.64,.9].map((h,i)=><View key={i} style={{width:size*.16,height:size*h,borderRadius:size*.08,backgroundColor:color}}/>)}</View>;
+  if(name==="profile") return <View {...decorative} style={{width:size,height:size,alignItems:"center"}}><View style={{width:size*.36,height:size*.36,borderRadius:size*.18,...base}}/><View style={{marginTop:size*.1,width:size*.72,height:size*.36,borderTopLeftRadius:size*.38,borderTopRightRadius:size*.38,...base,borderBottomWidth:0}}/></View>;
+  if(name==="skills") return <View {...decorative} style={{width:size,height:size,alignItems:"center",justifyContent:"center"}}><View style={{width:size*.62,height:size*.62,borderRadius:size*.16,...base,transform:[{rotate:"45deg"}]}}/><View style={{position:"absolute",width:size*.16,height:size*.16,borderRadius:size*.08,backgroundColor:color}}/></View>;
+  if(name==="train") return <View {...decorative} style={{width:size,height:size,alignItems:"center",justifyContent:"center"}}><View style={{width:size*.72,height:size*.72,borderRadius:size*.36,...base,alignItems:"center",justifyContent:"center"}}><View style={{width:size*.22,height:size*.22,borderRadius:size*.11,backgroundColor:color}}/></View></View>;
+  if(name==="bookmark") return <View {...decorative} style={{width:size*.58,height:size*.75,...base,borderRadius:size*.08,borderBottomWidth:0,transform:[{translateY:size*.05}]}}><View style={{position:"absolute",bottom:-size*.13,left:size*.08,width:size*.29,height:size*.29,borderLeftWidth:stroke,borderBottomWidth:stroke,borderColor:color,transform:[{rotate:"-45deg"}]}}/></View>;
+  if(name==="arrow") return <View {...decorative} style={{width:size,height:size,alignItems:"center",justifyContent:"center"}}><View style={{width:size*.42,height:size*.42,borderTopWidth:stroke,borderRightWidth:stroke,borderColor:color,transform:[{rotate:"45deg"}],marginLeft:-size*.16}}/></View>;
+  if(name==="spark") return <View {...decorative} style={{width:size,height:size,alignItems:"center",justifyContent:"center"}}><View style={{width:stroke,height:size*.72,backgroundColor:color,borderRadius:stroke}}/><View style={{position:"absolute",width:size*.72,height:stroke,backgroundColor:color,borderRadius:stroke}}/></View>;
+  return <View {...decorative} style={{width:size,height:size,alignItems:"center",justifyContent:"center"}}><View style={{position:"absolute",top:size*.15,width:size*.50,height:size*.50,borderTopWidth:stroke,borderLeftWidth:stroke,borderColor:color,transform:[{rotate:"45deg"}],borderTopLeftRadius:size*.06}}/><View style={{position:"absolute",bottom:size*.12,width:size*.60,height:size*.48,...base,borderTopWidth:0,borderBottomLeftRadius:size*.08,borderBottomRightRadius:size*.08}}/></View>;
 }

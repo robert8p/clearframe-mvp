@@ -1,24 +1,66 @@
-/** Cogni Nightfall. Bright edges, deep reading surfaces, never bright text backgrounds. */
+import { Platform } from "react-native";
+
+/**
+ * Cogni 0.5 — Aurora Editorial.
+ * The visual system favours deep reading surfaces, cinematic imagery and a small
+ * number of luminous moments rather than neon borders around every component.
+ */
 export const colors = {
-  bg: "#070c20", bg2: "#0b1430",
-  panel: "#101c36", panel2: "#172644", panel3: "#203052",
-  line: "#344569", lineStrong: "#8097bb",
-  text: "#f5f7ff", muted: "#c0cce3", soft: "#b0bfd9",
-  cyan: "#6eeaff", blue: "#89b4ff", violet: "#8874ff", purple: "#c4b5ff",
-  magenta: "#e997ff", green: "#78e7bd", pink: "#ffaccd",
-  amber: "#ffd18e", danger: "#ffb0c9", white: "#ffffff",
+  bg: "#071022",
+  bgDeep: "#040916",
+  bgRaised: "#0b1730",
+  panel: "#0e1c36",
+  panel2: "#132440",
+  panel3: "#1a2f4f",
+  panelQuiet: "rgba(15,31,57,.72)",
+  line: "rgba(150,178,222,.17)",
+  lineStrong: "rgba(174,201,239,.34)",
+  text: "#F7F9FF",
+  muted: "#BBC8E1",
+  soft: "#8FA1C0",
+  faint: "#6C7F9F",
+  cyan: "#6DEBFF",
+  aqua: "#53D4DC",
+  blue: "#79A9FF",
+  violet: "#8B78FF",
+  purple: "#B8A8FF",
+  magenta: "#DD9EFF",
+  green: "#7EE6B9",
+  pink: "#FFAAC8",
+  amber: "#FFD193",
+  danger: "#FFADC7",
+  white: "#FFFFFF",
+  ink: "#071022",
 } as const;
+
 export const gradients = {
-  // White button labels meet 4.5:1 at every stop and along the full blend.
-  primary: ["#09617e", "#304bc4", "#6242bd"] as const,
-  orb: [colors.cyan, "#527dff", colors.violet, colors.magenta] as const,
-  card: ["#1c2c51", "#101a35"] as const,
-  cardBright: ["#28396a", "#172143"] as const,
-  success: ["#174b45", "#102d36"] as const,
-  warm: ["#ffcf88", "#f6a798"] as const,
-};
-export const glow = {
-  cyan: "0 3px 24px rgba(60,207,255,0.18)",
-  violet: "0 8px 30px rgba(117,83,255,0.22)",
-  magenta: "0 0 28px rgba(204,141,255,0.16)",
+  primary: ["#08BFE8", "#3E6CFF", "#8765F2"] as const,
+  hero: ["rgba(7,16,34,0)", "rgba(7,16,34,.24)", "#071022"] as const,
+  ambient: ["rgba(78,108,221,.30)", "rgba(42,152,193,.13)", "rgba(7,16,34,0)"] as const,
+  panel: ["rgba(27,48,85,.96)", "rgba(12,27,52,.98)"] as const,
+  panelQuiet: ["rgba(20,43,74,.86)", "rgba(10,24,45,.92)"] as const,
+  success: ["rgba(29,100,84,.68)", "rgba(14,49,54,.82)"] as const,
+  warm: ["#F6B78A", "#C790F6"] as const,
+  progress: ["#66EEFF", "#72A5FF", "#A37DFF"] as const,
 } as const;
+
+export const glow = {
+  cyan: "0 8px 30px rgba(74,214,255,0.18)",
+  violet: "0 12px 36px rgba(126,92,255,0.18)",
+  hero: "0 18px 48px rgba(0,0,0,.35)",
+} as const;
+
+const android = Platform.OS === "android";
+export const typography = {
+  display: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "700" as const, letterSpacing: -1.2 },
+  title: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "700" as const, letterSpacing: -.55 },
+  heading: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.25 },
+  body: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "400" as const, letterSpacing: 0 },
+  bodyMedium: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "500" as const, letterSpacing: 0 },
+  label: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: .2 },
+  eyebrow: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 1.55 },
+  metric: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.8 },
+} as const;
+
+export const radius = { sm: 12, md: 18, lg: 24, xl: 30, pill: 999 } as const;
+export const space = { xs: 6, sm: 10, md: 16, lg: 22, xl: 30, xxl: 40 } as const;

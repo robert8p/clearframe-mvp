@@ -3,26 +3,17 @@
     "name": "Cogni",
     "slug": "cogni",
     "owner": "cogniapp",
-    "version": "0.4.5",
+    "version": "0.5.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#070c20",
+    "backgroundColor": "#071022",
     "scheme": "cogni",
-    "splash": {
-      "backgroundColor": "#070c20"
-    },
-    "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "app.gocogni.cogni"
-    },
+    "splash": { "backgroundColor": "#071022" },
+    "ios": { "supportsTablet": false, "bundleIdentifier": "app.gocogni.cogni" },
     "android": {
       "package": "app.gocogni.cogni",
-      "permissions": [
-        "com.android.vending.BILLING"
-      ],
-      "adaptiveIcon": {
-        "backgroundColor": "#070b19"
-      },
+      "permissions": ["com.android.vending.BILLING"],
+      "adaptiveIcon": { "backgroundColor": "#071022" },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false,
@@ -38,32 +29,12 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-secure-store",
-        {
-          "configureAndroidBackup": true
-        }
-      ],
-      [
-        "expo-audio",
-        {
-          "microphonePermission": false,
-          "recordAudioAndroid": false,
-          "enableBackgroundPlayback": false,
-          "enableBackgroundRecording": false
-        }
-      ],
+      ["expo-secure-store", { "configureAndroidBackup": true }],
+      ["expo-audio", { "microphonePermission": false, "recordAudioAndroid": false, "enableBackgroundPlayback": false, "enableBackgroundRecording": false }],
       "./plugins/withRevenueCatAndroidLaunchMode",
       "./plugins/withAndroidFontScaleLayout"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "24fc0fea-5e66-4365-a82c-ac668aded7d0"
-      }
-    }
+    "experiments": { "typedRoutes": true },
+    "extra": { "router": {}, "eas": { "projectId": "24fc0fea-5e66-4365-a82c-ac668aded7d0" } }
   }
 }

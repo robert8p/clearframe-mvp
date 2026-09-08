@@ -2,54 +2,29 @@ import React from "react";
 import { AccessibilityInfo, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Body, Card, Eyebrow, PrimaryButton, ProgressBar, Title } from "./ui";
+import { Body, EditorialPanel, Eyebrow, PrimaryButton, ProgressBar, Title } from "./ui";
 import { useNotebook } from "@/lib/notebook";
 import { weekProgress, type SavedIdea } from "@/lib/notebook-store";
 import { practiceLens } from "@/lib/practice-lenses";
-import { SkillMotif } from "./visuals";
-import { colors } from "@/lib/theme";
+import { CogniIcon, InsightArtwork, SkillMotif } from "./visuals";
+import { colors, radius, typography } from "@/lib/theme";
 
-export function DeviceToolsNotice() {
-  const tools = useNotebook();
-  return tools.error ? <Card style={{ borderColor: colors.amber }}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: colors.text, fontSize: 14, lineHeight: 21 }}>{tools.error}</Text><PrimaryButton secondary label="Retry device storage" onPress={() => void tools.reload()} /></Card> : null;
+export function DeviceToolsNotice(){const tools=useNotebook();return tools.error?<EditorialPanel style={{borderColor:"rgba(255,209,147,.38)"}}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={{color:colors.text,fontSize:14,lineHeight:21,...typography.body}}>{tools.error}</Text><PrimaryButton secondary label="Retry device storage" onPress={()=>void tools.reload()}/></EditorialPanel>:null;}
+export function SaveIdeaButton({idea}:{idea:Omit<SavedIdea,"savedOn">}){const tools=useNotebook();const saved=tools.data.ideas.some(item=>item.id===idea.id);return <PrimaryButton secondary label={saved?"Key idea saved":"Save key idea"} disabled={!tools.ready||tools.busy||saved} accessibilityHint="Keeps this takeaway privately on this device for this account. No scores are shared." onPress={()=>{void tools.save(idea).then(()=>AccessibilityInfo.announceForAccessibility("Key idea saved on this device.")).catch(()=>undefined);}}/>;}
+
+export function PracticeRhythm({editable=false}:{editable?:boolean}){
+  const tools=useNotebook();const {fontScale}=useWindowDimensions();const week=weekProgress(tools.data);
+  return <LinearGradient colors={["rgba(14,54,69,.90)","rgba(14,37,64,.94)"]} start={{x:0,y:0}} end={{x:1,y:1}} style={{borderRadius:radius.lg,borderWidth:1,borderColor:"rgba(102,203,222,.25)",padding:17,gap:13}}>
+    <View style={{flexDirection:"row",alignItems:"flex-start",justifyContent:"space-between",gap:12}}><View style={{flex:1,gap:4}}><Eyebrow>Your weekly rhythm</Eyebrow><Title size={23}>{!tools.ready?"Your pace, your choice":week.goal?`${week.count} of ${week.goal} practice days`:"A little, often. At your pace."}</Title></View>{tools.ready&&week.goal?<View style={{width:46,height:46,borderRadius:23,borderWidth:5,borderColor:"rgba(109,235,255,.22)",alignItems:"center",justifyContent:"center"}}><Text style={{color:colors.cyan,fontSize:13,...typography.metric}}>{Math.min(100,Math.round(week.count/week.goal*100))}%</Text></View>:null}</View>
+    {tools.ready&&week.goal?<ProgressBar value={Math.min(100,week.count/week.goal*100)}/>:null}
+    {tools.ready&&fontScale<=1.3?<View accessible accessibilityLabel={week.days.map(day=>`${day.label} ${day.key}: ${day.done?"practised":day.future?"upcoming":"not recorded"}${day.today?", today":""}`).join(". ")} style={{flexDirection:"row",justifyContent:"space-between",gap:3}}>{week.days.map(day=><View key={day.key} importantForAccessibility="no-hide-descendants" style={{flex:1,gap:6,alignItems:"center"}}><Text style={{color:colors.soft,fontSize:10.5,lineHeight:15,...typography.body}}>{day.label}</Text><View style={{width:27,height:27,borderRadius:14,borderWidth:day.today?2:1,borderColor:day.today?colors.purple:day.done?colors.cyan:colors.line,backgroundColor:day.done?"rgba(83,212,220,.15)":"rgba(7,16,34,.58)",alignItems:"center",justifyContent:"center"}}>{day.done?<View style={{width:7,height:7,borderRadius:4,backgroundColor:colors.cyan}}/>:day.today?<View style={{width:5,height:5,borderRadius:3,backgroundColor:colors.purple}}/>:null}</View></View>)}</View>:tools.ready?<Body muted>{week.count} recorded practice {week.count===1?"day":"days"} this week.</Body>:null}
+    <Body muted style={{fontSize:13,lineHeight:19}}>{tools.ready&&week.goal?(week.count>=week.goal?"Target met. Keep exploring only if you want to.":"Consistency builds a sharper habit. A missed day never erases progress."):"Choose an optional rhythm, not a deadline."}</Body>
+    {editable||(tools.ready&&!week.goal)?<View accessibilityRole="radiogroup" accessibilityLabel="Optional weekly practice target" style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>{([2,3,5,null] as const).map(goal=><Pressable key={String(goal)} accessibilityRole="radio" accessibilityLabel={goal?`${goal} days a week`:"No weekly target"} accessibilityState={{checked:week.goal===goal,disabled:!tools.ready||tools.busy}} disabled={!tools.ready||tools.busy} onPress={()=>{void tools.setGoal(goal).catch(()=>undefined);}} style={({pressed})=>({minHeight:44,minWidth:48,paddingHorizontal:12,paddingVertical:10,borderRadius:12,borderWidth:1,borderColor:week.goal===goal?colors.cyan:colors.line,backgroundColor:week.goal===goal?"rgba(83,212,220,.12)":"rgba(11,28,51,.7)",opacity:pressed?.75:1,justifyContent:"center"})}><Text style={{color:colors.text,fontSize:13.5,lineHeight:20,...typography.label}}>{goal?`${goal} days`:"No target"}</Text></Pressable>)}</View>:<Pressable accessibilityRole="button" accessibilityLabel="Change weekly target" onPress={()=>router.push("/toolkit")} style={{minHeight:44,justifyContent:"center"}}><Text style={{color:colors.blue,fontSize:13.5,...typography.label}}>Change target</Text></Pressable>}
+  </LinearGradient>;
 }
-export function SaveIdeaButton({ idea }: { idea: Omit<SavedIdea, "savedOn"> }) {
-  const tools = useNotebook();
-  const saved = tools.data.ideas.some(item => item.id === idea.id);
-  return <PrimaryButton secondary label={saved ? "Key idea saved" : "Save key idea"} disabled={!tools.ready || tools.busy || saved} accessibilityHint="Keeps this takeaway privately on this device for this account. No scores are shared." onPress={() => { void tools.save(idea).then(() => AccessibilityInfo.announceForAccessibility("Key idea saved on this device.")).catch(() => undefined); }} />;
-}
-export function PracticeRhythm({ editable = false }: { editable?: boolean }) {
-  const tools = useNotebook(); const { fontScale } = useWindowDimensions();
-  const week = weekProgress(tools.data);
-  return <Card style={{ gap: 14, backgroundColor:"#112b42", borderColor:"#3d6585" }}>
-    <Eyebrow>Your weekly rhythm</Eyebrow>
-    <Title size={23}>{!tools.ready ? "Your pace, your choice" : week.goal ? `${week.count} of ${week.goal} practice days` : "A little, often. At your pace."}</Title>
-    {tools.ready && week.goal ? <Body muted style={{ fontSize: 14, lineHeight: 21 }}>{week.count >= week.goal ? "Your weekly target is met. Take a break, or keep exploring because you’re curious." : "Any day you submit an answer counts. A missed day does not erase your progress."}</Body> : <Body muted style={{ fontSize: 14, lineHeight: 21 }}>Choose an optional target, not a deadline. No reminders, penalties or streak resets.</Body>}
-    {tools.ready && week.goal ? <ProgressBar value={Math.min(100, week.count / week.goal * 100)} /> : null}
-    {tools.ready && fontScale <= 1.3 ? <View accessible accessibilityLabel={week.days.map(day => `${day.label} ${day.key}: ${day.done ? "practised" : day.future ? "upcoming" : "not recorded"}${day.today ? ", today" : ""}`).join(". ")} style={{ flexDirection: "row", justifyContent: "space-between", gap: 3 }}>
-      {week.days.map(day => <View key={day.key} importantForAccessibility="no-hide-descendants" style={{ flex: 1, gap: 7, alignItems: "center" }}><Text style={{ color: colors.muted, fontSize: 11, lineHeight: 16 }}>{day.label}</Text><View style={{ width: 29, height: 29, borderRadius: 15, borderWidth: day.today ? 2 : 1, borderColor: day.today ? colors.purple : day.done ? colors.cyan : colors.line, backgroundColor: day.done ? "rgba(100,215,200,.17)" : colors.bg, alignItems: "center", justifyContent: "center" }}><Text style={{ color: day.done ? colors.cyan : colors.soft, fontSize: 15, lineHeight: 20 }}>{day.done ? "✓" : day.today ? "·" : "–"}</Text></View></View>)}
-    </View> : tools.ready ? <Body muted>{week.count} recorded practice {week.count === 1 ? "day" : "days"} this week.</Body> : null}
-    {editable || (tools.ready && !week.goal) ? <View accessibilityRole="radiogroup" accessibilityLabel="Optional weekly practice target" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      {([2, 3, 5, null] as const).map(goal => <Pressable key={String(goal)} accessibilityRole="radio" accessibilityLabel={goal ? `${goal} days a week` : "No weekly target"} accessibilityState={{ checked: week.goal === goal, disabled: !tools.ready || tools.busy }} disabled={!tools.ready || tools.busy} onPress={() => { void tools.setGoal(goal).catch(() => undefined); }} style={({ pressed }) => ({ minHeight: 48, minWidth: 48, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: week.goal === goal ? colors.cyan : colors.lineStrong, backgroundColor: week.goal === goal ? "rgba(100,215,200,.1)" : colors.panel2, opacity: pressed ? .75 : 1, justifyContent: "center" })}><Text style={{ color: colors.text, fontSize: 14, lineHeight: 21, fontWeight: "700" }}>{goal ? `${goal} days` : "No target"}</Text></Pressable>)}
-    </View> : <Pressable accessibilityRole="button" accessibilityLabel="Change weekly target" onPress={() => router.push("/toolkit")} style={{ minHeight: 48, justifyContent: "center" }}><Text style={{ color: colors.purple, fontSize: 14, fontWeight: "700" }}>Change target →</Text></Pressable>}
-    <Body muted style={{ fontSize: 12, lineHeight: 18 }}>On this device since version 0.4.4. Monday–Sunday, using your device’s dates. Your online history is unchanged.</Body>
-  </Card>;
-}
-export function ToolkitShortcut() {
-  const { data, ready } = useNotebook();
-  return <Pressable accessibilityRole="button" accessibilityLabel="Open saved ideas" accessibilityHint="Revisit your privately saved takeaways, even when offline" onPress={() => router.push("/toolkit")} style={({ pressed }) => ({ opacity: pressed ? .8 : 1, minHeight: 48 })}>
-    <LinearGradient colors={["#253760", "#152543"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 18, borderRadius: 24, borderWidth: 1, borderColor: "#677dac", gap: 8 }}>
-      <View style={{flexDirection:"row",alignItems:"center",gap:12}}><SkillMotif kind="perspective" size={42} /><View style={{flex:1}}><Eyebrow>Your thinking toolkit</Eyebrow></View></View><Title size={23}>{ready && data.ideas.length ? `${data.ideas.length} ${data.ideas.length === 1 ? "idea" : "ideas"} worth keeping` : "Keep what clicks."}</Title>
-      <Body muted style={{ fontSize: 14, lineHeight: 21 }}>{ready && data.ideas.length ? data.ideas[0].title : "Save a useful takeaway after a question. Come back to it when a real decision needs it."}</Body>
-      <Text style={{ color: colors.purple, fontSize: 14, lineHeight: 21, fontWeight: "700" }}>Open saved ideas →</Text>
-    </LinearGradient>
-  </Pressable>;
-}
-export function DailyLens({ audience }: { audience?: string | null }) {
-  const { today } = useNotebook(); const lens = practiceLens(today, audience);
-  return <Card style={{ borderColor: "rgba(102,210,197,.38)", backgroundColor: "#112a37", gap: 12 }}>
-    <Eyebrow>Try this outside the app</Eyebrow><Title size={23}>{lens.title}</Title><Body>{lens.prompt}</Body><Body muted style={{ fontSize: 14, lineHeight: 21 }}>{lens.context}</Body>
-    <SaveIdeaButton idea={{ id: `lens-${lens.id}`, title: lens.title, principle: lens.principle, application: lens.prompt }} />
-    <Body muted style={{ fontSize: 12, lineHeight: 18 }}>A rotating reflection prompt. It is not scored.</Body>
-  </Card>;
-}
+
+export function ToolkitShortcut(){const{data,ready}=useNotebook();const idea=ready&&data.ideas.length?data.ideas[0]:null;return <Pressable accessibilityRole="button" accessibilityLabel="Open saved ideas" accessibilityHint="Revisit your privately saved takeaways, even when offline" onPress={()=>router.push("/toolkit")} style={({pressed})=>({opacity:pressed?.8:1,minHeight:48})}>
+  <View style={{padding:14,borderRadius:radius.lg,borderWidth:1,borderColor:colors.line,backgroundColor:"rgba(13,29,54,.72)",flexDirection:"row",alignItems:"center",gap:13}}><InsightArtwork kind="perspective" size={60}/><View style={{flex:1,gap:3}}><Eyebrow>Saved ideas</Eyebrow><Text style={{color:colors.text,fontSize:16,lineHeight:22,...typography.heading}} numberOfLines={2}>{idea?idea.title:"Keep what clicks."}</Text><Text style={{color:colors.muted,fontSize:12.5,lineHeight:18,...typography.body}}>{ready&&data.ideas.length?`${data.ideas.length} ${data.ideas.length===1?"idea":"ideas"} kept on this device`:"Save a takeaway after a question."}</Text></View><CogniIcon name="arrow" size={20} color={colors.soft}/></View>
+  </Pressable>;}
+
+export function DailyLens({audience}:{audience?:string|null}){const{today}=useNotebook();const lens=practiceLens(today,audience);return <EditorialPanel style={{borderColor:"rgba(126,230,185,.24)"}}><View style={{flexDirection:"row",alignItems:"center",gap:12}}><SkillMotif kind="growth" size={44}/><View style={{flex:1}}><Eyebrow>Try this outside the app</Eyebrow></View></View><Title size={22}>{lens.title}</Title><Body>{lens.prompt}</Body><Body muted style={{fontSize:13.5,lineHeight:20}}>{lens.context}</Body><SaveIdeaButton idea={{id:`lens-${lens.id}`,title:lens.title,principle:lens.principle,application:lens.prompt}}/><Body muted style={{fontSize:11.5,lineHeight:17}}>A rotating reflection prompt. It is not scored.</Body></EditorialPanel>;}

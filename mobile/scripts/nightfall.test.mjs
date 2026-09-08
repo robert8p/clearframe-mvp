@@ -8,7 +8,7 @@ test('Nightfall retains the native app and real learning routes',()=>{
   const welcome=read('app/index.tsx');assert(welcome.includes('Sharpen how you think.'));assert(welcome.includes('router.push("/demo")'));assert(welcome.includes('router.push("/signup")'));assert(welcome.includes('router.push("/login")'));assert(welcome.includes('insets.top'));
 });
 test('Illustration is bundled, decorative and independent of learning content',()=>{
-  const art=read('components/visuals.tsx');assert(art.includes('importantForAccessibility:"no-hide-descendants"'));assert(art.includes('pointerEvents: "none"'));assert(art.includes('require("../assets/approved-dreamscape.png")'));assert(!art.includes('https://'));assert(!art.includes('Math.random'));assert(!art.includes('Animated.loop'));
+  const art=read('components/visuals.tsx');assert(art.includes('importantForAccessibility:"no-hide-descendants"'));assert(art.includes('pointerEvents:"none"'));assert(art.includes('require("../assets/approved-dreamscape.png")'));assert(!art.includes('https://'));assert(!art.includes('Math.random'));assert(!art.includes('Animated.loop'));
   const bytes=fs.readFileSync(new URL('../assets/approved-dreamscape.png',import.meta.url));assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert(bytes.length<100000);
   assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),'2ea4004cf994b9f82bba4b5179d71efe020464bb59bf6a2b0e5c47be08386ea9');
 });

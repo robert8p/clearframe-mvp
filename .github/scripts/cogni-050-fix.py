@@ -1,5 +1,6 @@
 # Idempotent compatibility repair for the Cogni 0.5.0 visual release.
 from pathlib import Path
+import subprocess
 
 root=Path(__file__).resolve().parents[2]
 def patch(rel, replacements):
@@ -18,9 +19,22 @@ patch('mobile/components/ui.tsx',[
  ('minHeight:54,borderRadius:radius.pill','minHeight: 56,borderRadius:radius.pill'),
  ('minHeight:44,minWidth:44','minHeight: 48,minWidth:48'),
 ])
-for rel in ['mobile/components/practice-tools.tsx','mobile/components/question-runner.tsx','mobile/app/(tabs)/skills.tsx']:
+for rel in ['mobile/components/practice-tools.tsx','mobile/app/(tabs)/skills.tsx']:
     patch(rel,[('minHeight:44','minHeight:48')])
+patch('mobile/components/question-runner.tsx',[
+ ('minHeight:44','minHeight:48'),
+ ('multi.length===requiredSelections','multi.length === requiredSelections'),
+])
 patch('mobile/app/onboarding.tsx', [('selectedAudience==="casual"','selectedAudience === "casual"')])
 patch('mobile/app/(tabs)/_layout.tsx', [('tabBarHideOnKeyboard:true','tabBarHideOnKeyboard: true')])
 old=root/'.github/workflows/cogni-050-release.yml'
 if old.exists(): old.unlink()
+
+# If this helper discovers a compatibility drift, commit it inside this job so
+# the same workflow can validate and build the exact repaired SHA immediately.
+if subprocess.run(['git','diff','--quiet'],cwd=root).returncode:
+    subprocess.run(['git','config','user.name','github-actions[bot]'],cwd=root,check=True)
+    subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],cwd=root,check=True)
+    subprocess.run(['git','add','-A'],cwd=root,check=True)
+    subprocess.run(['git','commit','-m','fix(mobile): preserve exact multi-select submission invariant'],cwd=root,check=True)
+    subprocess.run(['git','push','origin','HEAD:refs/heads/release/cogni-0.5.0'],cwd=root,check=True)

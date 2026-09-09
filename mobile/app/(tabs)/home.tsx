@@ -1,6 +1,7 @@
 import React from "react";
 import { Redirect, router } from "expo-router";
 import { Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActionLink, Body, EditorialPanel, Eyebrow, LoadingState, PrimaryButton, Screen, SectionHeader, Title } from "@/components/ui";
 import { RefreshNotice, SkillShelf, SkillTile, TrainingCard } from "@/components/learning-surfaces";
 import { DailyLens, DeviceToolsNotice, PracticeRhythm, ToolkitShortcut } from "@/components/practice-tools";
@@ -17,12 +18,12 @@ import type { MobileProfileResponse, TodayResponse } from "@/lib/types";
 
 async function loadHome(signal:AbortSignal){const[profile,today]=await Promise.all([apiFetch<MobileProfileResponse>("/api/mobile/profile",{signal}),apiFetch<TodayResponse>("/api/mobile/today",{signal})]);return{profile,today};}
 export default function HomeScreen(){
-  const{data,loading,refreshing,error,reload}=useFocusResource(loadHome);const{needsProForFocusedPractice,openFocusedPractice}=useProGate();
+  const{data,loading,refreshing,error,reload}=useFocusResource(loadHome);const{needsProForFocusedPractice,openFocusedPractice}=useProGate();const insets=useSafeAreaInsets();
   if(loading)return <LoadingState label="Preparing Cogni…"/>;
   if(!data)return <Screen><Title size={27}>Let’s reconnect.</Title><Body muted>{error||"Could not load your practice."}</Body><PrimaryButton label="Try again" onPress={()=>void reload()}/><ToolkitShortcut/><Body muted style={{fontSize:13,lineHeight:20}}>Saved ideas on this device are still available. New questions and scores need a connection.</Body></Screen>;
   const{profile,today}=data;if(!profile.profile.audience_segment||today.state==="onboarding")return <Redirect href="/onboarding"/>;
   const firstName=profile.profile.full_name?.trim().split(/\s+/)[0]||"there";const meta=mobileAudienceMeta(profile.profile.audience_segment);const action=getTrainingAction(today);const next=selectSkills(profile.skillScores,"","practised").slice(0,2);const average=profile.summary.averageScore;
-  return <Screen refreshing={refreshing} onRefresh={()=>void reload()}>
+  return <Screen contentStyle={{paddingTop:insets.top+14}} refreshing={refreshing} onRefresh={()=>void reload()}>
     <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12}}><View style={{gap:4,flex:1}}><CogniLogo compact animated={false}/><Text style={{color:colors.muted,fontSize:12.5,lineHeight:18,...typography.body}}>{meta?.shortLabel??"Small practice. A sharper you."}</Text></View><View accessibilityLabel={`${profile.profile.current_streak??0} day streak`} style={{width:42,height:42,borderRadius:21,borderWidth:1,borderColor:colors.line,backgroundColor:"rgba(13,31,58,.7)",alignItems:"center",justifyContent:"center"}}><CogniIcon name="spark" size={19} color={colors.cyan}/></View></View>
     <View style={{gap:4}}><Eyebrow>Today</Eyebrow><Title size={29}>A brighter day, {firstName}</Title></View>
     {error?<RefreshNotice message={error} onRetry={()=>void reload()}/>:null}

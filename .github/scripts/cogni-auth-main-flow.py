@@ -325,7 +325,7 @@ def test_all_tabs() -> None:
     assert_absent("Something went wrong")
 
     tap("Progress")
-    wait_for("See what’s changing", timeout=45)
+    wait_for("Your progress, in perspective", timeout=45)
     assert_absent("Something went wrong")
 
     tap("Profile")

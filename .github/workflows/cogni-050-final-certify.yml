@@ -1,0 +1,158 @@
+name: Cogni 0.5.0 final exact-APK regression certification
+on:
+  push:
+    branches: [release/cogni-0.5.0-final-certify]
+    paths: [.github/workflows/cogni-050-final-certify.yml]
+permissions:
+  contents: read
+  actions: read
+env:
+  SOURCE_SHA: 222ef77bd77b914f7887c9d4060f6aca11d096e6
+  SOURCE_RUN_ID: '34317718015'
+  APK_PATH: /tmp/cogni-050-expo/Cogni-0.5.0-preview.apk
+  SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+  SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+  API_LEVEL: '36'
+  TZ: Europe/London
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Align only inherited E2E wording with the actual 0.5.0 Progress heading
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          for p in Path('.github/scripts').glob('cogni-*.py'):
+              s=p.read_text()
+              if 'See what’s changing' in s:
+                  p.write_text(s.replace('See what’s changing','Your progress, in perspective'))
+                  print('Patched test-only copy:',p)
+          PY
+          git diff -- .github/scripts
+      - name: Await and retrieve exact APK artifact from the canonical final release run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,subprocess,time,hashlib
+          from pathlib import Path
+          from zipfile import ZipFile
+          repo=os.environ['GITHUB_REPOSITORY']; run=os.environ['SOURCE_RUN_ID']; wanted='cogni-050-expo-apk'
+          def get(path): return json.loads(subprocess.check_output(['gh','api',path],text=True,timeout=45))
+          artifact=None
+          for attempt in range(100):
+              payload=get(f'repos/{repo}/actions/runs/{run}/artifacts')
+              matches=[a for a in payload['artifacts'] if a['name']==wanted and not a['expired']]
+              if matches:
+                  artifact=matches[0]; break
+              state=get(f'repos/{repo}/actions/runs/{run}')
+              if state['status']=='completed': raise RuntimeError('Canonical run completed without exact APK artifact')
+              print('Awaiting canonical exact APK artifact...',attempt+1,flush=True); time.sleep(20)
+          if not artifact: raise TimeoutError('Canonical exact APK artifact was not available in time')
+          assert artifact['workflow_run']['head_sha']==os.environ['SOURCE_SHA'],artifact
+          with open('/tmp/exact.zip','wb') as f:
+              subprocess.run(['gh','api',f"repos/{repo}/actions/artifacts/{artifact['id']}/zip"],stdout=f,check=True,timeout=240)
+          root=Path('/tmp/cogni-050-expo'); root.mkdir(parents=True,exist_ok=True)
+          with ZipFile('/tmp/exact.zip') as z: z.extractall(root)
+          meta=json.loads((root/'metadata.json').read_text())
+          apk=root/'Cogni-0.5.0-preview.apk'
+          assert meta['sourceCommit']==os.environ['SOURCE_SHA']
+          assert meta['version']=='0.5.0' and int(meta['versionCode'])>68
+          assert meta['status']=='FINISHED' and meta['apkIdentityAndSigning']=='passed'
+          assert hashlib.sha256(apk.read_bytes()).hexdigest()==meta['sha256']
+          Path('/tmp/cogni-050-cert-source.json').write_text(json.dumps(meta,indent=2))
+          print(json.dumps(meta,indent=2))
+          PY
+      - name: Provision isolated certification identity
+        run: |
+          python3 - <<'PY'
+          import json,os,secrets,urllib.request,urllib.error
+          def post(path,payload,token=None):
+              h={'apikey':os.environ['SUPABASE_KEY'],'Content-Type':'application/json'}
+              if token:h['Authorization']='Bearer '+token
+              r=urllib.request.Request(os.environ['SUPABASE_URL']+path,data=json.dumps(payload).encode(),headers=h,method='POST')
+              try:
+                  with urllib.request.urlopen(r,timeout=30) as x:return x.status,json.load(x)
+              except urllib.error.HTTPError as e:return e.code,json.load(e)
+          email=f"cogni.e2e.050.finalcert.{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}@example.com"; password='Cg'+secrets.token_hex(18)+'9a'
+          print('::add-mask::'+email); print('::add-mask::'+password)
+          status,_=post('/auth/v1/signup',{'email':email,'password':password,'data':{'full_name':'Cogni Route E2E'}}); assert status==200
+          status,b=post('/auth/v1/token?grant_type=password',{'email':email,'password':password}); assert status==200 and b.get('access_token')
+          status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/profile','method':'POST','body':{'fullName':'Cogni Route E2E','audienceSegment':'casual','functionArea':'everyday_decisions','primaryGoal':'think_more_clearly'},'context':{'timeZone':'Europe/London'}},b['access_token']); assert status==200
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('E2E_EMAIL='+email+'\nE2E_PASSWORD='+password+'\n')
+          PY
+      - uses: android-actions/setup-android@v3
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run complete installed regression suite against the exact final APK
+        timeout-minutes: 34
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu software -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
+          script: |
+            timeout 1900 bash -o pipefail -c 'python3 -u .github/scripts/cogni-bounded-run.py cogni-auth-route-e2e-fixed.py 2>&1 | tee /tmp/cogni-050-final-certify.txt'
+      - name: Delete isolated certification identity
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          def post(path,payload,token=None):
+              h={'apikey':os.environ['SUPABASE_KEY'],'Content-Type':'application/json'}
+              if token:h['Authorization']='Bearer '+token
+              r=urllib.request.Request(os.environ['SUPABASE_URL']+path,data=json.dumps(payload).encode(),headers=h,method='POST')
+              try:
+                  with urllib.request.urlopen(r,timeout=30) as x:return x.status,json.load(x)
+              except urllib.error.HTTPError as e:return e.code,json.load(e)
+          email=os.environ.get('E2E_EMAIL'); pw=os.environ.get('E2E_PASSWORD')
+          if email and pw:
+              status,b=post('/auth/v1/token?grant_type=password',{'email':email,'password':pw})
+              if status==200 and b.get('access_token'):
+                  status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/account','method':'DELETE','body':None,'context':{'timeZone':'UTC'}},b['access_token']); assert status==200
+              status,b=post('/auth/v1/token?grant_type=password',{'email':email,'password':pw}); assert status==400 and not b.get('access_token')
+          PY
+      - name: Write exact certification record
+        if: success()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          meta=json.loads(Path('/tmp/cogni-050-cert-source.json').read_text())
+          record={**meta,'installedRegression':'passed Android API 36','certificationRun':'${{ github.run_id }}','testHarnessAdjustment':'test-only stale Progress heading replacement; application binary unchanged'}
+          Path('/tmp/cogni-050-final-certification.json').write_text(json.dumps(record,indent=2))
+          print(json.dumps(record,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-050-final-exact-apk-regression-certification
+          path: |
+            /tmp/cogni-050-final-certify.txt
+            /tmp/cogni-050-final-certification.json
+            /tmp/cogni-050-cert-source.json
+            /tmp/cogni-auth-route-api-36/
+            /tmp/cogni-copy-feedback-api-36/
+            /tmp/cogni-profile-password-api-36/
+            /tmp/cogni-signup-onboarding-api-36/
+            /tmp/cogni-monetization-prestore-api-36/
+          retention-days: 30
+          if-no-files-found: warn

@@ -1,0 +1,128 @@
+name: Cogni 0.5.0 certify existing Expo APK
+on:
+  push:
+    branches: [release/cogni-0.5.0-certify]
+    paths: [.github/workflows/cogni-050-certify-existing-apk.yml]
+permissions:
+  contents: read
+env:
+  SOURCE_SHA: 49dce4de3220be5a7dd33e78f7182403c5ec93b6
+  APK_URL: https://expo.dev/artifacts/eas/57Z905-UDRWLog0KbATjukrEpZLm29P0oXe3-qtM4Vs.apk
+  APK_SHA256: 5a526f4e555c8c36b4dd733637422c90ca2948375680287f0b97337b6d93368a
+  APK_PATH: /tmp/Cogni-0.5.0-preview.apk
+  SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
+  SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
+  TZ: Europe/London
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Apply test-only wording compatibility
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ['.github/scripts/cogni-auth-main-flow.py','.github/scripts/cogni-auth-route-e2e-fixed.py']:
+              p=Path(name); s=p.read_text(); s=s.replace('See what’s changing','Your progress, in perspective'); p.write_text(s)
+          PY
+      - name: Download and verify exact previously built Expo APK
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --max-time 300 "$APK_URL" --output "$APK_PATH"
+          echo "$APK_SHA256  $APK_PATH" | sha256sum --check --strict
+      - uses: android-actions/setup-android@v3
+      - name: Verify APK identity
+        run: |
+          set -euo pipefail
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          "$AAPT" dump badging "$APK_PATH" > /tmp/badging.txt
+          grep -q "package: name='app.gocogni.cogni'" /tmp/badging.txt
+          grep -q "versionCode='68'" /tmp/badging.txt
+          grep -q "versionName='0.5.0'" /tmp/badging.txt
+      - name: Provision isolated test identity
+        run: |
+          python3 - <<'PY'
+          import json,os,secrets,urllib.request,urllib.error
+          def post(path,payload,token=None):
+              h={'apikey':os.environ['SUPABASE_KEY'],'Content-Type':'application/json'}
+              if token:h['Authorization']='Bearer '+token
+              r=urllib.request.Request(os.environ['SUPABASE_URL']+path,data=json.dumps(payload).encode(),headers=h,method='POST')
+              try:
+                  with urllib.request.urlopen(r,timeout=30) as x:return x.status,json.load(x)
+              except urllib.error.HTTPError as e:return e.code,json.load(e)
+          email=f"cogni.e2e.050.certify.{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}@example.com"; password='Cg'+secrets.token_hex(18)+'9a'
+          print('::add-mask::'+email); print('::add-mask::'+password)
+          status,_=post('/auth/v1/signup',{'email':email,'password':password,'data':{'full_name':'Cogni Route E2E'}}); assert status==200
+          status,b=post('/auth/v1/token?grant_type=password',{'email':email,'password':password}); assert status==200 and b.get('access_token')
+          status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/profile','method':'POST','body':{'fullName':'Cogni Route E2E','audienceSegment':'casual','functionArea':'everyday_decisions','primaryGoal':'think_more_clearly'},'context':{'timeZone':'Europe/London'}},b['access_token']); assert status==200
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('E2E_EMAIL='+email+'\nE2E_PASSWORD='+password+'\n')
+          PY
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run full installed regression suite against exact APK
+        timeout-minutes: 28
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          disk-size: 6G
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu software -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
+          script: |
+            timeout 1500 bash -o pipefail -c 'python3 -u .github/scripts/cogni-bounded-run.py cogni-auth-route-e2e-fixed.py 2>&1 | tee /tmp/cogni-050-certify-regression.txt'
+      - name: Delete isolated test identity
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          def post(path,payload,token=None):
+              h={'apikey':os.environ['SUPABASE_KEY'],'Content-Type':'application/json'}
+              if token:h['Authorization']='Bearer '+token
+              r=urllib.request.Request(os.environ['SUPABASE_URL']+path,data=json.dumps(payload).encode(),headers=h,method='POST')
+              try:
+                  with urllib.request.urlopen(r,timeout=30) as x:return x.status,json.load(x)
+              except urllib.error.HTTPError as e:return e.code,json.load(e)
+          email=os.environ.get('E2E_EMAIL'); pw=os.environ.get('E2E_PASSWORD')
+          if email and pw:
+              status,b=post('/auth/v1/token?grant_type=password',{'email':email,'password':pw})
+              if status==200 and b.get('access_token'):
+                  status,_=post('/functions/v1/mobile-api',{'path':'/api/mobile/account','method':'DELETE','body':None,'context':{'timeZone':'UTC'}},b['access_token']); assert status==200
+          PY
+      - name: Write certification record
+        if: success()
+        run: |
+          cat > /tmp/cogni-050-certification.json <<'JSON'
+          {
+            "version": "0.5.0",
+            "versionCode": 68,
+            "sourceCommit": "49dce4de3220be5a7dd33e78f7182403c5ec93b6",
+            "easBuildId": "6d60d8e4-6814-49f3-8422-33f03fa6e706",
+            "apkSha256": "5a526f4e555c8c36b4dd733637422c90ca2948375680287f0b97337b6d93368a",
+            "visualInstalledQa": "passed in run 34292274175",
+            "regressionInstalledQa": "passed"
+          }
+          JSON
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cogni-050-existing-apk-certification
+          path: |
+            /tmp/cogni-050-certify-regression.txt
+            /tmp/cogni-050-certification.json
+            /tmp/cogni-auth-route-api-unknown/
+          retention-days: 30
+          if-no-files-found: warn

@@ -41,6 +41,7 @@ function mount(relative, { props = {}, request = async () => outcome, clock = ()
     '@/components/visuals': { CogniIcon: 'CogniIcon', SkillMotif: 'SkillMotif', motifForSkill: () => 'reasoning' },
     '@/components/visuals': { CogniIcon: 'CogniIcon', SkillMotif: 'SkillMotif', motifForSkill: () => 'reasoning' },
     '@/components/visuals': { CogniIcon: 'CogniIcon', SkillMotif: 'SkillMotif', motifForSkill: () => 'reasoning' },
+    '@/components/visuals': { CogniIcon: 'CogniIcon', SkillMotif: 'SkillMotif', motifForSkill: () => 'reasoning' },
     '@/lib/feedback': { useFeedback: () => feedback },
     '@/lib/theme': { colors: {}, radius: { sm:12, md:18, lg:24, xl:30, pill:999 }, typography: {} },
     '@/components/ui': ui,

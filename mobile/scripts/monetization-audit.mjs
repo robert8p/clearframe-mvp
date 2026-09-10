@@ -10,7 +10,7 @@ const requireText = (source, needle, message) => { if (!source.includes(needle))
 const forbidText = (source, needle, message) => { if (source.includes(needle)) failures.push(message); };
 
 const appConfig = JSON.parse(readMobile("app.json"));
-if (appConfig.expo?.version !== "0.5.0") failures.push("Cogni monetisation candidate must match the 0.5.0 visual release version.");
+if (appConfig.expo?.version !== "0.6.0") failures.push("Cogni monetisation candidate must match the 0.6.0 Connected Knowledge release version.");
 if (appConfig.expo?.android?.package !== "app.gocogni.cogni") failures.push("Android application identity changed.");
 if (appConfig.expo?.ios?.bundleIdentifier !== "app.gocogni.cogni") failures.push("iOS application identity changed.");
 if (!(appConfig.expo?.android?.permissions ?? []).includes("com.android.vending.BILLING")) failures.push("Android billing permission is missing.");
@@ -102,9 +102,7 @@ requireText(webhook, "loadTransferDestinationProjection", "Transfer destination 
 requireText(webhook, "for (const delayMs of [500, 1_500])", "Transfer destination lookup must retry a briefly lagging canonical projection.");
 requireText(webhook, 'admin.rpc("sync_subscription_transfer"', "Transfer webhooks must use the atomic database projection.");
 
-if (fs.existsSync(path.join(repoRoot, "supabase/functions/mobile-api-v04"))) {
-  failures.push("Abandoned duplicate mobile-api-v04 source tree must not exist.");
-}
+if (fs.existsSync(path.join(repoRoot, "supabase/functions/mobile-api-v04"))) failures.push("Abandoned duplicate mobile-api-v04 source tree must not exist.");
 
 const executableRoots = ["app", "components", "lib"];
 for (const root of executableRoots) {
@@ -132,7 +130,7 @@ if (failures.length) {
 }
 
 console.log("Cogni monetisation audit passed.");
-console.log("✓ App identity and version preserved");
+console.log("✓ App identity and release version preserved");
 console.log("✓ Exact store products and store-derived pricing only");
 console.log("✓ Server-authoritative entitlement and fail-closed premium enforcement");
 console.log("✓ Atomic source/destination transfer reconciliation with direct former-owner revocation");

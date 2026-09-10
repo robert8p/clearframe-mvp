@@ -32,10 +32,11 @@ function screen(file, overrides = {}) {
   const imports = {
     react: hooks,
     'react-native': { ...named('Text TextInput View Pressable ActivityIndicator Switch'), Alert: { alert: (...args) => alerts.push(args) }, Platform: { OS: 'android' }, Linking: { openURL: async () => {} } },
+    'expo-linear-gradient': { LinearGradient: 'LinearGradient' },
     'expo-router': { router, Redirect: 'Redirect', useLocalSearchParams: () => overrides.params ?? {}, useFocusEffect: effect => { if (!focused) { focused = true; effects.push(effect); } } },
     'expo-linking': { createURL: path => `cogni://${path}` },
     '@/components/ui': named('ActionLink Body Card Eyebrow PrimaryButton Screen Title LoadingState ErrorState'),
-    '@/components/brand': named('CogniLogo'), '@/components/form-field': named('FormField'),
+    '@/components/brand': named('CogniLogo CogniMark'), '@/components/form-field': named('FormField'),
     '@/components/interaction-cues': named('CompactAction'), '@/components/option-picker': named('OptionPicker'),
     '@/lib/audience': { isMobileAudience: () => true, mobileAudienceMeta: () => ({ label: 'Everyday learner' }) },
     '@/lib/context-options': { functionLabelForAudience: () => 'Interests', functionOptionsForAudience: () => [], goalOptionsForAudience: () => [] },
@@ -45,7 +46,7 @@ function screen(file, overrides = {}) {
     '@/lib/supabase': { supabase: { auth: { updateUser: async data => { calls.push(data); return { error: null }; }, resetPasswordForEmail: async email => { calls.push(email); return { error: null }; }, signOut: async () => ({}), ...overrides.supabase } } },
     '@/lib/api': { apiFetch: async (...args) => { calls.push(args); return overrides.api ? overrides.api(...args) : profile; } },
     '@/lib/entitlements': { useEntitlements: () => entitlement }, '@/lib/pro-gate': { useProGate: () => entitlement },
-    '@/lib/legal': {}, '@/lib/theme': { colors: {}, glow: {} },
+    '@/lib/legal': {}, '@/lib/theme': { colors: {}, glow: {}, radius: { sm: 12, md: 16, lg: 20, xl: 24, pill: 999 }, typography: {} },
     '../app.json': { expo: { version: 'test-version' } }, '../../app.json': { expo: { version: 'test-version' } },
   };
   const source = fs.readFileSync(new URL(`../app/${file}.tsx`, import.meta.url), 'utf8');

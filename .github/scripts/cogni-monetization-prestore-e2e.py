@@ -235,7 +235,7 @@ def main() -> int:
 
     tap("About Cogni Pro", scroll=True)
     wait_for("Cogni Pro", timeout=45)
-    wait_for("More practice. Deeper progress.", timeout=45)
+    wait_for("Go deeper. Explore further.", timeout=45)
     wait_for("Unlimited additional focused practice", scroll=True)
     wait_for("Your starting check, daily lesson and assigned core training stay free.", scroll=True)
     wait_for("Keep exploring for free", scroll=True)
@@ -251,7 +251,7 @@ def main() -> int:
     scroll_to_top()
     tap("Not now")
     wait_for("Cogni Route E2E", timeout=45)
-    assert_absent("More practice. Deeper progress.")
+    assert_absent("Go deeper. Explore further.")
 
     tap("Sign out", scroll=True)
     scroll_to_top()

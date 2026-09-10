@@ -19,6 +19,7 @@ TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "A brighter day, Cogni", 
 DISPLAY_ALIASES = {
     "Find your focus": "Find your next focus",
     "Your progress, in perspective": "Your learning, in orbit",
+    "See what’s changing": "Your learning, in orbit",
 }
 
 def load_suite(path: Path) -> ModuleType:

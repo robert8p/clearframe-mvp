@@ -57,7 +57,7 @@ export default function OnboardingScreen() {
       <View style={{ position: "absolute", left: 20, right: 20, bottom: 18, flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: colors.cyan }} /><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: "rgba(71,85,105,.42)" }} /><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: "rgba(71,85,105,.42)" }} /></View>
     </LinearGradient>
 
-    <EditorialPanel style={{ padding: 17 }}><Eyebrow>Choose your context</Eyebrow><Body muted>This is about context—not ability—and you can change it later without losing progress.</Body></EditorialPanel>
+    <EditorialPanel style={{ padding: 17 }}><Eyebrow>Which situations matter to you?</Eyebrow><Body muted>This is about context—not ability—and you can change it later without losing progress.</Body></EditorialPanel>
 
     <View accessibilityRole="radiogroup" style={{ gap: 10 }}>
       {MOBILE_AUDIENCES.map((item, index) => {

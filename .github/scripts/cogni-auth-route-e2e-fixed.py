@@ -15,7 +15,7 @@ SUITES = [
     ROOT / "cogni-signup-onboarding-e2e.py",
     ROOT / "cogni-monetization-prestore-e2e.py",
 ]
-TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "A brighter day, Cogni", "Find your focus", "Your progress, in perspective", "Find your starting point"}
+TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "A brighter day, Cogni", "Find your next focus", "Your learning, in orbit", "Find your starting point"}
 
 def load_suite(path: Path) -> ModuleType:
     module_name = path.stem.replace("-", "_")
@@ -76,7 +76,6 @@ def install_reliable_automation(module: ModuleType) -> None:
         raise AssertionError(f"Timed out waiting for clickable control {label!r}")
 
     def type_android_text(value: str) -> None:
-        # Avoid injecting an entire controlled-input value within one render.
         for offset in range(0, len(value), 4):
             chunk = value[offset:offset + 4].replace("%", "%25").replace(" ", "%s")
             module.adb("shell", "input", "text", chunk)
@@ -111,8 +110,6 @@ def install_reliable_automation(module: ModuleType) -> None:
             type_android_text(value)
             time.sleep(0.8)
             verified = "password" in field_label.casefold()
-            # Masked password fields are verified by actual sign-in/password
-            # change. Other fields must still match every character exactly.
             verify_deadline = time.time() + 6
             while not verified and time.time() < verify_deadline:
                 for item in module.dump_ui("input-verify"):
@@ -129,8 +126,6 @@ def install_reliable_automation(module: ModuleType) -> None:
 
     original_wait = module.wait_for
     def wait_for(label: str, **kwargs):
-        # A retained scroll position is intended app behaviour. Navigate to a
-        # top heading with real gestures, then run the original assertion.
         if label in TOP_HEADINGS:
             module.scroll_to_top()
         return original_wait(label, **kwargs)

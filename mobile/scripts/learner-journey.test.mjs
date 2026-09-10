@@ -112,7 +112,7 @@ test('Resume skips only saved session questions; feedback scrolls once and compl
   const f = runner([question('a'), question('b')], { mode: 'practice', answeredChallengeIds: ['a', 'a', 'other'], onComplete: () => { finished++; } });
   assert(f.text().includes('Question b')); assert.equal(f.nodes().find(n => n.type === 'ProgressBar').props.value, 50);
   f.press('One'); await (f.press('Submit answer'), f.flush());
-  const result = f.nodes().find(n => n.props.onLayout); const event = { nativeEvent: { layout: { y: 800 } };
+  const result = f.nodes().find(n => n.props.onLayout); const event = { nativeEvent: { layout: { y: 800 } } };
   result.props.onLayout(event); result.props.onLayout(event); assert.deepEqual(f.scrolls.at(-1), { y: 788, animated: false });
   assert.equal(f.scrolls.filter(s => s.y === 788).length, 1); f.press('Finish training');
   assert(f.text().includes('answers are saved')); const finish = f.find('Back to skills').props.onPress; finish(); finish(); await f.flush(); assert.equal(finished, 1);

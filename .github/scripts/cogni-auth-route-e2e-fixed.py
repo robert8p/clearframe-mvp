@@ -16,6 +16,10 @@ SUITES = [
     ROOT / "cogni-monetization-prestore-e2e.py",
 ]
 TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "A brighter day, Cogni", "Find your next focus", "Your learning, in orbit", "Find your starting point"}
+DISPLAY_ALIASES = {
+    "Find your focus": "Find your next focus",
+    "Your progress, in perspective": "Your learning, in orbit",
+}
 
 def load_suite(path: Path) -> ModuleType:
     module_name = path.stem.replace("-", "_")
@@ -43,7 +47,8 @@ def install_reliable_automation(module: ModuleType) -> None:
         return bool(str(getattr(node, "description", "")).strip())
 
     def tap(label: str, *, enabled: bool | None = True, scroll: bool = False) -> None:
-        needle = label.casefold().strip()
+        resolved = DISPLAY_ALIASES.get(label, label)
+        needle = resolved.casefold().strip()
         deadline = time.time() + 40
         last_nodes: list[object] = []
         while time.time() < deadline:
@@ -52,7 +57,7 @@ def install_reliable_automation(module: ModuleType) -> None:
             exact = [item for item in enabled_nodes if needle in values(item) and needle != ""]
             interactive = [item for item in enabled_nodes if is_interactive(item)]
             exact_interactive = [item for item in exact if is_interactive(item)]
-            candidates = exact_interactive or exact or [item for item in interactive if matches(item, label)]
+            candidates = exact_interactive or exact or [item for item in interactive if matches(item, resolved)]
             if candidates:
                 node = candidates[0]
                 left, top, right, bottom = node.bounds
@@ -62,7 +67,7 @@ def install_reliable_automation(module: ModuleType) -> None:
                     time.sleep(0.5)
                     continue
                 x, y = (left + right) // 2, (visible_top + visible_bottom) // 2
-                print(f"TAP {label!r}: description={getattr(node, 'description', '')!r} text={getattr(node, 'text', '')!r} at {x},{y}")
+                print(f"TAP {resolved!r}: description={getattr(node, 'description', '')!r} text={getattr(node, 'text', '')!r} at {x},{y}")
                 module.adb("shell", "input", "tap", str(x), str(y))
                 time.sleep(1.2)
                 return
@@ -73,7 +78,7 @@ def install_reliable_automation(module: ModuleType) -> None:
         for item in last_nodes:
             if getattr(item, "text", "") or getattr(item, "description", ""):
                 print(item)
-        raise AssertionError(f"Timed out waiting for clickable control {label!r}")
+        raise AssertionError(f"Timed out waiting for clickable control {resolved!r}")
 
     def type_android_text(value: str) -> None:
         for offset in range(0, len(value), 4):
@@ -126,9 +131,10 @@ def install_reliable_automation(module: ModuleType) -> None:
 
     original_wait = module.wait_for
     def wait_for(label: str, **kwargs):
-        if label in TOP_HEADINGS:
+        resolved = DISPLAY_ALIASES.get(label, label)
+        if resolved in TOP_HEADINGS:
             module.scroll_to_top()
-        return original_wait(label, **kwargs)
+        return original_wait(resolved, **kwargs)
 
     module.matches = matches
     module.tap = tap

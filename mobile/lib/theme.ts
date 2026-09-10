@@ -48,8 +48,8 @@ export const colors = {
 } as const;
 
 export const gradients = {
-  primary: ["#2563EB", "#3B82F6", "#8B5CF6"] as const,
-  train: ["#0EA5E9", "#2563EB", "#7C3AED", "#F59E0B"] as const,
+  primary: ["#1D4ED8", "#2547CC", "#6D28D9"] as const,
+  train: ["#0369A1", "#1D4ED8", "#6D28D9", "#B45309"] as const,
   hero: ["rgba(37,99,235,.04)", "rgba(139,92,246,.14)", "rgba(245,158,11,.08)", "#081026"] as const,
   ambient: ["rgba(37,99,235,.30)", "rgba(34,211,238,.12)", "rgba(139,92,246,.10)", "rgba(8,16,38,0)"] as const,
   panel: ["rgba(25,48,82,.97)", "rgba(15,23,42,.98)"] as const,

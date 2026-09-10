@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Verify the installed Nightfall APK, not a web mock or generated concept."""
+"""Verify the installed Cogni APK, not a web mock or generated concept."""
 import importlib.util,json,os,time,xml.etree.ElementTree as ET
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('reliable',ROOT/'cogni-auth-route-e2e-fixed.py')
 runner=importlib.util.module_from_spec(spec);spec.loader.exec_module(runner)
 ui=runner.load_suite(ROOT/'cogni-copy-feedback-e2e.py');runner.install_reliable_automation(ui)
-ui.OUT=Path('/tmp/cogni-045-visual');ui.OUT.mkdir(exist_ok=True)
+ui.OUT=Path('/tmp/cogni-060-visual');ui.OUT.mkdir(exist_ok=True)
 
 def top(label):
     ui.scroll_to_top();ui.wait_for(label,timeout=50)
@@ -17,7 +17,7 @@ def assert_nav():
         assert node.enabled and node.bounds[2]>node.bounds[0],name+' is inaccessible'
 
 def main():
-    results={'status':'running','physicalDeviceTested':False}
+    results={'status':'running','physicalDeviceTested':False,'visualSystem':'Cogni 0.6 Connected Knowledge'}
     try:
         ui.adb('install','-r',os.environ['APK_PATH']);ui.adb('logcat','-c')
         ui.adb('shell','am','start','-W','-n',ui.ACTIVITY);time.sleep(5)
@@ -54,7 +54,7 @@ def main():
         ui.capture('practice-confidence');ui.tap('Submit answer',scroll=True)
         ui.wait_for('Next question',timeout=60,scroll=True);ui.capture('practice-feedback')
         ui.tap('Save key idea',scroll=True);ui.wait_for('Key idea saved',timeout=30);ui.capture('practice-saved')
-        ui.tap('Progress');top('Your progress, in perspective');ui.capture('progress-top');assert_nav()
+        ui.tap('Progress');top('Your learning, in orbit');ui.capture('progress-top');assert_nav()
         ui.wait_for('Recent performance',scroll=True);ui.capture('progress-ring')
         ui.tap('Home');top('A brighter day, Cogni')
         ui.wait_for('1 of 3 practice days',scroll=True);ui.capture('home-weekly')
@@ -62,7 +62,7 @@ def main():
         ui.adb('shell','settings','put','system','font_scale','1.6');time.sleep(3)
         top('A brighter day, Cogni');ui.capture('home-large');assert_nav()
         ui.wait_for('Explore your thinking',scroll=True);ui.capture('home-skills-large')
-        ui.tap('Progress');top('Your progress, in perspective');ui.capture('progress-large')
+        ui.tap('Progress');top('Your learning, in orbit');ui.capture('progress-large')
         ui.wait_for('Recent performance',scroll=True);ui.capture('progress-score-large')
         ui.tap('Home');top('A brighter day, Cogni');ui.tap('Open saved ideas',scroll=True);top('Your thinking toolkit');ui.capture('toolkit-large')
         ui.tap('Reveal idea',scroll=True);ui.wait_for('Hide idea',scroll=True);ui.capture('toolkit-revealed-large')

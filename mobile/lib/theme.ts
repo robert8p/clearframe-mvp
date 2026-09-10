@@ -1,68 +1,91 @@
 import { Platform } from "react-native";
 
 /**
- * Cogni 0.5 — Aurora Editorial.
- * The visual system favours deep reading surfaces, cinematic imagery and a small
- * number of luminous moments rather than neon borders around every component.
+ * Cogni 0.6 — Connected Knowledge.
+ * Production tokens derived from the approved premium visual-system handoff.
+ * Deep navy reading surfaces carry the experience; electric blue/cyan creates
+ * action and progress; violet adds depth; warm amber/gold is reserved for
+ * premium, streak and achievement moments. Semantic meaning never relies on
+ * colour alone.
  */
 export const colors = {
-  bg: "#071022",
-  bgDeep: "#040916",
+  bg: "#081026",
+  bgDeep: "#050A18",
   bg2: "#0B1730",
-  bgRaised: "#0B1730",
-  panel: "#0e1c36",
-  panel2: "#132440",
-  panel3: "#1a2f4f",
-  panelQuiet: "rgba(15,31,57,.72)",
-  line: "rgba(150,178,222,.17)",
-  lineStrong: "#7891BA",
-  text: "#F7F9FF",
-  muted: "#BBC8E1",
-  soft: "#8FA1C0",
-  faint: "#6C7F9F",
-  cyan: "#6DEBFF",
-  aqua: "#53D4DC",
-  blue: "#79A9FF",
-  violet: "#8B78FF",
-  purple: "#B8A8FF",
-  magenta: "#DD9EFF",
-  green: "#7EE6B9",
-  pink: "#FFAAC8",
-  amber: "#FFD193",
-  danger: "#FFADC7",
+  bgRaised: "#0D1B34",
+  surface: "#0F172A",
+  panel: "#0F172A",
+  panel2: "#12213D",
+  panel3: "#193052",
+  panelQuiet: "rgba(15,31,57,.78)",
+  line: "rgba(148,163,184,.24)",
+  lineStrong: "#6FA8FF",
+  text: "#F8FAFC",
+  muted: "#C7D4EA",
+  soft: "#A9B9D3",
+  faint: "#7E90AD",
+  cobalt: "#1E3ABA",
+  blue: "#3B82F6",
+  blueBright: "#2563EB",
+  cyan: "#22D3EE",
+  aqua: "#06B6D4",
+  teal: "#14B8A6",
+  violet: "#8B5CF6",
+  purple: "#A78BFA",
+  magenta: "#C084FC",
+  green: "#22C55E",
+  success: "#22C55E",
+  pink: "#FB7185",
+  red: "#EF4444",
+  danger: "#EF4444",
+  amber: "#F59E0B",
+  gold: "#FBBF24",
+  orange: "#F97316",
+  warning: "#F59E0B",
+  info: "#3B82F6",
   white: "#FFFFFF",
-  ink: "#071022",
+  ink: "#081026",
 } as const;
 
 export const gradients = {
-  primary: ["#00738B", "#3151B8", "#5A3AAF"] as const,
-  hero: ["rgba(7,16,34,0)", "rgba(7,16,34,.24)", "#071022"] as const,
-  ambient: ["rgba(78,108,221,.30)", "rgba(42,152,193,.13)", "rgba(7,16,34,0)"] as const,
-  panel: ["rgba(27,48,85,.96)", "rgba(12,27,52,.98)"] as const,
-  panelQuiet: ["rgba(20,43,74,.86)", "rgba(10,24,45,.92)"] as const,
-  success: ["rgba(29,100,84,.68)", "rgba(14,49,54,.82)"] as const,
-  warm: ["#F6B78A", "#C790F6"] as const,
-  progress: ["#66EEFF", "#72A5FF", "#A37DFF"] as const,
-  orb: ["#4DD5E7", "#546BFF", "#8F65E9"] as const,
+  primary: ["#2563EB", "#3B82F6", "#8B5CF6"] as const,
+  train: ["#0EA5E9", "#2563EB", "#7C3AED", "#F59E0B"] as const,
+  hero: ["rgba(37,99,235,.04)", "rgba(139,92,246,.14)", "rgba(245,158,11,.08)", "#081026"] as const,
+  ambient: ["rgba(37,99,235,.30)", "rgba(34,211,238,.12)", "rgba(139,92,246,.10)", "rgba(8,16,38,0)"] as const,
+  panel: ["rgba(25,48,82,.97)", "rgba(15,23,42,.98)"] as const,
+  panelQuiet: ["rgba(18,33,61,.90)", "rgba(10,24,45,.96)"] as const,
+  success: ["#22C55E", "#14B8A6"] as const,
+  error: ["#EF4444", "#F97316"] as const,
+  warm: ["#F59E0B", "#F97316"] as const,
+  premium: ["#F59E0B", "#FBBF24", "#8B5CF6"] as const,
+  achievement: ["#8B5CF6", "#2563EB", "#FBBF24"] as const,
+  progress: ["#22D3EE", "#3B82F6", "#8B5CF6"] as const,
+  orb: ["#22D3EE", "#2563EB", "#8B5CF6", "#F59E0B"] as const,
+  glow: ["#8B5CF6", "#22D3EE"] as const,
 } as const;
 
 export const glow = {
-  cyan: "0 8px 30px rgba(74,214,255,0.18)",
-  violet: "0 12px 36px rgba(126,92,255,0.18)",
-  hero: "0 18px 48px rgba(0,0,0,.35)",
+  cyan: "0 10px 34px rgba(34,211,238,.28)",
+  blue: "0 12px 38px rgba(37,99,235,.28)",
+  violet: "0 14px 42px rgba(139,92,246,.24)",
+  warm: "0 12px 36px rgba(245,158,11,.22)",
+  hero: "0 20px 52px rgba(0,0,0,.40)",
+  success: "0 10px 34px rgba(34,197,94,.22)",
+  error: "0 10px 34px rgba(239,68,68,.20)",
 } as const;
 
 const android = Platform.OS === "android";
 export const typography = {
-  display: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "700" as const, letterSpacing: -1.2 },
-  title: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "700" as const, letterSpacing: -.55 },
-  heading: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.25 },
+  display: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "700" as const, letterSpacing: -1.15 },
+  title: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "700" as const, letterSpacing: -.5 },
+  heading: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.2 },
   body: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "400" as const, letterSpacing: 0 },
   bodyMedium: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "500" as const, letterSpacing: 0 },
   label: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: .2 },
-  eyebrow: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 1.55 },
-  metric: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.8 },
+  eyebrow: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 1.45 },
+  metric: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.7 },
 } as const;
 
-export const radius = { sm: 12, md: 18, lg: 24, xl: 30, pill: 999 } as const;
-export const space = { xs: 6, sm: 10, md: 16, lg: 22, xl: 30, xxl: 40 } as const;
+export const radius = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 30, pill: 999 } as const;
+export const space = { xxs: 4, xs: 8, sm: 12, md: 16, lg: 24, xl: 32, xxl: 48 } as const;
+export const motion = { quick: 160, standard: 240, deliberate: 360, celebration: 620, orbitMs: 26000 } as const;

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 const read=name=>fs.readFileSync(new URL('../'+name,import.meta.url),'utf8');
 const compact=value=>value.replace(/\s+/g,'');
 test('Connected Knowledge retains the native app and real learning routes',()=>{
-  const {expo}=JSON.parse(read('app.json'));assert.equal(expo.version,'0.6.0');assert.equal(expo.android.package,'app.gocogni.cogni');
+  const {expo}=JSON.parse(read('app.json'));assert.equal(expo.version,'0.6.1');assert.equal(expo.android.package,'app.gocogni.cogni');
   const welcome=read('app/index.tsx');assert(welcome.includes('Sharpen how you think.'));assert(welcome.includes('router.push("/demo")'));assert(welcome.includes('router.push("/signup")'));assert(welcome.includes('router.push("/login")'));assert(welcome.includes('insets.top'));
 });
 test('Illustration is bundled, decorative and independent of learning content',()=>{
@@ -14,7 +14,7 @@ test('Illustration is bundled, decorative and independent of learning content',(
   assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),'2ea4004cf994b9f82bba4b5179d71efe020464bb59bf6a2b0e5c47be08386ea9');
 });
 test('New skill tiles use real data and real navigation with scalable labels',()=>{
-  const source=compact(read('components/learning-surfaces.tsx'));assert(source.includes('rows.filter(row=>skillDetails(row)?.slug)'));assert(source.includes('onOpen(slug)'));assert(source.includes('fontScale>1.45'));assert(source.includes('fontScale>1.3?undefined:2'));assert(!source.includes('numberOfLines={1}'));
+  const source=compact(read('components/learning-surfaces.tsx'));assert(source.includes('rows.filter(row=>skillDetails(row)?.slug)'));assert(source.includes('onOpen(slug)'));assert(source.includes('fontScale>1.45'));assert(!source.includes('numberOfLines='));
 });
 test('Redesign does not turn mockup statistics into product data',()=>{
   for(const name of ['app/(tabs)/home.tsx','app/(tabs)/progress.tsx','components/practice-tools.tsx']){const s=read(name);assert(!s.includes('Overall mastery'));assert(!s.includes('+12%'));assert(!s.includes('72%'));}

@@ -29,7 +29,7 @@ function mount(relative, { props = {}, request = async () => outcome, clock = ()
   const ui = Object.fromEntries(['Screen', 'Body', 'Card', 'EditorialPanel', 'SectionHeader', 'Eyebrow', 'Title', 'PrimaryButton', 'ProgressBar', 'ActionLink', 'ErrorState', 'LoadingState'].map(name => [name, name]));
   const imports = {
     react,
-    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Keyboard: { dismiss() {} }, AccessibilityInfo: { announceForAccessibility() {} }, Animated: { View: 'Animated.View', Value: class { constructor(value){ this.value=value; } setValue(value){ this.value=value; } stopAnimation(){} interpolate(){ return 1; } }, sequence(){ return { start(){} }; }, spring(){ return {}; }, timing(){ return {}; }, loop(){ return { start(){}, stop(){} }; } } },
+    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', useWindowDimensions: () => ({ width: 430, fontScale: 1 }), Keyboard: { dismiss() {} }, AccessibilityInfo: { announceForAccessibility() {} }, Animated: { View: 'Animated.View', Value: class { constructor(value){ this.value=value; } setValue(value){ this.value=value; } stopAnimation(){} interpolate(){ return 1; } }, sequence(){ return { start(){} }; }, spring(){ return {}; }, timing(){ return {}; }, loop(){ return { start(){}, stop(){} }; } } },
     'expo-linear-gradient': { LinearGradient: 'LinearGradient' },
     '@/components/brand': { CogniMark: 'CogniMark' },
     '@/components/form-field': { FormField: 'FormField' },

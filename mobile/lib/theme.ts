@@ -76,14 +76,14 @@ export const glow = {
 
 const android = Platform.OS === "android";
 export const typography = {
-  display: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "700" as const, letterSpacing: -1.15 },
-  title: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "700" as const, letterSpacing: -.5 },
-  heading: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.2 },
+  display: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "700" as const, letterSpacing: 0 },
+  title: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "700" as const, letterSpacing: 0 },
+  heading: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 0 },
   body: { fontFamily: android ? "sans-serif" : undefined, fontWeight: "400" as const, letterSpacing: 0 },
   bodyMedium: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "500" as const, letterSpacing: 0 },
-  label: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: .2 },
-  eyebrow: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 1.45 },
-  metric: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: -.7 },
+  label: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 0 },
+  eyebrow: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 0 },
+  metric: { fontFamily: android ? "sans-serif-medium" : undefined, fontWeight: "600" as const, letterSpacing: 0 },
 } as const;
 
 export const radius = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 30, pill: 999 } as const;

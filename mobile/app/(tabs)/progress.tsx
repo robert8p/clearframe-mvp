@@ -7,7 +7,6 @@ import { ProgressHistoryCard, ScoreExplainer, type ProgressHistory } from "@/com
 import { apiFetch } from "@/lib/api";
 import { useProGate } from "@/lib/pro-gate";
 import { ToolkitShortcut } from "@/components/practice-tools";
-import { CogniMark } from "@/components/brand";
 import { CogniIcon } from "@/components/visuals";
 import { colors, glow, radius, typography } from "@/lib/theme";
 import type { MobileProfileResponse } from "@/lib/types";
@@ -41,13 +40,12 @@ export default function ProgressScreen() {
     <View style={{ gap: 5 }}><Eyebrow>Progress · mastery · momentum</Eyebrow><Title>Your learning, in orbit</Title><Body muted style={{ maxWidth: 620 }}>See what you have practised, how much evidence sits behind each score, and where your next useful move may be.</Body></View>
 
     <LinearGradient colors={["rgba(37,99,235,.38)", "rgba(139,92,246,.22)", "rgba(15,23,42,.96)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: radius.xl, borderWidth: 1, borderColor: "rgba(111,168,255,.36)", padding: 20, gap: 18, overflow: "hidden", boxShadow: glow.blue }}>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", right: -25, top: -14, opacity: .34 }}><CogniMark size={154} /></View>
       <View style={{ flexDirection: fontScale > 1.25 || width < 360 ? "column" : "row", alignItems: "center", gap: 18 }}>
         <ProgressRing value={average} label="recent" />
         <View style={{ flex: 1, gap: 7, alignSelf: "stretch", justifyContent: "center" }}><Eyebrow>Recent performance</Eyebrow><Text style={{ color: colors.text, fontSize: 23, lineHeight: 29, ...typography.heading }}>{average !== null ? "Your profile is taking shape" : "Your profile starts with practice"}</Text><Text style={{ color: colors.muted, fontSize: 13.5, lineHeight: 20, ...typography.body }}>{measured.length} measured skills · latest up to 200 answers</Text></View>
       </View>
       <View style={{ height: 1, backgroundColor: colors.line }} />
-      <View style={{ flexDirection: "row", gap: 18 }}><MetricCard label="XP" value={data.profile.xp ?? 0} hint="earned" /><MetricCard label="Streak" value={`${streak}d`} hint="current" /><MetricCard label="Answers" value={data.summary.answers} hint="saved" /></View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 18 }}><MetricCard label="XP" value={data.profile.xp ?? 0} hint="earned" /><MetricCard label="Streak" value={`${streak}d`} hint="current" /><MetricCard label="Answers" value={data.summary.answers} hint="saved" /></View>
     </LinearGradient>
 
     <LinearGradient colors={streak > 0 ? ["rgba(245,158,11,.18)", "rgba(139,92,246,.10)", "rgba(15,23,42,.90)"] : ["rgba(18,33,61,.86)", "rgba(15,23,42,.92)"]} style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: streak > 0 ? "rgba(245,158,11,.32)" : colors.line, padding: 17, flexDirection: "row", alignItems: "center", gap: 14, boxShadow: streak > 0 ? glow.warm : undefined }}>

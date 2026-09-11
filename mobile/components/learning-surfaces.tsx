@@ -11,14 +11,17 @@ import type { SkillScore, TodayResponse } from "@/lib/types";
 
 export function TrainingCard({ today, onPress, busy = false, label }: { today: TodayResponse | null; onPress: () => void; busy?: boolean; label?: string }) {
   const presentation = trainingPresentation(today); const action = getTrainingAction(today);
+  const { width, fontScale } = useWindowDimensions();
+  const compact = width < 390 || fontScale > 1.22;
+  const artHeight = compact ? 144 : 176;
   return (
-    <View style={{ minHeight: 420, borderRadius: radius.xl, borderCurve: "continuous", overflow: "hidden", borderWidth: 1, borderColor: "rgba(111,168,255,.42)", backgroundColor: colors.panel, boxShadow: glow.hero }}>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", inset: 0 }}>
-        <LandscapeArtwork height={420} />
-        <LinearGradient colors={["rgba(8,16,38,.08)", "rgba(8,16,38,.20)", "rgba(8,16,38,.88)", "#081026"]} locations={[0, .33, .64, 1]} style={{ position: "absolute", inset: 0 }} />
-        <View style={{ position: "absolute", top: 28, right: 28, width: 126, height: 126, borderRadius: 63, backgroundColor: "rgba(37,99,235,.09)", boxShadow: glow.blue, alignItems: "center", justifyContent: "center" }}><CogniMark size={82} /></View>
+    <View style={{ borderRadius: radius.xl, borderCurve: "continuous", overflow: "hidden", borderWidth: 1, borderColor: "rgba(111,168,255,.42)", backgroundColor: colors.panel, boxShadow: glow.hero }}>
+      <View pointerEvents="none" accessible={false} style={{ minHeight: artHeight, backgroundColor: colors.bgRaised, overflow: "hidden" }}>
+        <LandscapeArtwork height={artHeight} />
+        <LinearGradient colors={["rgba(8,16,38,.04)", "rgba(8,16,38,.10)", "rgba(8,16,38,.62)"]} locations={[0, .44, 1]} style={{ position: "absolute", inset: 0 }} />
+        <View style={{ position: "absolute", top: compact ? 18 : 24, right: compact ? 18 : 24, width: compact ? 86 : 112, height: compact ? 86 : 112, borderRadius: compact ? 43 : 56, backgroundColor: "rgba(37,99,235,.09)", boxShadow: glow.blue, alignItems: "center", justifyContent: "center" }}><CogniMark size={compact ? 58 : 76} /></View>
       </View>
-      <View style={{ flex: 1, justifyContent: "flex-end", padding: 20, gap: 13, paddingTop: 150 }}>
+      <View style={{ padding: 20, gap: 13 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <Eyebrow>Today&apos;s focus</Eyebrow>
           <View style={{ paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(8,16,38,.70)", borderWidth: 1, borderColor: "rgba(34,211,238,.30)" }}><Text style={{ color: colors.text, fontSize: 12, ...typography.label }}>About 5 min</Text></View>
@@ -53,5 +56,5 @@ export function SkillTile({ row, onPress, pro = false }: { row: SkillScore; onPr
 
 export function SkillShelf({ rows, onOpen, pro = false }: { rows: SkillScore[]; onOpen: (slug: string) => void; pro?: boolean }) {
   const { fontScale, width } = useWindowDimensions(); const columns = fontScale > 1.75 ? 1 : width < 600 || fontScale > 1.2 ? 2 : 4; const visible = rows.filter(row => skillDetails(row)?.slug).slice(0, 4); if (!visible.length) return null;
-  return <View style={{ gap: 12 }}><SectionHeader title="Explore your thinking" /><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>{visible.map(row => { const skill = skillDetails(row); const slug = skill?.slug; if (!skill || !slug) return null; return <Pressable key={row.skill_id} accessibilityRole="button" accessibilityLabel={`Explore ${skill.name}`} accessibilityHint={pro ? "Explore Pro focused practice" : "Start focused practice"} onPress={() => onOpen(slug)} style={({ pressed }) => ({ flexBasis: columns === 1 ? "100%" : columns === 2 ? "45%" : "21%", flexGrow: 1, minWidth: columns === 1 ? 0 : 104, minHeight: 116, padding: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(15,23,42,.86)", alignItems: "center", justifyContent: "center", gap: 9, opacity: pressed ? .8 : 1 })}><SkillMotif kind={motifForSkill(slug)} size={48} /><Text numberOfLines={fontScale > 1.3 ? undefined : 2} style={{ color: colors.text, fontSize: 13, lineHeight: 18, ...typography.label, textAlign: "center" }}>{skill.name}</Text></Pressable>; })}</View></View>;
+  return <View style={{ gap: 12 }}><SectionHeader title="Explore your thinking" /><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>{visible.map(row => { const skill = skillDetails(row); const slug = skill?.slug; if (!skill || !slug) return null; return <Pressable key={row.skill_id} accessibilityRole="button" accessibilityLabel={`Explore ${skill.name}`} accessibilityHint={pro ? "Explore Pro focused practice" : "Start focused practice"} onPress={() => onOpen(slug)} style={({ pressed }) => ({ flexBasis: columns === 1 ? "100%" : columns === 2 ? "45%" : "21%", flexGrow: 1, minWidth: columns === 1 ? 0 : 104, minHeight: 116, padding: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(15,23,42,.86)", alignItems: "center", justifyContent: "center", gap: 9, opacity: pressed ? .8 : 1 })}><SkillMotif kind={motifForSkill(slug)} size={48} /><Text style={{ color: colors.text, fontSize: 13, lineHeight: 18, ...typography.label, textAlign: "center" }}>{skill.name}</Text></Pressable>; })}</View></View>;
 }

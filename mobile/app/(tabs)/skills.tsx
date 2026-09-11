@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { Redirect, router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { FormField } from "@/components/form-field";
 import { RefreshNotice, SkillTile } from "@/components/learning-surfaces";
-import { ActionLink, Body, EditorialPanel, Eyebrow, ErrorState, LoadingState, Screen, SectionHeader, Title } from "@/components/ui";
+import { ActionLink, Body, EditorialPanel, ErrorState, HeroPanel, LoadingState, Screen, SectionHeader, Title } from "@/components/ui";
 import { CogniMark } from "@/components/brand";
 import { SkillMotif } from "@/components/visuals";
 import { apiFetch } from "@/lib/api";
@@ -27,11 +26,7 @@ export default function SkillsScreen() {
   const rows = selectSkills(data.skillScores, query, filter);
 
   return <Screen refreshing={refreshing} onRefresh={() => void reload()}>
-    <LinearGradient colors={["rgba(37,99,235,.30)", "rgba(139,92,246,.18)", "rgba(15,23,42,.94)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ minHeight: 190, padding: 20, borderRadius: radius.xl, borderWidth: 1, borderColor: "rgba(111,168,255,.34)", overflow: "hidden", boxShadow: glow.blue }}>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", right: -10, top: 8, opacity: .65 }}><CogniMark size={120} /></View>
-      <View style={{ maxWidth: "72%", gap: 7 }}><Eyebrow>Explore your thinking</Eyebrow><Title size={30}>Find your next focus</Title><Body muted style={{ fontSize: 14.5, lineHeight: 21 }}>Choose a skill for a focused round. A score is a starting point for practice, not a label.</Body></View>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", left: 20, bottom: 16, flexDirection: "row", gap: 7 }}><SkillMotif kind="reasoning" size={38} /><SkillMotif kind="perspective" size={38} /><SkillMotif kind="growth" size={38} /></View>
-    </LinearGradient>
+    <HeroPanel eyebrow="Explore your thinking" title="Find your next focus" body="Choose a skill for a focused round. A score is a starting point for practice, not a label." minHeight={0} renderArtwork={(size) => <CogniMark size={size} />} footer={<View pointerEvents="none" accessible={false} style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}><SkillMotif kind="reasoning" size={38} /><SkillMotif kind="perspective" size={38} /><SkillMotif kind="growth" size={38} /></View>} />
 
     {error ? <RefreshNotice message={error} onRetry={() => void reload()} /> : null}
     <FormField label="Search skills" accessibilityLabel="Search skills" placeholder="Try evidence, reasoning or AI" placeholderTextColor={colors.soft} value={query} onChangeText={setQuery} autoCorrect={false} returnKeyType="search" />

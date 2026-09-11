@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
 const read = (name) => fs.readFileSync(new URL(name, import.meta.url), "utf8");
-test("0.6.0 Connected Knowledge release retains application and EAS identity", () => {
+test("0.6.1 responsive visual repair release retains application and EAS identity", () => {
   const { expo } = JSON.parse(read("../app.json"));
-  assert.equal(expo.version, "0.6.0");
+  assert.equal(expo.version, "0.6.1");
   assert.equal(expo.android.package, "app.gocogni.cogni");
   assert.equal(expo.ios.bundleIdentifier, "app.gocogni.cogni");
   assert.equal(expo.extra.eas.projectId, "24fc0fea-5e66-4365-a82c-ac668aded7d0");

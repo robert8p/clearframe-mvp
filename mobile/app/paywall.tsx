@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActionLink, Body, Card, Eyebrow, PrimaryButton, Screen, Title } from "@/components/ui";
+import { ActionLink, Body, Card, Eyebrow, HeroPanel, PrimaryButton, Screen, Title } from "@/components/ui";
 import { CogniMark } from "@/components/brand";
 import { useEntitlements } from "@/lib/entitlements";
 import { PRIVACY_URL, SUBSCRIPTION_TERMS_URL, TERMS_URL } from "@/lib/legal";
@@ -65,11 +65,7 @@ export default function PaywallScreen() {
   return <Screen contentStyle={{ paddingTop: 18, paddingBottom: 52 }}>
     <View style={{ alignItems: "flex-end" }}><Pressable accessibilityRole="button" accessibilityLabel="Not now" onPress={() => void dismiss()} hitSlop={12} style={({ pressed }) => ({ minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, opacity: pressed ? .65 : 1 })}><Text style={{ color: colors.muted, fontSize: 14.5, ...typography.label }}>Not now</Text></Pressable></View>
 
-    <LinearGradient colors={["rgba(245,158,11,.22)", "rgba(139,92,246,.24)", "rgba(37,99,235,.18)", "rgba(15,23,42,.96)"]} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={{ minHeight: 300, borderRadius: radius.xl, borderWidth: 1, borderColor: "rgba(251,191,36,.36)", padding: 22, overflow: "hidden", boxShadow: glow.warm }}>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", right: -6, top: 18, opacity: .78 }}><CogniMark size={132} /></View>
-      <View style={{ width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(245,158,11,.11)", borderWidth: 1, borderColor: "rgba(251,191,36,.44)", boxShadow: glow.warm }}><Text accessible={false} style={{ color: colors.gold, fontSize: 28 }}>♛</Text></View>
-      <View style={{ maxWidth: "75%", gap: 8, marginTop: 14 }}><Eyebrow style={{ color: colors.gold }}>Cogni Pro</Eyebrow><Title size={31}>Go deeper. Explore further.</Title><Body muted>Daily core learning stays intact. Pro adds more choice, more focused practice and a fuller view of your progress.</Body></View>
-    </LinearGradient>
+    <HeroPanel tone="gold" eyebrow="Cogni Pro" title="Go deeper. Explore further." body="Daily core learning stays intact. Pro adds more choice, more focused practice and a fuller view of your progress." titleSize={31} artworkSize={128} renderArtwork={(size) => <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}><CogniMark size={size} /><View style={{ position: "absolute", width: Math.max(46, size * .48), height: Math.max(46, size * .48), borderRadius: Math.max(23, size * .24), alignItems: "center", justifyContent: "center", backgroundColor: "rgba(245,158,11,.14)", borderWidth: 1, borderColor: "rgba(251,191,36,.48)", boxShadow: glow.warm }}><Text accessible={false} style={{ color: colors.gold, fontSize: Math.max(24, size * .23) }}>♛</Text></View></View>} />
 
     <Card variant="glass" style={{ gap: 13 }}><Benefit>Unlimited additional focused practice</Benefit><Benefit>Train a specific skill whenever you choose</Benefit><Benefit>Full available skill-progress history and trends</Benefit><Benefit>Cogni Pro follows your account across supported devices</Benefit><Text style={{ color: colors.muted, fontSize: 13.5, lineHeight: 20, ...typography.body }}>Your starting check, daily lesson and assigned core training stay free.</Text></Card>
 

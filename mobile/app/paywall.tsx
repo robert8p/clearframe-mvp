@@ -28,7 +28,14 @@ export default function PaywallScreen() {
 
   const selected = useMemo(() => selectedKind === "annual" ? offering?.annual ?? offering?.monthly ?? null : offering?.monthly ?? offering?.annual ?? null, [offering, selectedKind]);
   const storeName = Platform.OS === "ios" ? "App Store" : "Google Play"; const purchaseReady = stateReliable && config.monetizationEnabled && billingStatus === "ready" && Boolean(selected); const preview = stateReliable && !config.monetizationEnabled;
-  const leavePaywall = () => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/home"); };
+  const leavePaywall = () => {
+    if (source === "profile") {
+      router.replace("/(tabs)/profile");
+      return;
+    }
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/home");
+  };
   const dismiss = async () => { await recordAnalytics("paywall_dismissed", { feature, source, experiment: config.paywallExperiment }); leavePaywall(); };
 
   const buy = async () => {

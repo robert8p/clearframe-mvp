@@ -75,6 +75,6 @@ export default function OnboardingScreen() {
     {selectedAudience ? <EditorialPanel style={{ borderColor: "rgba(34,211,238,.28)" }}><View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}><CogniMark size={52} animated={false} /><View style={{ flex: 1 }}><Eyebrow>What happens next</Eyebrow><Title size={23}>A short starting check</Title></View></View><Body muted>Plan for about 4–6 minutes. Cogni uses those answers to choose a useful starting focus. Your early scores become more reliable as you practise.</Body><Body muted style={{ fontSize: 13.5, lineHeight: 20 }}>It is not a pass/fail test. Your learning context changes which situations feel relevant; it does not raise or lower your assumed ability.</Body></EditorialPanel> : null}
 
     {error ? <Text accessibilityLiveRegion="assertive" selectable style={{ color: colors.danger, lineHeight: 22, ...typography.body }}>{error}</Text> : null}
-    <PrimaryButton label={busy ? "Saving…" : "Continue to Cogni"} disabled={busy || !selectedAudience} loading={busy} trailingArrow onPress={() => void save()} />
+    <PrimaryButton label={busy ? "Saving…" : "Continue to Cogni"} disabled={busy} loading={busy} trailingArrow onPress={() => void save()} />
   </Screen>;
 }

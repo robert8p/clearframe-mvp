@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 import { test } from 'node:test';
 const read=name=>fs.readFileSync(new URL('../'+name,import.meta.url),'utf8');
 const compact=value=>value.replace(/\s+/g,'');
@@ -8,10 +7,8 @@ test('Connected Knowledge retains the native app and real learning routes',()=>{
   const {expo}=JSON.parse(read('app.json'));assert.equal(expo.version,'0.6.1');assert.equal(expo.android.package,'app.gocogni.cogni');
   const welcome=read('app/index.tsx');assert(welcome.includes('Sharpen how you think.'));assert(welcome.includes('router.push("/demo")'));assert(welcome.includes('router.push("/signup")'));assert(welcome.includes('router.push("/login")'));assert(welcome.includes('insets.top'));
 });
-test('Illustration is bundled, decorative and independent of learning content',()=>{
-  const art=read('components/visuals.tsx');assert(art.includes('importantForAccessibility:"no-hide-descendants"'));assert(art.includes('pointerEvents:"none"'));assert(art.includes('require("../assets/approved-dreamscape.png")'));assert(!art.includes('https://'));assert(!art.includes('Math.random'));assert(!art.includes('Animated.loop'));
-  const bytes=fs.readFileSync(new URL('../assets/approved-dreamscape.png',import.meta.url));assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert(bytes.length<100000);
-  assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),'2ea4004cf994b9f82bba4b5179d71efe020464bb59bf6a2b0e5c47be08386ea9');
+test('Illustration is abstract, decorative and independent of learning content',()=>{
+  const art=read('components/visuals.tsx');assert(art.includes('importantForAccessibility:"no-hide-descendants"'));assert(art.includes('pointerEvents:"none"'));assert(art.includes('CogniMark'));assert(art.includes('SkillMotif'));assert(!art.includes('approved-dreamscape'));assert(!art.includes('require('));assert(!art.includes('https://'));assert(!art.includes('Math.random'));assert(!art.includes('Animated.loop'));
 });
 test('New skill tiles use real data and real navigation with scalable labels',()=>{
   const source=compact(read('components/learning-surfaces.tsx'));assert(source.includes('rows.filter(row=>skillDetails(row)?.slug)'));assert(source.includes('onOpen(slug)'));assert(source.includes('fontScale>1.45'));assert(!source.includes('numberOfLines='));
@@ -27,11 +24,17 @@ test('Five accessible destinations and keyboard handling survive restyling',()=>
   const s=read('app/(tabs)/_layout.tsx');for(const name of ['home','skills','train','progress','profile'])assert(s.includes(`name="${name}"`));assert(s.includes('tabBarHideOnKeyboard: true'));assert(s.includes('useSafeAreaInsets'));
 });
 
-test("Welcome artwork uses the bundled concept art with a controlled atmospheric overlay",()=>{
+test("Welcome artwork uses abstract Cogni artwork with a controlled atmospheric overlay",()=>{
   const art=read("components/visuals.tsx");
   const welcome=art.split("export function WelcomeArtwork()")[1].split("export type MotifKind")[0];
   assert(welcome.includes("<HeroArtwork"));
   assert(welcome.includes("<LinearGradient"));
-  assert(art.includes('require("../assets/approved-dreamscape.png")'));
+  assert(!art.includes("approved-dreamscape"));
   assert(!art.includes("https://"));
+});
+
+test("Global app backdrop never renders retired character artwork",()=>{
+  const ui=read("components/ui.tsx");
+  assert(!ui.includes("approved-dreamscape"));
+  assert(!ui.includes("<Image"));
 });

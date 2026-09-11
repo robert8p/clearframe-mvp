@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Image, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions, type ScrollViewProps, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions, type ScrollViewProps, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { CogniMark } from "@/components/brand";
@@ -25,11 +25,11 @@ function AmbientBackdrop({ atmospheric = true }: { atmospheric?: boolean }) {
   return (
     <View pointerEvents="none" accessible={false} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       <LinearGradient colors={[colors.bgDeep, colors.bg, "#09162C"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", inset: 0 }} />
-      {atmospheric ? <Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{ position: "absolute", top: -58, right: -86, width: 430, height: 430, opacity: .18 }} /> : null}
-      <LinearGradient colors={[...gradients.ambient]} locations={[0, .38, .68, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 520 }} />
-      <View style={{ position: "absolute", left: -120, top: 260, width: 300, height: 300, borderRadius: 150, backgroundColor: "rgba(37,99,235,.06)", boxShadow: glow.blue }} />
-      <View style={{ position: "absolute", right: -130, top: 510, width: 280, height: 280, borderRadius: 140, backgroundColor: "rgba(139,92,246,.045)", boxShadow: glow.violet }} />
-      {[{l:"12%",t:86,s:2},{l:"28%",t:164,s:1.5},{l:"78%",t:116,s:2},{l:"90%",t:286,s:1.5},{l:"63%",t:356,s:1.5}].map((dot,index)=><View key={index} style={{position:"absolute",left:dot.l as `${number}%`,top:dot.t,width:dot.s,height:dot.s,borderRadius:2,backgroundColor:"rgba(248,250,252,.42)"}}/>)}
+      {atmospheric ? <>
+        <LinearGradient colors={[...gradients.ambient]} locations={[0, .38, .68, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 520 }} />
+        <LinearGradient colors={["transparent", "rgba(34,211,238,.10)", "rgba(139,92,246,.08)", "transparent"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", left: -40, right: -40, top: 210, height: 360 }} />
+        {[{l:"12%",t:86,s:2},{l:"28%",t:164,s:1.5},{l:"78%",t:116,s:2},{l:"90%",t:286,s:1.5},{l:"63%",t:356,s:1.5}].map((dot,index)=><View key={index} style={{position:"absolute",left:dot.l as `${number}%`,top:dot.t,width:dot.s,height:dot.s,borderRadius:2,backgroundColor:"rgba(248,250,252,.42)"}}/>)}
+      </> : null}
     </View>
   );
 }

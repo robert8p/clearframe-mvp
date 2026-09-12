@@ -78,7 +78,7 @@ export function QuestionRunner({ mode, sessionId, challenges, answeredChallengeI
     try { await onComplete(); } catch { nextLock.current = false; setAdvancing(false); setError("We couldn’t open the next screen. Your answers are saved. Try again."); }
   }
 
-  if (!challenge) return <Screen><EditorialPanel><View style={{ alignSelf: "center" }}><CogniMark size={86} /></View><Title size={24}>{challenges.length ? "You’re all caught up" : "No questions available"}</Title><Body muted>{challenges.length ? "Your answers are saved. Return to Train for your next step." : "Return to Train and try again."}</Body>{error ? <Text accessibilityLiveRegion="assertive" style={{ color: colors.danger }}>{error}</Text> : null}<PrimaryButton label={mode === "practice" ? "Back to skills" : "Back to training"} loading={advancing} onPress={() => void finish()} /></EditorialPanel></Screen>;
+  if (!challenge) return <Screen><EditorialPanel><View style={{ alignSelf: "center" }}><CogniMark size={86} /></View><Title size={24}>{challenges.length ? "You’re all caught up" : "No questions available"}</Title><Body muted>{challenges.length ? "Your answers are saved. Return to Train for your next step." : "Return to Train and try again."}</Body>{error ? <Text accessibilityLiveRegion="assertive" style={{ color: colors.danger }}>{error}</Text> : null}<PrimaryButton label={mode === "practice" ? "Back to Discover" : "Back to training"} loading={advancing} onPress={() => void finish()} /></EditorialPanel></Screen>;
 
   const multiReady = requiredSelections ? multi.length === requiredSelections : multi.length > 0;
   const answerReady = type === "multi_select" ? multiReady : type === "ranking" ? ranking.length === challenge.options.length : type === "classification" ? challenge.options.length > 0 && challenge.options.every((_item, optionIndex) => Boolean(classification[String(optionIndex)])) : selected !== null;
@@ -129,10 +129,10 @@ export function QuestionRunner({ mode, sessionId, challenges, answeredChallengeI
       <DeviceToolsNotice />
       <Eyebrow>Takeaways from this visit</Eyebrow>
       {visitIdeas.slice(-3).map(idea => <EditorialPanel key={idea.id}><Title size={21}>{idea.title}</Title><Body>{idea.principle}</Body><SaveIdeaButton idea={idea} /></EditorialPanel>)}
-      <Body muted style={{ fontSize: 13, lineHeight: 20 }}>Showing up to three ideas from answers submitted in this visit. Saved ideas are available in your thinking toolkit.</Body>
+      <Body muted style={{ fontSize: 13, lineHeight: 20 }}>Showing up to three ideas from answers submitted in this visit. Saved ideas stay available on this device.</Body>
       <Body muted>Progress comes from understanding the reasoning, not chasing a perfect score.</Body>
       {error ? <Text accessibilityLiveRegion="assertive" style={{ color: colors.danger }}>{error}</Text> : null}
-      <PrimaryButton label={mode === "practice" ? "Back to skills" : "Back to training"} trailingArrow loading={advancing} onPress={() => void finish()} />
+      <PrimaryButton label={mode === "practice" ? "Back to Discover" : "Back to training"} trailingArrow loading={advancing} onPress={() => void finish()} />
     </Screen>;
   }
 
@@ -140,7 +140,7 @@ export function QuestionRunner({ mode, sessionId, challenges, answeredChallengeI
   const partial = Boolean(result) && !result?.correct && score >= .5;
   return <Screen ref={scrollRef}>
     <View style={{ gap: 10 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 9, flex: 1 }}><SkillMotif kind={motifForSkill(skillName)} size={38} /><View style={{ flex: 1 }}><Eyebrow>{modeLabel ?? (mode === "diagnostic" ? "Starting check" : mode === "practice" ? "Skill practice" : "Daily practice")}</Eyebrow></View></View><Text style={{ color: colors.muted, fontSize: 13.5, ...typography.label, fontVariant: ["tabular-nums"] }}>{Math.min(index + 1, challenges.length)} of {challenges.length}</Text></View>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 9, flex: 1 }}><SkillMotif kind={motifForSkill(skillName)} size={38} /><View style={{ flex: 1 }}><Eyebrow>{modeLabel ?? (mode === "diagnostic" ? "Starting check" : mode === "practice" ? "Topic practice" : "Daily practice")}</Eyebrow></View></View><Text style={{ color: colors.muted, fontSize: 13.5, ...typography.label, fontVariant: ["tabular-nums"] }}>{Math.min(index + 1, challenges.length)} of {challenges.length}</Text></View>
       <ProgressBar value={progress} />
     </View>
 
@@ -160,7 +160,7 @@ export function QuestionRunner({ mode, sessionId, challenges, answeredChallengeI
         <View style={{ alignSelf: "center", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(8,16,38,.54)", borderWidth: 1, borderColor: colors.line }}><Text style={{ color: colors.cyan, fontSize: 14, ...typography.metric }}>+{result.xpEarned} XP</Text></View>
       </LinearGradient>
 
-      {result.skillUpdates?.length ? <EditorialPanel><Eyebrow>Skill progress</Eyebrow>{result.skillUpdates.map(update => <View key={update.slug} style={{ flexDirection: "row", justifyContent: "space-between", gap: 14 }}><Text style={{ flex: 1, color: colors.text, fontSize: 15.5, lineHeight: 22, ...typography.bodyMedium }}>{(update.name ?? update.slug).replace(/^./, c => c.toUpperCase())}</Text><Text style={{ color: Number(update.delta ?? 0) >= 0 ? colors.green : colors.danger, fontSize: 15.5, ...typography.metric }}>{Number(update.delta ?? 0) >= 0 ? "+" : ""}{Number(update.delta ?? 0).toFixed(1)}</Text></View>)}</EditorialPanel> : null}
+      {result.skillUpdates?.length ? <EditorialPanel><Eyebrow>Topic progress</Eyebrow>{result.skillUpdates.map(update => <View key={update.slug} style={{ flexDirection: "row", justifyContent: "space-between", gap: 14 }}><Text style={{ flex: 1, color: colors.text, fontSize: 15.5, lineHeight: 22, ...typography.bodyMedium }}>{(update.name ?? update.slug).replace(/^./, c => c.toUpperCase())}</Text><Text style={{ color: Number(update.delta ?? 0) >= 0 ? colors.green : colors.danger, fontSize: 15.5, ...typography.metric }}>{Number(update.delta ?? 0) >= 0 ? "+" : ""}{Number(update.delta ?? 0).toFixed(1)}</Text></View>)}</EditorialPanel> : null}
 
       <EditorialPanel style={{ borderColor: "rgba(34,211,238,.26)" }}><View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}><View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(34,211,238,.08)", borderWidth: 1, borderColor: "rgba(34,211,238,.24)", alignItems: "center", justifyContent: "center" }}><CogniIcon name="bookmark" size={20} color={colors.cyan} /></View><Eyebrow>Key insight</Eyebrow></View><Body>{result.thinkingPrinciple}</Body><SaveIdeaButton idea={{ id: challenge.id, title: challenge.title, principle: result.thinkingPrinciple, application: result.application }} /></EditorialPanel>
       <DeviceToolsNotice />

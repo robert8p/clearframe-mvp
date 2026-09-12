@@ -41,7 +41,7 @@ function screen(file, overrides = {}) {
     'expo-linking': { createURL: path => `cogni://${path}` },
     '@/components/ui': named('ActionLink Body Card Eyebrow PrimaryButton Screen Title LoadingState ErrorState'),
     '@/components/brand': named('CogniLogo CogniMark'), '@/components/form-field': named('FormField'),
-    '@/components/interaction-cues': named('CompactAction'), '@/components/option-picker': named('OptionPicker'),
+    '@/components/interaction-cues': named('CompactAction'), '@/components/option-picker': named('OptionPicker'), '@/components/achievements': named('AchievementShelf'),
     '@/lib/audience': { isMobileAudience: () => true, mobileAudienceMeta: () => ({ label: 'Everyday learner' }) },
     '@/lib/context-options': { functionLabelForAudience: () => 'Interests', functionOptionsForAudience: () => [], goalOptionsForAudience: () => [] },
     '@/lib/notebook': { useNotebook: () => ({ clear: async () => {} }) },

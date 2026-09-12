@@ -64,6 +64,27 @@ export type DailyLesson = {
 };
 type ScoreRow = { skill_id: string; score: number; reliability: number; attempts: number };
 type Assignment = { challenge: Challenge; reason: "weakest_measured" | "ai_verification" | "adaptive_variety" | "fallback"; skillId: string | null };
+type AchievementTone = "common" | "uncommon" | "rare" | "epic" | "legendary";
+type AchievementStats = {
+  xp: number;
+  answers: number;
+  streak: number;
+  completedSessions: number;
+  completedLessons: number;
+  measuredSkills: number;
+  masteredSkills: number;
+};
+type AchievementProgress = {
+  slug: string;
+  name: string;
+  description: string;
+  tone: AchievementTone;
+  target: number;
+  current: number;
+  unlocked: boolean;
+  earnedAt: string | null;
+};
+type AchievementRule = Omit<AchievementProgress, "current" | "unlocked" | "earnedAt"> & { current: (stats: AchievementStats) => number };
 export type DailyTrainingSession = {
   id: string | null;
   sessionDate: string;
@@ -79,6 +100,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const QUESTION_COUNTS: Record<Audience, number> = { casual: 5, university_student: 5, graduate_early_career: 5, junior_professional: 5, management: 4, executive: 3 };
 const COMPLEXITY: Record<Audience, number> = { casual: 50, university_student: 42, graduate_early_career: 48, junior_professional: 54, management: 61, executive: 68 };
 const SESSION_LABELS: Record<Audience, string> = { casual: "Everyday practice", university_student: "Daily practice", graduate_early_career: "Workplace practice", junior_professional: "Applied judgement", management: "Management decisions", executive: "Executive decisions" };
+const ACHIEVEMENT_RULES: AchievementRule[] = [
+  { slug: "first-lesson", name: "First Lesson", description: "Complete your first Cogni lesson.", tone: "common", target: 1, current: (stats) => stats.completedLessons },
+  { slug: "first-principles", name: "First Principles", description: "Earn 50 XP.", tone: "common", target: 50, current: (stats) => stats.xp },
+  { slug: "concept-explorer", name: "Concept Explorer", description: "Answer 25 Cogni questions.", tone: "uncommon", target: 25, current: (stats) => stats.answers },
+  { slug: "week-warrior", name: "Week Warrior", description: "Complete 5 learning sessions.", tone: "rare", target: 5, current: (stats) => stats.completedSessions },
+  { slug: "seven-day-signal", name: "Seven-Day Signal", description: "Build a 7-day streak.", tone: "epic", target: 7, current: (stats) => stats.streak },
+  { slug: "evidence-habit", name: "Evidence Habit", description: "Earn 250 XP.", tone: "rare", target: 250, current: (stats) => stats.xp },
+  { slug: "mastery-builder", name: "Mastery Builder", description: "Measure progress in 5 topics.", tone: "epic", target: 5, current: (stats) => stats.measuredSkills },
+  { slug: "galaxy-mind", name: "Galaxy Mind", description: "Reach mastery in 3 topics.", tone: "legendary", target: 3, current: (stats) => stats.masteredSkills },
+];
 
 export function isAudience(value: unknown): value is Audience {
   return typeof value === "string" && (AUDIENCES as readonly string[]).includes(value);
@@ -233,19 +264,77 @@ function rankChallenges(rows: Challenge[], target: number, seed: string, seenPro
   });
 }
 
+export function buildAchievementProgress(stats: AchievementStats): AchievementProgress[] {
+  return ACHIEVEMENT_RULES.map((rule) => {
+    const current = Math.max(0, Number(rule.current(stats)) || 0);
+    return { slug: rule.slug, name: rule.name, description: rule.description, tone: rule.tone, target: rule.target, current, unlocked: current >= rule.target, earnedAt: null };
+  });
+}
+function joinedAchievementSlug(value: unknown) {
+  const relation = Array.isArray(value) ? value[0] : value;
+  return relation && typeof relation === "object" && "slug" in relation ? String((relation as { slug?: unknown }).slug ?? "") : "";
+}
+async function persistKnownAchievements(admin: SupabaseClient, userId: string, achievements: AchievementProgress[]) {
+  const unlockedSlugs = achievements.filter((achievement) => achievement.unlocked).map((achievement) => achievement.slug);
+  if (unlockedSlugs.length) {
+    const { data: knownRows, error: knownError } = await admin.from("achievements").select("id,slug").in("slug", unlockedSlugs);
+    if (knownError) throw knownError;
+    const rows = (knownRows ?? []) as { id: string; slug: string }[];
+    if (rows.length) {
+      const { error } = await admin.from("user_achievements").upsert(rows.map((row) => ({ user_id: userId, achievement_id: row.id })), { onConflict: "user_id,achievement_id", ignoreDuplicates: true });
+      if (error) throw error;
+    }
+  }
+  const { data: earnedRows, error: earnedError } = await admin.from("user_achievements").select("earned_at,achievements(slug)").eq("user_id", userId);
+  if (earnedError) throw earnedError;
+  const earnedAt = new Map<string, string>();
+  for (const row of (earnedRows ?? []) as { earned_at: string; achievements?: unknown }[]) {
+    const slug = joinedAchievementSlug(row.achievements);
+    if (slug) earnedAt.set(slug, row.earned_at);
+  }
+  return achievements.map((achievement) => ({ ...achievement, earnedAt: earnedAt.get(achievement.slug) ?? null }));
+}
+
 export async function profilePayload(admin: SupabaseClient, userId: string, email?: string) {
-  const [{ data: profile, error: profileError }, { data: skillScores, error: scoreError }, { data: recent, error: responseError }, countResult] = await Promise.all([
+  const [
+    { data: profile, error: profileError },
+    { data: skillScores, error: scoreError },
+    { data: recent, error: responseError },
+    countResult,
+    completedSessionsResult,
+    completedLessonsResult,
+  ] = await Promise.all([
     admin.from("profiles").select("id,full_name,audience_segment,function_area,industry,primary_goal,study_stage,role_focus,responsibility_scope,organisation_scale,time_zone,xp,current_streak,last_session_date").eq("id", userId).single(),
     admin.from("user_skill_scores").select("skill_id,score,reliability,attempts,evidence_points,last_seen_at,skills(name,slug,description)").eq("user_id", userId).order("score"),
     admin.from("user_responses").select("is_correct,score_fraction,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
     admin.from("user_responses").select("id", { count: "exact", head: true }).eq("user_id", userId),
+    admin.from("training_sessions").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "completed"),
+    admin.from("user_lesson_completions").select("lesson_id", { count: "exact", head: true }).eq("user_id", userId),
   ]);
   if (profileError) throw profileError;
   if (scoreError) throw scoreError;
   if (responseError) throw responseError;
+  if (completedSessionsResult.error) throw completedSessionsResult.error;
+  if (completedLessonsResult.error) throw completedLessonsResult.error;
   const responses = recent ?? [];
   const averageScore = responses.length ? responses.reduce((sum, row) => sum + Number(row.score_fraction ?? (row.is_correct ? 1 : 0)), 0) / responses.length : null;
-  return { profile: { ...profile, email }, skillScores: skillScores ?? [], summary: { answers: countResult.count ?? 0, averageScore } };
+  const scores = (skillScores ?? []) as { score?: number | null; reliability?: number | null; attempts?: number | null }[];
+  const measured = scores.filter((row) => Number(row.attempts ?? 0) > 0);
+  const mastered = measured.filter((row) => Number(row.score ?? 0) >= 80 && Number(row.reliability ?? 0) >= .35);
+  const answers = countResult.count ?? 0;
+  const completedSessions = completedSessionsResult.count ?? 0;
+  const completedLessons = completedLessonsResult.count ?? 0;
+  const masteryScore = measured.length ? measured.reduce((sum, row) => sum + Number(row.score ?? 0), 0) / measured.length : null;
+  const achievements = await persistKnownAchievements(admin, userId, buildAchievementProgress({
+    xp: Number(profile?.xp ?? 0),
+    answers,
+    streak: Number(profile?.current_streak ?? 0),
+    completedSessions,
+    completedLessons,
+    measuredSkills: measured.length,
+    masteredSkills: mastered.length,
+  }));
+  return { profile: { ...profile, email }, skillScores: skillScores ?? [], achievements, summary: { answers, averageScore, completedSessions, completedLessons, measuredSkills: measured.length, masteryScore } };
 }
 
 type DiagnosticRow = { id: string; sort_order: number; diagnostic_role: string | null; audience_segments: string[] | null; is_published: boolean; interaction_config?: Record<string, unknown> | null };

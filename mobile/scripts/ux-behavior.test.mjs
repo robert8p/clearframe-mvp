@@ -95,7 +95,7 @@ test('Home training action reflects actual progress and opens next activity dire
   assert.equal(getTrainingAction({state:'training',session:{answeredChallengeIds:[]}}).label,'Train now');
   assert.equal(getTrainingAction({state:'training',session:{answeredChallengeIds:['a']}}).label,'Continue training');
   for(const state of ['diagnostic','training']) assert.equal(getTrainingAction({state}).href,'/(tabs)/train/session');
-  assert.equal(getTrainingAction({state:'lesson'}).href,'/(tabs)/train/lesson');assert.equal(getTrainingAction({state:'complete'}).href,'/(tabs)/skills');
+  assert.equal(getTrainingAction({state:'lesson'}).href,'/(tabs)/train/lesson');assert.equal(getTrainingAction({state:'complete'}).href,'/(tabs)/skills');assert.equal(getTrainingAction({state:'complete'}).label,'Discover topics');
   assert.equal(getTrainingAction({state:'unavailable'}).href,null);assert.equal(getTrainingAction(null).href,null);
 });
 test('Display repair fixes nested escaped whitespace without mutating the original',()=>{

@@ -64,7 +64,7 @@ export default function SignupScreen() {
       </View>
       <Card>
         <Title size={30}>Create your Cogni account</Title>
-        <Body muted>Your skill profile, streak and progress will stay synced across devices.</Body>
+        <Body muted>Your topic profile, streak and progress will stay synced across devices.</Body>
         <View style={{ gap: 14 }}>
           <FormField
             label="Name"

@@ -21,7 +21,22 @@ test('Practice still starts without a selected answer or confidence',()=>{
   const s=compact(read('components/question-runner.tsx'));assert(s.includes('useState<number|null>(null)'));assert(s.includes('(!challenge.confidence_required||confidence!==null)'));assert(s.includes('if(!ready||busy||result||submitLock.current)return;'));
 });
 test('Five accessible destinations and keyboard handling survive restyling',()=>{
-  const s=read('app/(tabs)/_layout.tsx');for(const name of ['home','skills','train','progress','profile'])assert(s.includes(`name="${name}"`));assert(s.includes('tabBarHideOnKeyboard: true'));assert(s.includes('useSafeAreaInsets'));
+  const s=read('app/(tabs)/_layout.tsx');for(const name of ['home','skills','train','progress','profile'])assert(s.includes(`name="${name}"`));assert(s.includes('title: "Discover"'));assert(s.includes('tabBarAccessibilityLabel: "Discover tab"'));assert(s.includes('tabBarHideOnKeyboard: true'));assert(s.includes('useSafeAreaInsets'));
+});
+
+test("Achievements are backend-owned and exposed to the mobile UI",()=>{
+  const types=read("lib/types.ts");
+  const achievements=read("components/achievements.tsx");
+  const profile=read("app/(tabs)/profile.tsx");
+  const progress=read("app/(tabs)/progress.tsx");
+  const engine=read("../supabase/functions/mobile-api/engine.ts");
+  assert(types.includes("AchievementProgress"));
+  assert(achievements.includes("AchievementShelf"));
+  assert(profile.includes("data.achievements ?? []"));
+  assert(progress.includes("data.achievements ?? []"));
+  assert(engine.includes("ACHIEVEMENT_RULES"));
+  assert(engine.includes("user_achievements"));
+  assert(engine.includes("persistKnownAchievements"));
 });
 
 test("Welcome artwork uses abstract Cogni artwork with a controlled atmospheric overlay",()=>{

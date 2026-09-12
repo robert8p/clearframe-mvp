@@ -36,7 +36,7 @@ export default function TabLayout() {
     tabBarLabelStyle: { fontSize: 11 * Math.min(fontScale, 1.2), lineHeight: 14 * Math.min(fontScale, 1.2), ...typography.label, paddingTop: 1 },
   }}>
     <Tabs.Screen name="home" options={{ title: "Home", headerShown: false, tabBarAccessibilityLabel: "Home tab", tabBarIcon: ({ focused }) => <TabIcon name="home" active={focused} /> }} />
-    <Tabs.Screen name="skills" options={{ title: "Skills", tabBarAccessibilityLabel: "Skills tab", tabBarIcon: ({ focused }) => <TabIcon name="skills" active={focused} /> }} />
+    <Tabs.Screen name="skills" options={{ title: "Discover", tabBarAccessibilityLabel: "Discover tab", tabBarIcon: ({ focused }) => <TabIcon name="skills" active={focused} /> }} />
     <Tabs.Screen name="train" options={{ title: "Train", tabBarAccessibilityLabel: "Train tab", headerShown: false, tabBarIcon: ({ focused }) => <TabIcon name="train" active={focused} /> }} />
     <Tabs.Screen name="progress" options={{ title: "Progress", tabBarAccessibilityLabel: "Progress tab", tabBarIcon: ({ focused }) => <TabIcon name="progress" active={focused} /> }} />
     <Tabs.Screen name="profile" options={{ title: "Profile", tabBarAccessibilityLabel: "Profile tab", tabBarIcon: ({ focused }) => <TabIcon name="profile" active={focused} /> }} />

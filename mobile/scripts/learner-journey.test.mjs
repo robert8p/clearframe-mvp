@@ -115,7 +115,7 @@ test('Resume skips only saved session questions; feedback scrolls once and compl
   const result = f.nodes().find(n => n.props.onLayout); const event = { nativeEvent: { layout: { y: 800 } } };
   result.props.onLayout(event); result.props.onLayout(event); assert.deepEqual(f.scrolls.at(-1), { y: 788, animated: false });
   assert.equal(f.scrolls.filter(s => s.y === 788).length, 1); f.press('Finish training');
-  assert(f.text().includes('answers are saved')); const finish = f.find('Back to skills').props.onPress; finish(); finish(); await f.flush(); assert.equal(finished, 1);
+  assert(f.text().includes('answers are saved')); const finish = f.find('Back to Discover').props.onPress; finish(); finish(); await f.flush(); assert.equal(finished, 1);
 });
 
 for (const typed of [false, true]) test(`Lesson reflection ${typed ? 'with private text' : 'without typing'} completes without sending text`, async () => {

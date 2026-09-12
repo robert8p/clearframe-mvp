@@ -69,10 +69,10 @@ export default function HomeScreen() {
 
     <EditorialPanel style={{ borderColor: "rgba(34,211,238,.25)" }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}><View style={{ flex: 1, gap: 5 }}><Eyebrow>Your progress</Eyebrow><Title size={22}>{average === null ? "Your starting point is taking shape" : `${Math.round(average * 100)}% recent performance`}</Title><Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19, ...typography.body }}>{profile.summary.answers} answers saved · {profile.profile.xp ?? 0} practice XP</Text></View><View style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(34,211,238,.08)", borderWidth: 1, borderColor: "rgba(34,211,238,.24)" }}><CogniIcon name="progress" size={27} color={colors.cyan} /></View></View>
-      <Body muted style={{ fontSize: 13, lineHeight: 20 }}>{average === null ? "Your first answers begin your skill map. There is nothing to catch up on." : "Based on your latest up to 200 answers—not a measure of intelligence or a ranking against other people."}</Body>
-      <ActionLink label="View progress" hint="Explore the evidence and history behind your skill scores" onPress={() => router.navigate("/(tabs)/progress")} />
+      <Body muted style={{ fontSize: 13, lineHeight: 20 }}>{average === null ? "Your first answers begin your topic map. There is nothing to catch up on." : "Based on your latest up to 200 answers—not a measure of intelligence or a ranking against other people."}</Body>
+      <ActionLink label="View progress" hint="Explore the evidence and history behind your topic scores" onPress={() => router.navigate("/(tabs)/progress")} />
     </EditorialPanel>
 
-    {next.length ? <View style={{ gap: 12 }}><SectionHeader title="Choose your next focus" action={<ActionLink label="See all skills" onPress={() => router.navigate("/(tabs)/skills")} />} />{next.map(row => <SkillTile key={row.skill_id} row={row} pro={needsProForFocusedPractice} onPress={() => { const slug = skillDetails(row)?.slug; if (slug) openFocusedPractice(slug, "home_focus"); }} />)}</View> : null}
+    {next.length ? <View style={{ gap: 12 }}><SectionHeader title="Choose your next focus" action={<ActionLink label="Browse topics" onPress={() => router.navigate("/(tabs)/skills")} />} />{next.map(row => <SkillTile key={row.skill_id} row={row} pro={needsProForFocusedPractice} onPress={() => { const slug = skillDetails(row)?.slug; if (slug) openFocusedPractice(slug, "home_focus"); }} />)}</View> : null}
   </Screen>;
 }

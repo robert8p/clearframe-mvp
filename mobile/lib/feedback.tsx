@@ -23,6 +23,39 @@ const HAPTICS_KEY = "cogni.feedback.haptics.v1";
 const SOUND_VERSION = 3;
 const FeedbackContext = createContext<FeedbackContextValue | null>(null);
 const report = (error: unknown) => { if (__DEV__) console.warn("Cogni feedback unavailable", error); };
+const preferenceFallback = new Map<string, string>();
+
+async function canUsePreferenceStore() {
+  if (Platform.OS === "web") return false;
+  try {
+    return await SecureStore.isAvailableAsync();
+  } catch (error) {
+    report(error);
+    return false;
+  }
+}
+
+async function readPreference(key: string) {
+  if (!(await canUsePreferenceStore())) return preferenceFallback.get(key) ?? null;
+  try {
+    const value = key === SOUND_KEY
+      ? await SecureStore.getItemAsync(SOUND_KEY)
+      : key === HAPTICS_KEY
+        ? await SecureStore.getItemAsync(HAPTICS_KEY)
+        : await SecureStore.getItemAsync(key);
+    if (value !== null) preferenceFallback.set(key, value);
+    return value;
+  } catch (error) {
+    report(error);
+    return preferenceFallback.get(key) ?? null;
+  }
+}
+
+async function writePreference(key: string, value: string) {
+  preferenceFallback.set(key, value);
+  if (!(await canUsePreferenceStore())) return;
+  await SecureStore.setItemAsync(key, value);
+}
 
 function soundFile(cue: SoundCue) {
   const bytes = writeWav(TONES[cue]); // Synthesis must succeed BEFORE creating a file.
@@ -91,7 +124,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const activeRef = useRef(AppState.currentState === "active");
   const audioRef = useRef<ReturnType<typeof createFeedbackAudio> | null>(null);
   const lastSelectionAtRef = useRef(0);
-  const persist = useMemo(() => createPreferenceWriter(SecureStore.setItemAsync, report), []);
+  const persist = useMemo(() => createPreferenceWriter(writePreference, report), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,8 +152,8 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
       audio.setEnabled(readyRef.current && soundEnabledRef.current && !enabled);
     });
     void Promise.all([
-      SecureStore.getItemAsync(SOUND_KEY).catch((error) => { report(error); return "false"; }),
-      SecureStore.getItemAsync(HAPTICS_KEY).catch((error) => { report(error); return "false"; }),
+      readPreference(SOUND_KEY),
+      readPreference(HAPTICS_KEY),
       AccessibilityInfo.isScreenReaderEnabled().catch(() => true),
     ]).then(([storedSound, storedHaptics, readerEnabled]) => {
       if (cancelled) return;

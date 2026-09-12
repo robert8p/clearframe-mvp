@@ -16,11 +16,12 @@ export function OptionPicker({ label, hint, value, options, onChange }: { label:
               key={`${label}:${item.value || "none"}`}
               accessibilityRole="radio"
               accessibilityLabel={`${label}: ${item.label}`}
-              accessibilityState={{ selected }}
+              accessibilityState={{ checked: selected }}
               onPress={() => onChange(item.value)}
               style={({ pressed }) => ({
                 flexGrow: 1,
                 flexBasis: 142,
+                minWidth: 0,
                 minHeight: 48,
                 justifyContent: "center",
                 paddingHorizontal: 13,
@@ -32,7 +33,7 @@ export function OptionPicker({ label, hint, value, options, onChange }: { label:
                 opacity: pressed ? 0.78 : 1,
               })}
             >
-              <Text style={{ color: selected ? colors.text : colors.muted, fontSize: 13.5, lineHeight: 18, fontWeight: selected ? "900" : "700", textAlign: "center" }}>{item.label}</Text>
+              <Text style={{ color: selected ? colors.text : colors.muted, fontSize: 13.5, lineHeight: 19, fontWeight: selected ? "900" : "700", textAlign: "center" }}>{item.label}</Text>
             </Pressable>
           );
         })}

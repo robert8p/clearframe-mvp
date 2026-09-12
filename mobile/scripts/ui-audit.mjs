@@ -56,7 +56,9 @@ const orb = read("components/orb.tsx");
 const rootLayout = read("app/_layout.tsx");
 const interactionCues = read("components/interaction-cues.tsx");
 const optionPicker = read("components/option-picker.tsx");
+const learningSurfaces = read("components/learning-surfaces.tsx");
 const statusLabelSource = interactionCues.split("export function CompactAction")[0];
+pass(ui.includes("export function HeroPanel"), "Shared hero panels must use the responsive content/artwork primitive.");
 pass(ui.includes("useReducedMotion"), "Shared UI motion must respect Reduce Motion.");
 pass(brand.includes("useReducedMotion"), "Cogni brand motion must respect Reduce Motion.");
 pass(orb.includes("useReducedMotion"), "Cogni orb motion must respect Reduce Motion.");
@@ -67,6 +69,7 @@ pass(ui.includes("minHeight: 48") && ui.includes("export function ActionLink"), 
 pass(interactionCues.includes("export function CompactAction") && interactionCues.includes('accessibilityRole="button"') && interactionCues.includes("minHeight: 48"), "Compact button-like controls must be real accessible buttons with at least a 48dp target.");
 pass(optionPicker.includes('accessibilityRole="radiogroup"') && optionPicker.includes('accessibilityRole="radio"') && optionPicker.includes("minHeight: 48"), "Canonical option pickers must be accessible radio controls with at least a 48dp target.");
 pass(statusLabelSource.includes("export function StatusLabel") && !statusLabelSource.includes("borderWidth:"), "Non-interactive status labels must remain visually flat and borderless.");
+pass(!learningSurfaces.includes("numberOfLines="), "Skill shelf labels must remain fully readable rather than truncated to fit a tile.");
 
 const formField = read("components/form-field.tsx");
 pass(formField.includes("accessibilityLabel"), "Reusable form fields must expose accessibility labels.");
@@ -99,6 +102,10 @@ pass(!welcome.includes("borderRadius: 21"), "Welcome feature descriptions must n
 pass(!profile.includes("flexBasis: 96, minHeight: 88, borderRadius: 18"), "Profile milestones must remain clearly informational rather than button-like tiles.");
 
 const theme = parseThemeColours(read("lib/theme.ts"));
+pass(!/letterSpacing:\s*-\d/.test(read("lib/theme.ts")), "Typography tokens must not use negative letter spacing.");
+for (const heroFile of ["app/(tabs)/home.tsx", "app/(tabs)/skills.tsx", "app/onboarding.tsx", "app/paywall.tsx"]) {
+  pass(!/maxWidth:\s*"[0-9]+%"/.test(read(heroFile)), `${heroFile} must not reserve fragile percentage text columns in artwork-led hero panels.`);
+}
 for (const foreground of ["text", "muted", "soft"]) {
   for (const background of ["bg", "panel", "panel2", "panel3"]) {
     const ratio = contrast(theme[foreground], theme[background]);

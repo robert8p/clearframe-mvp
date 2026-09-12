@@ -15,9 +15,13 @@ SUITES = [
     ROOT / "cogni-signup-onboarding-e2e.py",
     ROOT / "cogni-monetization-prestore-e2e.py",
 ]
-TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "A brighter day, Cogni", "Find your next focus", "Your learning, in orbit", "Find your starting point"}
+TOP_HEADINGS = {"Cogni Route E2E", "Cogni Signup E2E", "A brighter day, Cogni", "Discover", "Your learning, in orbit", "Find your starting point"}
 DISPLAY_ALIASES = {
-    "Find your focus": "Find your next focus",
+    "Skills": "Discover",
+    "Skills tab": "Discover tab",
+    "Search skills": "Search topics",
+    "No skills match yet": "No topics match yet",
+    "Find your focus": "Discover",
     "Your progress, in perspective": "Your learning, in orbit",
     "See what’s changing": "Your learning, in orbit",
 }

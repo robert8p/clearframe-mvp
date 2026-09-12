@@ -99,7 +99,7 @@ export function ProgressHistoryCard({ history, showUpgrade, onUpgrade }: {
 
   return <Card>
     <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
-      <Eyebrow>Skill history</Eyebrow>
+      <Eyebrow>Topic history</Eyebrow>
       <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>{history.access === "full" ? "All available history" : `Recent ${history.windowDays ?? history.freeDays} days`}</Text>
     </View>
     {selected && latest ? <>
@@ -107,9 +107,9 @@ export function ProgressHistoryCard({ history, showUpgrade, onUpgrade }: {
         <Title size={23}>{selected.skillName}</Title>
         <Body muted style={{ fontSize: 14, lineHeight: 21 }}>Latest score: {latest.score} / 100 · {historyDateLabel(latest.date)}</Body>
       </View>
-      {series.length > 1 ? <HistoryButton testID="progress-history-skill-selector" label={choosing ? "Close skill choices" : `Change skill · ${series.length} available`}
+      {series.length > 1 ? <HistoryButton testID="progress-history-skill-selector" label={choosing ? "Close topic choices" : `Change topic - ${series.length} available`}
         expanded={choosing} onPress={() => setChoosing(value => !value)} /> : null}
-      {choosing ? <View accessibilityRole="radiogroup" accessibilityLabel="Choose a skill history" style={{ gap: 8 }}>
+      {choosing ? <View accessibilityRole="radiogroup" accessibilityLabel="Choose a topic history" style={{ gap: 8 }}>
         {series.map(item => <HistorySkill key={item.skillId} id={item.skillId} label={item.skillName} observations={item.observations}
           selected={item.skillId === selected.skillId} onPress={() => { setSelectedId(item.skillId); setPageIndex(0); setChoosing(false); }} />)}
       </View> : null}

@@ -2,8 +2,7 @@ import React from "react";
 import { Redirect, router } from "expo-router";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { ActionLink, Body, EditorialPanel, Eyebrow, LoadingState, PrimaryButton, Screen, SectionHeader, Title } from "@/components/ui";
+import { ActionLink, Body, EditorialPanel, Eyebrow, HeroPanel, LoadingState, PrimaryButton, Screen, SectionHeader, Title } from "@/components/ui";
 import { RefreshNotice, SkillShelf, SkillTile, TrainingCard } from "@/components/learning-surfaces";
 import { DailyLens, DeviceToolsNotice, PracticeRhythm, ToolkitShortcut } from "@/components/practice-tools";
 import { CogniLogo, CogniMark } from "@/components/brand";
@@ -51,11 +50,7 @@ export default function HomeScreen() {
       <View accessibilityLabel={`${profile.profile.current_streak ?? 0} day streak`} style={{ minWidth: 48, minHeight: 48, borderRadius: 24, borderWidth: 1, borderColor: "rgba(245,158,11,.38)", backgroundColor: "rgba(245,158,11,.08)", alignItems: "center", justifyContent: "center", boxShadow: profile.profile.current_streak ? glow.warm : undefined }}><CogniIcon name="spark" size={20} color={profile.profile.current_streak ? colors.gold : colors.soft} /></View>
     </View>
 
-    <LinearGradient colors={["rgba(37,99,235,.30)", "rgba(139,92,246,.17)", "rgba(15,23,42,.90)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ minHeight: 222, borderRadius: radius.xl, borderWidth: 1, borderColor: "rgba(111,168,255,.34)", padding: 20, overflow: "hidden", boxShadow: glow.blue }}>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", right: -12, top: 8, opacity: .92 }}><CogniMark size={132} /></View>
-      <View style={{ maxWidth: "66%", gap: 7, paddingTop: 6 }}><Eyebrow>Today</Eyebrow><Title size={31}>A brighter day, {firstName}</Title><Body muted style={{ fontSize: 14.5, lineHeight: 21 }}>{meta?.text ?? "A few focused minutes can move your learning forward."}</Body></View>
-      <View style={{ position: "absolute", left: 20, right: 20, bottom: 17, height: 1, backgroundColor: "rgba(148,163,184,.16)" }} />
-    </LinearGradient>
+    <HeroPanel eyebrow="Today" title={`A brighter day, ${firstName}`} body={meta?.text ?? "A few focused minutes can move your learning forward."} minHeight={0} renderArtwork={(size) => <CogniMark size={size} />} footer={<View style={{ height: 1, backgroundColor: "rgba(148,163,184,.16)" }} />} />
 
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
       <Stat label="day streak" value={String(profile.profile.current_streak ?? 0)} icon="spark" />
@@ -74,10 +69,10 @@ export default function HomeScreen() {
 
     <EditorialPanel style={{ borderColor: "rgba(34,211,238,.25)" }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}><View style={{ flex: 1, gap: 5 }}><Eyebrow>Your progress</Eyebrow><Title size={22}>{average === null ? "Your starting point is taking shape" : `${Math.round(average * 100)}% recent performance`}</Title><Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19, ...typography.body }}>{profile.summary.answers} answers saved · {profile.profile.xp ?? 0} practice XP</Text></View><View style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(34,211,238,.08)", borderWidth: 1, borderColor: "rgba(34,211,238,.24)" }}><CogniIcon name="progress" size={27} color={colors.cyan} /></View></View>
-      <Body muted style={{ fontSize: 13, lineHeight: 20 }}>{average === null ? "Your first answers begin your skill map. There is nothing to catch up on." : "Based on your latest up to 200 answers—not a measure of intelligence or a ranking against other people."}</Body>
-      <ActionLink label="View progress" hint="Explore the evidence and history behind your skill scores" onPress={() => router.navigate("/(tabs)/progress")} />
+      <Body muted style={{ fontSize: 13, lineHeight: 20 }}>{average === null ? "Your first answers begin your topic map. There is nothing to catch up on." : "Based on your latest up to 200 answers—not a measure of intelligence or a ranking against other people."}</Body>
+      <ActionLink label="View progress" hint="Explore the evidence and history behind your topic scores" onPress={() => router.navigate("/(tabs)/progress")} />
     </EditorialPanel>
 
-    {next.length ? <View style={{ gap: 12 }}><SectionHeader title="Choose your next focus" action={<ActionLink label="See all skills" onPress={() => router.navigate("/(tabs)/skills")} />} />{next.map(row => <SkillTile key={row.skill_id} row={row} pro={needsProForFocusedPractice} onPress={() => { const slug = skillDetails(row)?.slug; if (slug) openFocusedPractice(slug, "home_focus"); }} />)}</View> : null}
+    {next.length ? <View style={{ gap: 12 }}><SectionHeader title="Choose your next focus" action={<ActionLink label="Browse topics" onPress={() => router.navigate("/(tabs)/skills")} />} />{next.map(row => <SkillTile key={row.skill_id} row={row} pro={needsProForFocusedPractice} onPress={() => { const slug = skillDetails(row)?.slug; if (slug) openFocusedPractice(slug, "home_focus"); }} />)}</View> : null}
   </Screen>;
 }

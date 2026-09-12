@@ -19,6 +19,9 @@ function screen(file, overrides = {}) {
     useCallback: fn => fn, useMemo: fn => fn(), useEffect: () => {},
   };
   const router = { canGoBack: () => overrides.canGoBack ?? false, back: () => navigation.push('back'), replace: path => navigation.push(path), push: path => navigation.push(path) };
+  if (overrides.canDismiss !== undefined) router.canDismiss = () => overrides.canDismiss;
+  if (overrides.dismiss) router.dismiss = () => navigation.push('dismiss');
+  if (overrides.dismissTo) router.dismissTo = path => navigation.push(`dismissTo:${path}`);
   const pkg = { identifier: 'annual', kind: 'annual', priceString: '$24.00', productId: 'cogni_pro_annual', introText: null };
   const entitlement = {
     isPro: false, stateReliable: true, entitlement: null, billingStatus: 'ready', billingMessage: null,
@@ -34,10 +37,11 @@ function screen(file, overrides = {}) {
     'react-native': { ...named('Text TextInput View Pressable ActivityIndicator Switch'), Alert: { alert: (...args) => alerts.push(args) }, Platform: { OS: 'android' }, Linking: { openURL: async () => {} } },
     'expo-linear-gradient': { LinearGradient: 'LinearGradient' },
     'expo-router': { router, Redirect: 'Redirect', useLocalSearchParams: () => overrides.params ?? {}, useFocusEffect: effect => { if (!focused) { focused = true; effects.push(effect); } } },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => overrides.insets ?? { top: 0, right: 0, bottom: 0, left: 0 } },
     'expo-linking': { createURL: path => `cogni://${path}` },
     '@/components/ui': named('ActionLink Body Card Eyebrow PrimaryButton Screen Title LoadingState ErrorState'),
     '@/components/brand': named('CogniLogo CogniMark'), '@/components/form-field': named('FormField'),
-    '@/components/interaction-cues': named('CompactAction'), '@/components/option-picker': named('OptionPicker'),
+    '@/components/interaction-cues': named('CompactAction'), '@/components/option-picker': named('OptionPicker'), '@/components/achievements': named('AchievementShelf'),
     '@/lib/audience': { isMobileAudience: () => true, mobileAudienceMeta: () => ({ label: 'Everyday learner' }) },
     '@/lib/context-options': { functionLabelForAudience: () => 'Interests', functionOptionsForAudience: () => [], goalOptionsForAudience: () => [] },
     '@/lib/notebook': { useNotebook: () => ({ clear: async () => {} }) },
@@ -77,6 +81,14 @@ test('Disabled monetisation presents the free preview and a deep-link-safe exit'
   assert(!nodes(tree).some(node => node.props?.label?.startsWith('Subscribe')));
   control(tree, 'Continue learning').onPress(); assert.deepEqual(app.navigation, ['/(tabs)/home']);
   control(tree, 'Restore purchases').onPress(); await tick(); assert.deepEqual(app.calls, ['restore']);
+});
+test('Profile preview paywall Not now exits the modal below Android system chrome', async () => {
+  const app = screen('paywall', { params: { source: 'profile' }, dismissTo: true, insets: { top: 80, right: 0, bottom: 0, left: 0 } });
+  const tree = app.render();
+  const root = nodes(tree).find(node => node.type === 'Screen');
+  assert(root.props.contentStyle.paddingTop >= 96);
+  control(tree, 'Not now').onPress();
+  assert.deepEqual(app.navigation, ['dismissTo:/(tabs)/profile']);
 });
 test('Unverified entitlement state cannot launch a purchase even if its handler is invoked', async () => {
   const app = screen('paywall', { entitlement: { stateReliable: false, config: { monetizationEnabled: true } } });

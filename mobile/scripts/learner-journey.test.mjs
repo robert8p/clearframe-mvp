@@ -29,7 +29,7 @@ function mount(relative, { props = {}, request = async () => outcome, clock = ()
   const ui = Object.fromEntries(['Screen', 'Body', 'Card', 'EditorialPanel', 'SectionHeader', 'Eyebrow', 'Title', 'PrimaryButton', 'ProgressBar', 'ActionLink', 'ErrorState', 'LoadingState'].map(name => [name, name]));
   const imports = {
     react,
-    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Keyboard: { dismiss() {} }, AccessibilityInfo: { announceForAccessibility() {} }, Animated: { View: 'Animated.View', Value: class { constructor(value){ this.value=value; } setValue(value){ this.value=value; } stopAnimation(){} interpolate(){ return 1; } }, sequence(){ return { start(){} }; }, spring(){ return {}; }, timing(){ return {}; }, loop(){ return { start(){}, stop(){} }; } } },
+    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', useWindowDimensions: () => ({ width: 430, fontScale: 1 }), Keyboard: { dismiss() {} }, AccessibilityInfo: { announceForAccessibility() {} }, Animated: { View: 'Animated.View', Value: class { constructor(value){ this.value=value; } setValue(value){ this.value=value; } stopAnimation(){} interpolate(){ return 1; } }, sequence(){ return { start(){} }; }, spring(){ return {}; }, timing(){ return {}; }, loop(){ return { start(){}, stop(){} }; } } },
     'expo-linear-gradient': { LinearGradient: 'LinearGradient' },
     '@/components/brand': { CogniMark: 'CogniMark' },
     '@/components/form-field': { FormField: 'FormField' },
@@ -115,7 +115,7 @@ test('Resume skips only saved session questions; feedback scrolls once and compl
   const result = f.nodes().find(n => n.props.onLayout); const event = { nativeEvent: { layout: { y: 800 } } };
   result.props.onLayout(event); result.props.onLayout(event); assert.deepEqual(f.scrolls.at(-1), { y: 788, animated: false });
   assert.equal(f.scrolls.filter(s => s.y === 788).length, 1); f.press('Finish training');
-  assert(f.text().includes('answers are saved')); const finish = f.find('Back to skills').props.onPress; finish(); finish(); await f.flush(); assert.equal(finished, 1);
+  assert(f.text().includes('answers are saved')); const finish = f.find('Back to Discover').props.onPress; finish(); finish(); await f.flush(); assert.equal(finished, 1);
 });
 
 for (const typed of [false, true]) test(`Lesson reflection ${typed ? 'with private text' : 'without typing'} completes without sending text`, async () => {

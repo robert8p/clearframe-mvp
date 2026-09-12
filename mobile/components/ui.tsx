@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Image, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions, type ScrollViewProps, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions, type ScrollViewProps, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { CogniMark } from "@/components/brand";
@@ -7,16 +7,29 @@ import { useReducedMotion } from "@/lib/accessibility";
 import { colors, gradients, glow, motion, radius, typography } from "@/lib/theme";
 
 type ScreenProps = ScrollViewProps & { refreshing?: boolean; onRefresh?: () => void; contentStyle?: StyleProp<ViewStyle>; atmospheric?: boolean };
+type HeroPanelProps = {
+  eyebrow?: string;
+  title: string;
+  body?: string;
+  children?: React.ReactNode;
+  footer?: React.ReactNode;
+  minHeight?: number;
+  titleSize?: number;
+  artworkSize?: number;
+  tone?: "blue" | "gold" | "quiet";
+  renderArtwork?: (size: number, compact: boolean) => React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+};
 
 function AmbientBackdrop({ atmospheric = true }: { atmospheric?: boolean }) {
   return (
     <View pointerEvents="none" accessible={false} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       <LinearGradient colors={[colors.bgDeep, colors.bg, "#09162C"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", inset: 0 }} />
-      {atmospheric ? <Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{ position: "absolute", top: -58, right: -86, width: 430, height: 430, opacity: .18 }} /> : null}
-      <LinearGradient colors={[...gradients.ambient]} locations={[0, .38, .68, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 520 }} />
-      <View style={{ position: "absolute", left: -120, top: 260, width: 300, height: 300, borderRadius: 150, backgroundColor: "rgba(37,99,235,.06)", boxShadow: glow.blue }} />
-      <View style={{ position: "absolute", right: -130, top: 510, width: 280, height: 280, borderRadius: 140, backgroundColor: "rgba(139,92,246,.045)", boxShadow: glow.violet }} />
-      {[{l:"12%",t:86,s:2},{l:"28%",t:164,s:1.5},{l:"78%",t:116,s:2},{l:"90%",t:286,s:1.5},{l:"63%",t:356,s:1.5}].map((dot,index)=><View key={index} style={{position:"absolute",left:dot.l as `${number}%`,top:dot.t,width:dot.s,height:dot.s,borderRadius:2,backgroundColor:"rgba(248,250,252,.42)"}}/>)}
+      {atmospheric ? <>
+        <LinearGradient colors={[...gradients.ambient]} locations={[0, .38, .68, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 520 }} />
+        <LinearGradient colors={["transparent", "rgba(34,211,238,.10)", "rgba(139,92,246,.08)", "transparent"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", left: -40, right: -40, top: 210, height: 360 }} />
+        {[{l:"12%",t:86,s:2},{l:"28%",t:164,s:1.5},{l:"78%",t:116,s:2},{l:"90%",t:286,s:1.5},{l:"63%",t:356,s:1.5}].map((dot,index)=><View key={index} style={{position:"absolute",left:dot.l as `${number}%`,top:dot.t,width:dot.s,height:dot.s,borderRadius:2,backgroundColor:"rgba(248,250,252,.42)"}}/>)}
+      </> : null}
     </View>
   );
 }
@@ -43,6 +56,33 @@ export const Screen = React.forwardRef<ScrollView, ScreenProps>(function Screen(
     </View>
   );
 });
+
+export function HeroPanel({ eyebrow, title, body, children, footer, minHeight, titleSize = 31, artworkSize = 128, tone = "blue", renderArtwork, style }: HeroPanelProps) {
+  const { width, fontScale } = useWindowDimensions();
+  const compact = width < 390 || fontScale > 1.22;
+  const visualSize = compact ? Math.min(artworkSize, 88) : artworkSize;
+  const palette = tone === "gold"
+    ? ["rgba(245,158,11,.22)", "rgba(139,92,246,.20)", "rgba(37,99,235,.16)", "rgba(15,23,42,.96)"] as const
+    : tone === "quiet"
+      ? ["rgba(18,33,61,.92)", "rgba(15,23,42,.96)"] as const
+      : ["rgba(37,99,235,.30)", "rgba(139,92,246,.17)", "rgba(15,23,42,.94)"] as const;
+  const borderColor = tone === "gold" ? "rgba(251,191,36,.36)" : tone === "quiet" ? colors.line : "rgba(111,168,255,.34)";
+  return (
+    <LinearGradient colors={palette} start={{ x: tone === "gold" ? 1 : 0, y: 0 }} end={{ x: tone === "gold" ? 0 : 1, y: 1 }} style={[{ minHeight, borderRadius: radius.xl, borderWidth: 1, borderColor, padding: compact ? 18 : 20, gap: 15, overflow: "hidden", boxShadow: tone === "gold" ? glow.warm : glow.blue }, style]}>
+      <LinearGradient pointerEvents="none" accessible={false} colors={["rgba(255,255,255,.035)", "transparent"]} style={{ position: "absolute", inset: 0 }} />
+      <View style={{ flexDirection: compact || !renderArtwork ? "column" : "row", alignItems: compact ? "flex-start" : "center", gap: compact ? 12 : 18 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
+          {eyebrow ? <Eyebrow style={tone === "gold" ? { color: colors.gold } : undefined}>{eyebrow}</Eyebrow> : null}
+          <Title size={compact ? Math.min(titleSize, 29) : titleSize}>{title}</Title>
+          {body ? <Body muted style={{ fontSize: 14.5, lineHeight: 22 }}>{body}</Body> : null}
+        </View>
+        {renderArtwork ? <View pointerEvents="none" accessible={false} style={{ alignSelf: compact ? "center" : "center", width: visualSize, minHeight: visualSize, flexShrink: 0, alignItems: "center", justifyContent: "center", opacity: compact ? .74 : .9 }}>{renderArtwork(visualSize, compact)}</View> : null}
+      </View>
+      {children}
+      {footer ? <View style={{ gap: 8 }}>{footer}</View> : null}
+    </LinearGradient>
+  );
+}
 
 export function Card({ children, style, variant = "quiet" }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; variant?: "quiet" | "glass" | "solid" }) {
   const base: ViewStyle = {
@@ -72,7 +112,7 @@ export function Body({ children, muted = false, style }: { children: React.React
 }
 
 export function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
-  return <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}><Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 20, lineHeight: 27, ...typography.heading }}>{title}</Text>{action}</View>;
+  return <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}><Text accessibilityRole="header" style={{ flex: 1, minWidth: 190, color: colors.text, fontSize: 20, lineHeight: 27, ...typography.heading }}>{title}</Text>{action}</View>;
 }
 
 export function Pill({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
@@ -82,16 +122,20 @@ export function Pill({ children, accent = false }: { children: React.ReactNode; 
 export function PrimaryButton({ label, onPress, disabled = false, secondary = false, loading = false, accessibilityHint, trailingArrow = false, testID }: {
   label: string; onPress: () => void; disabled?: boolean; secondary?: boolean; loading?: boolean; accessibilityHint?: string; trailingArrow?: boolean; testID?: string;
 }) {
+  const { width, fontScale } = useWindowDimensions();
+  const compact = width < 360 || fontScale > 1.3;
   const reducedMotion = useReducedMotion(); const scale = useRef(new Animated.Value(1)).current; const [focused, setFocused] = useState(false); const blocked = disabled || loading;
   useEffect(() => { if (reducedMotion || blocked) { scale.stopAnimation(); scale.setValue(1); } return () => scale.stopAnimation(); }, [blocked, reducedMotion, scale]);
   const animate = (value: number) => { if (reducedMotion || blocked) { scale.setValue(1); return; } Animated.spring(scale, { toValue: value, damping: 22, stiffness: 300, useNativeDriver: true }).start(); };
-  const content = <View pointerEvents="none" style={{ minHeight: 56, paddingHorizontal: 20, paddingVertical: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>{loading ? <ActivityIndicator accessible={false} color={colors.white} size="small" /> : null}<Text style={{ flexShrink: 1, textAlign: "center", color: colors.white, fontSize: 15.5, lineHeight: 22, ...typography.label }}>{label}</Text>{trailingArrow && !loading ? <View accessible={false} style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center" }}><View style={{ width: 8, height: 8, borderTopWidth: 1.8, borderRightWidth: 1.8, borderColor: colors.white, transform: [{ rotate: "45deg" }], marginLeft: -3 }} /></View> : null}</View>;
+  const content = <View pointerEvents="none" style={{ minHeight: 56, paddingHorizontal: compact ? 16 : 20, paddingVertical: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: compact ? 8 : 10 }}>{loading ? <ActivityIndicator accessible={false} color={colors.white} size="small" /> : null}<Text style={{ flexShrink: 1, minWidth: 0, textAlign: "center", color: colors.white, fontSize: 15.5, lineHeight: 22, ...typography.label }}>{label}</Text>{trailingArrow && !loading ? <View accessible={false} style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center" }}><View style={{ width: 8, height: 8, borderTopWidth: 1.8, borderRightWidth: 1.8, borderColor: colors.white, transform: [{ rotate: "45deg" }], marginLeft: -3 }} /></View> : null}</View>;
   return <Animated.View style={{ transform: [{ scale }], borderRadius: radius.pill, borderWidth: focused ? 2 : 0, borderColor: colors.white, padding: focused ? 1 : 3, boxShadow: secondary || blocked ? undefined : glow.blue }}><Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={accessibilityHint} accessibilityState={{ disabled: blocked, busy: loading }} disabled={blocked} onPress={onPress} onPressIn={() => animate(.985)} onPressOut={() => animate(1)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={({ pressed }) => ({ opacity: disabled && !loading ? .45 : pressed ? .9 : 1, minHeight: 56, borderRadius: radius.pill, overflow: "hidden", borderWidth: secondary ? 1 : 0, borderColor: secondary ? colors.lineStrong : "transparent", backgroundColor: secondary ? "rgba(18,33,61,.88)" : undefined })}>{secondary ? content : <LinearGradient colors={[...gradients.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>{content}</LinearGradient>}</Pressable></Animated.View>;
 }
 
 /** Signature daily action. Warm light is deliberately limited to the trailing edge
  * so the control remains premium rather than looking like a generic neon CTA. */
 export function TrainButton({ label = "Train", onPress, disabled = false, loading = false, accessibilityHint, testID }: { label?: string; onPress: () => void; disabled?: boolean; loading?: boolean; accessibilityHint?: string; testID?: string }) {
+  const { width, fontScale } = useWindowDimensions();
+  const compact = width < 360 || fontScale > 1.25;
   const reducedMotion = useReducedMotion();
   const scale = useRef(new Animated.Value(1)).current;
   const breathe = useRef(new Animated.Value(0)).current;
@@ -109,10 +153,10 @@ export function TrainButton({ label = "Train", onPress, disabled = false, loadin
   return (
     <Animated.View style={{ transform: [{ scale }], borderRadius: radius.pill, boxShadow: blocked ? undefined : "0 14px 44px rgba(37,99,235,.40)" }}>
       {!blocked ? <Animated.View pointerEvents="none" style={{ position: "absolute", inset: -4, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(34,211,238,.62)", opacity: glowOpacity }} /> : null}
-      <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={accessibilityHint} accessibilityState={{ disabled: blocked, busy: loading }} disabled={blocked} onPress={onPress} onPressIn={() => press(.965)} onPressOut={() => press(1)} style={({ pressed }) => ({ minHeight: 68, borderRadius: radius.pill, overflow: "hidden", opacity: disabled && !loading ? .48 : pressed ? .92 : 1 })}>
-        <LinearGradient colors={[...gradients.train]} locations={[0, .34, .72, 1]} start={{ x: 0, y: .5 }} end={{ x: 1, y: .5 }} style={{ minHeight: 68, paddingHorizontal: 22, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 13, borderWidth: 1, borderColor: "rgba(255,255,255,.22)", borderRadius: radius.pill }}>
-          <CogniMark size={32} animated={!blocked} />
-          {loading ? <ActivityIndicator accessible={false} color={colors.white} size="small" /> : <Text style={{ color: colors.white, fontSize: 19, lineHeight: 25, ...typography.heading }}>{label}</Text>}
+      <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={accessibilityHint} accessibilityState={{ disabled: blocked, busy: loading }} disabled={blocked} onPress={onPress} onPressIn={() => press(.965)} onPressOut={() => press(1)} style={({ pressed }) => ({ minHeight: compact ? 64 : 68, borderRadius: radius.pill, overflow: "hidden", opacity: disabled && !loading ? .48 : pressed ? .92 : 1 })}>
+        <LinearGradient colors={[...gradients.train]} locations={[0, .34, .72, 1]} start={{ x: 0, y: .5 }} end={{ x: 1, y: .5 }} style={{ minHeight: compact ? 64 : 68, paddingHorizontal: compact ? 16 : 22, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: compact ? 9 : 13, borderWidth: 1, borderColor: "rgba(255,255,255,.22)", borderRadius: radius.pill }}>
+          <CogniMark size={compact ? 26 : 32} animated={!blocked} />
+          {loading ? <ActivityIndicator accessible={false} color={colors.white} size="small" /> : <Text style={{ flexShrink: 1, minWidth: 0, textAlign: "center", color: colors.white, fontSize: compact ? 17 : 19, lineHeight: compact ? 23 : 25, ...typography.heading }}>{label}</Text>}
           {!loading ? <View accessible={false} style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center" }}><View style={{ width: 9, height: 9, borderTopWidth: 2, borderRightWidth: 2, borderColor: colors.white, transform: [{ rotate: "45deg" }], marginLeft: -4 }} /></View> : null}
         </LinearGradient>
       </Pressable>
@@ -139,7 +183,7 @@ export function ProgressRing({ value, label }: { value: number | null; label?: s
 }
 
 export function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
-  return <View accessible accessibilityLabel={`${label}: ${value}${hint ? `. ${hint}` : ""}`} style={{ flex: 1, minWidth: 0, paddingVertical: 5, gap: 3 }}><Text style={{ color: colors.soft, fontSize: 11.5, lineHeight: 17, textTransform: "uppercase", ...typography.eyebrow }}>{label}</Text><Text style={{ color: colors.text, fontSize: 27, lineHeight: 33, ...typography.metric, fontVariant: ["tabular-nums"] }}>{value}</Text>{hint ? <Text style={{ color: colors.muted, fontSize: 12.5, lineHeight: 18, ...typography.body }}>{hint}</Text> : null}</View>;
+  return <View accessible accessibilityLabel={`${label}: ${value}${hint ? `. ${hint}` : ""}`} style={{ flex: 1, minWidth: 96, paddingVertical: 5, gap: 3 }}><Text style={{ color: colors.soft, fontSize: 11.5, lineHeight: 17, textTransform: "uppercase", ...typography.eyebrow }}>{label}</Text><Text style={{ color: colors.text, fontSize: 27, lineHeight: 33, ...typography.metric, fontVariant: ["tabular-nums"] }}>{value}</Text>{hint ? <Text style={{ color: colors.muted, fontSize: 12.5, lineHeight: 18, ...typography.body }}>{hint}</Text> : null}</View>;
 }
 
 export function LoadingState({ label = "Connecting your knowledge…" }: { label?: string }) {

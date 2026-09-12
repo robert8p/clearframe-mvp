@@ -1,4 +1,4 @@
-name: Cogni 0.6.0 Connected Knowledge Android release
+name: Cogni 0.6.1 Connected Knowledge Android release
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: cogni-060-release
+  group: cogni-061-release
   cancel-in-progress: true
 
 permissions:
@@ -41,16 +41,16 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: mobile/package-lock.json
-      - name: Validate exact 0.6.0 mobile source
+      - name: Validate exact 0.6.1 mobile source
         working-directory: mobile
         run: |
           set -euo pipefail
-          node -e "const a=require('./app.json').expo;if(a.version!=='0.6.0'||a.android.package!=='app.gocogni.cogni'||a.extra.eas.projectId!=='24fc0fea-5e66-4365-a82c-ac668aded7d0')process.exit(1)"
+          node -e "const a=require('./app.json').expo;if(a.version!=='0.6.1'||a.android.package!=='app.gocogni.cogni'||a.extra.eas.projectId!=='24fc0fea-5e66-4365-a82c-ac668aded7d0')process.exit(1)"
           npm ci --include=dev --no-audit --no-fund
           npx expo install --check
-          npm run validate 2>&1 | tee /tmp/cogni-060-validate.txt
-          npx expo-doctor 2>&1 | tee /tmp/cogni-060-doctor.txt
-          npx expo export --platform android --output-dir /tmp/cogni-060-export 2>&1 | tee /tmp/cogni-060-export.txt
+          npm run validate 2>&1 | tee /tmp/cogni-061-validate.txt
+          npx expo-doctor 2>&1 | tee /tmp/cogni-061-doctor.txt
+          npx expo export --platform android --output-dir /tmp/cogni-061-export 2>&1 | tee /tmp/cogni-061-export.txt
           git diff --exit-code
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
@@ -67,8 +67,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cogni-060-validation
-          path: /tmp/cogni-060-*.txt
+          name: cogni-061-validation
+          path: /tmp/cogni-061-*.txt
           retention-days: 30
 
   expo:
@@ -94,15 +94,15 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p /tmp/cogni-060-expo
-          npx eas-cli@21.7.1 build --platform android --profile preview --non-interactive --no-wait --json > /tmp/cogni-060-expo/request.json
+          mkdir -p /tmp/cogni-061-expo
+          npx eas-cli@21.7.1 build --platform android --profile preview --non-interactive --no-wait --json > /tmp/cogni-061-expo/request.json
           python3 - <<'PY'
           import json,os
           from pathlib import Path
-          b=json.loads(Path('/tmp/cogni-060-expo/request.json').read_text())[0]
+          b=json.loads(Path('/tmp/cogni-061-expo/request.json').read_text())[0]
           assert b['platform']=='ANDROID' and b['gitCommitHash']==os.environ['SOURCE_COMMIT']
           with open(os.environ['GITHUB_ENV'],'a') as f:f.write('EAS_BUILD_ID='+b['id']+'\n')
-          Path('/tmp/cogni-060-expo/request-summary.json').write_text(json.dumps({'id':b['id'],'sourceCommit':b['gitCommitHash'],'buildPage':'https://expo.dev/accounts/cogniapp/projects/cogni/builds/'+b['id']},indent=2))
+          Path('/tmp/cogni-061-expo/request-summary.json').write_text(json.dumps({'id':b['id'],'sourceCommit':b['gitCommitHash'],'buildPage':'https://expo.dev/accounts/cogniapp/projects/cogni/builds/'+b['id']},indent=2))
           PY
       - name: Await cloud completion and download exact APK
         env:
@@ -112,7 +112,7 @@ jobs:
           import json,os,subprocess,time
           from pathlib import Path
           from urllib.parse import urlparse
-          root=Path('/tmp/cogni-060-expo'); errors=0
+          root=Path('/tmp/cogni-061-expo'); errors=0
           for _ in range(220):
               try:
                   p=subprocess.run(['npx','eas-cli@21.7.1','build:view',os.environ['EAS_BUILD_ID'],'--json'],text=True,capture_output=True,timeout=90)
@@ -128,9 +128,9 @@ jobs:
               if b['status'] in ['ERRORED','CANCELED']: raise RuntimeError(str(b.get('error') or b['status']))
               time.sleep(30)
           else: raise TimeoutError('Expo build did not finish')
-          assert b['gitCommitHash']==os.environ['SOURCE_COMMIT'] and b['appVersion']=='0.6.0' and b['platform']=='ANDROID' and b['distribution']=='INTERNAL'
+          assert b['gitCommitHash']==os.environ['SOURCE_COMMIT'] and b['appVersion']=='0.6.1' and b['platform']=='ANDROID' and b['distribution']=='INTERNAL'
           url=b['artifacts']['buildUrl']; u=urlparse(url); assert u.scheme=='https' and (u.hostname=='expo.dev' or u.hostname.endswith('.expo.dev'))
-          subprocess.run(['curl','--fail','--location','--retry','5','--max-time','300',url,'--output',str(root/'Cogni-0.6.0-preview.apk')],check=True)
+          subprocess.run(['curl','--fail','--location','--retry','5','--max-time','300',url,'--output',str(root/'Cogni-0.6.1-preview.apk')],check=True)
           out={'id':b['id'],'version':b['appVersion'],'buildNumber':b['appBuildVersion'],'sourceCommit':b['gitCommitHash'],'buildPage':'https://expo.dev/accounts/cogniapp/projects/cogni/builds/'+b['id'],'downloadUrl':url,'status':'FINISHED'}
           (root/'completion.json').write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
           PY
@@ -138,7 +138,7 @@ jobs:
       - name: Verify APK identity, signing and permission surface
         run: |
           set -euo pipefail
-          OUT=/tmp/cogni-060-expo; APK="$OUT/Cogni-0.6.0-preview.apk"
+          OUT=/tmp/cogni-061-expo; APK="$OUT/Cogni-0.6.1-preview.apk"
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
           SIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)
@@ -147,7 +147,7 @@ jobs:
           "$SIGNER" verify --verbose --print-certs "$APK" > "$OUT/signature.txt"
           "$ZIPALIGN" -c -P 16 4 "$APK"
           grep -q "package: name='app.gocogni.cogni'" "$OUT/badging.txt"
-          grep -q "versionName='0.6.0'" "$OUT/badging.txt"
+          grep -q "versionName='0.6.1'" "$OUT/badging.txt"
           grep -q "targetSdkVersion:'36'" "$OUT/badging.txt"
           grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$OUT/signature.txt"
           tr -d ':' < "$OUT/signature.txt" | tr '[:upper:]' '[:lower:]' > /tmp/signer.txt
@@ -157,16 +157,16 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,re
           from pathlib import Path
-          root=Path('/tmp/cogni-060-expo'); b=json.loads((root/'completion.json').read_text())
+          root=Path('/tmp/cogni-061-expo'); b=json.loads((root/'completion.json').read_text())
           version=int(re.search(r"versionCode='(\d+)'",(root/'badging.txt').read_text()).group(1))
           assert version>70 and str(version)==b['buildNumber']
-          b['versionCode']=version; b['sha256']=hashlib.sha256((root/'Cogni-0.6.0-preview.apk').read_bytes()).hexdigest(); b['apkIdentityAndSigning']='passed'
+          b['versionCode']=version; b['sha256']=hashlib.sha256((root/'Cogni-0.6.1-preview.apk').read_bytes()).hexdigest(); b['apkIdentityAndSigning']='passed'
           (root/'metadata.json').write_text(json.dumps(b,indent=2)); print(json.dumps(b,indent=2))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: cogni-060-expo-apk
-          path: /tmp/cogni-060-expo/
+          name: cogni-061-expo-apk
+          path: /tmp/cogni-061-expo/
           retention-days: 30
           if-no-files-found: error
 
@@ -178,7 +178,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
-      APK_PATH: /tmp/cogni-060-expo/Cogni-0.6.0-preview.apk
+      APK_PATH: /tmp/cogni-061-expo/Cogni-0.6.1-preview.apk
       SUPABASE_URL: https://dhklfrqhsmofqrawfdjz.supabase.co
       SUPABASE_KEY: sb_publishable_Y1pPv4wp0DcQuq3XCEB0GA_mJtNPE2b
       API_LEVEL: '36'
@@ -189,8 +189,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: cogni-060-expo-apk
-          path: /tmp/cogni-060-expo
+          name: cogni-061-expo-apk
+          path: /tmp/cogni-061-expo
       - name: Provision isolated test identity
         env:
           MATRIX_LANE: ${{ matrix.lane }}
@@ -204,7 +204,7 @@ jobs:
               try:
                   with urllib.request.urlopen(r,timeout=30) as x:return x.status,json.load(x)
               except urllib.error.HTTPError as e:return e.code,json.load(e)
-          email=f"cogni.e2e.060.{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}.{os.environ['MATRIX_LANE']}@example.com"; password='Cg'+secrets.token_hex(18)+'9a'
+          email=f"cogni.e2e.061.{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}.{os.environ['MATRIX_LANE']}@example.com"; password='Cg'+secrets.token_hex(18)+'9a'
           print('::add-mask::'+email); print('::add-mask::'+password)
           status,_=post('/auth/v1/signup',{'email':email,'password':password,'data':{'full_name':'Cogni Route E2E'}}); assert status==200
           status,b=post('/auth/v1/token?grant_type=password',{'email':email,'password':password}); assert status==200 and b.get('access_token')
@@ -231,8 +231,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu software -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -no-metrics
           script: |
-            if [ "${{ matrix.lane }}" = visual ]; then timeout 1400 bash -o pipefail -c 'python3 -u .github/scripts/cogni-bounded-run.py cogni-045-visual-e2e.py 2>&1 | tee /tmp/cogni-060-visual.txt'; fi
-            if [ "${{ matrix.lane }}" = regression ]; then timeout 1700 bash -o pipefail -c 'python3 -u .github/scripts/cogni-bounded-run.py cogni-auth-route-e2e-fixed.py 2>&1 | tee /tmp/cogni-060-regression.txt'; fi
+            if [ "${{ matrix.lane }}" = visual ]; then timeout 1400 bash -o pipefail -c 'python3 -u .github/scripts/cogni-bounded-run.py cogni-045-visual-e2e.py 2>&1 | tee /tmp/cogni-061-visual.txt'; fi
+            if [ "${{ matrix.lane }}" = regression ]; then timeout 1700 bash -o pipefail -c 'python3 -u .github/scripts/cogni-bounded-run.py cogni-auth-route-e2e-fixed.py 2>&1 | tee /tmp/cogni-061-regression.txt'; fi
       - name: Delete isolated test identity
         if: always()
         run: |
@@ -255,11 +255,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cogni-060-installed-${{ matrix.lane }}
+          name: cogni-061-installed-${{ matrix.lane }}
           path: |
-            /tmp/cogni-060-visual.txt
-            /tmp/cogni-060-regression.txt
-            /tmp/cogni-060-visual/
+            /tmp/cogni-061-visual.txt
+            /tmp/cogni-061-regression.txt
+            /tmp/cogni-061-visual/
             /tmp/cogni-auth-route-api-36/
             /tmp/cogni-copy-feedback-api-36/
             /tmp/cogni-profile-password-api-36/
@@ -275,19 +275,19 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: cogni-060-expo-apk
-          path: /tmp/cogni-060-expo
+          name: cogni-061-expo-apk
+          path: /tmp/cogni-061-expo
       - name: Record certified release
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          root=Path('/tmp/cogni-060-expo'); meta=json.loads((root/'metadata.json').read_text())
+          root=Path('/tmp/cogni-061-expo'); meta=json.loads((root/'metadata.json').read_text())
           record={**meta,'installedVisualQA':'passed Android API 36 at 100% and 160% font scale','installedRegression':'passed Android API 36','backendRegression':'passed Deno checks and tests','releaseStatus':'CERTIFIED'}
-          Path('/tmp/cogni-060-release.json').write_text(json.dumps(record,indent=2)); print(json.dumps(record,indent=2))
+          Path('/tmp/cogni-061-release.json').write_text(json.dumps(record,indent=2)); print(json.dumps(record,indent=2))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: cogni-060-certified-release
-          path: /tmp/cogni-060-release.json
+          name: cogni-061-certified-release
+          path: /tmp/cogni-061-release.json
           retention-days: 30

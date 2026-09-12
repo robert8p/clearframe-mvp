@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const pluginSource = fs.readFileSync(new URL('../plugins/withAndroidFontScaleLayout.js', import.meta.url), 'utf8');
-const template = execFileSync('tar', ['-xOf', new URL('../node_modules/expo/template.tgz', import.meta.url).pathname, 'package/android/app/src/main/java/com/helloworld/MainApplication.kt'], { encoding: 'utf8' });
+const template = execFileSync('tar', ['-xOf', fileURLToPath(new URL('../node_modules/expo/template.tgz', import.meta.url)), 'package/android/app/src/main/java/com/helloworld/MainApplication.kt'], { encoding: 'utf8' });
 function apply(source, { rn = '0.81.5', expo = '54.0.37', language = 'kt', newArchEnabled = true } = {}) {
   const module = { exports: {} };
   const imports = {

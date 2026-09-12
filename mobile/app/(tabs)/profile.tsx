@@ -5,6 +5,7 @@ import { router, useFocusEffect } from "expo-router";
 import { FormField } from "@/components/form-field";
 import { CompactAction } from "@/components/interaction-cues";
 import { OptionPicker } from "@/components/option-picker";
+import { AchievementShelf } from "@/components/achievements";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isMobileAudience, mobileAudienceMeta } from "@/lib/audience";
@@ -182,12 +183,6 @@ export default function ProfileScreen() {
       : !config.monetizationEnabled
         ? "Paid subscriptions are not enabled in this preview. Daily learning, focused practice and available history are free to explore."
         : "Free plan. Your daily core learning remains available.";
-  const milestones = [
-    { icon: "⚡", label: "100 XP", unlocked: xp >= 100 },
-    { icon: "✓", label: "10 answers", unlocked: answers >= 10 },
-    { icon: "🔥", label: "3-day streak", unlocked: streak >= 3 },
-  ];
-
   return <Screen>
     <View style={{ gap: 5 }}><Eyebrow>Your account</Eyebrow><Title>Make Cogni yours</Title><Body muted>Manage your learning, feedback and account in one place.</Body></View>
     <Card style={{ alignItems: "center", gap: 10 }}>
@@ -197,7 +192,7 @@ export default function ProfileScreen() {
       <ActionLink label="Get help" onPress={() => router.push("/support")} />
     </Card>
 
-    <Card><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}><Eyebrow>Milestones</Eyebrow><Text style={{ color: colors.soft, fontSize: 12.5 }}>Progress markers</Text></View><View style={{ gap: 0 }}>{milestones.map((item, index) => <View accessible accessibilityLabel={`${item.label}. ${item.unlocked ? "Unlocked" : "Locked"}.`} key={item.label} style={{ minHeight: 62, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: index === milestones.length - 1 ? 0 : 1, borderBottomColor: colors.line }}><Text accessible={false} style={{ width: 30, fontSize: 21, textAlign: "center", opacity: item.unlocked ? 1 : .48 }}>{item.icon}</Text><View style={{ flex: 1, gap: 2 }}><Text style={{ color: colors.text, fontSize: 15.5, lineHeight: 21, fontWeight: "800" }}>{item.label}</Text><Text style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 12.5, lineHeight: 18, fontWeight: "700" }}>{item.unlocked ? "Unlocked" : "Not yet unlocked"}</Text></View><Text accessible={false} style={{ color: item.unlocked ? colors.green : colors.soft, fontSize: 18, fontWeight: "900" }}>{item.unlocked ? "✓" : "○"}</Text></View>)}</View></Card>
+    <AchievementShelf achievements={data.achievements ?? []} title="Your achievements" />
 
     <Card><Eyebrow>Learning context</Eyebrow><Body muted>Changing context never resets your scores, XP, streak or history. It changes the situations Cogni uses next.</Body><PrimaryButton label="Change learning context" secondary onPress={() => router.push("/onboarding")} /></Card>
 

@@ -54,7 +54,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ title: "Your learning context" }} />
         <Stack.Screen name="paywall" options={{ headerShown: false, presentation: "modal" }} />
-        <Stack.Screen name="toolkit" options={{ title: "Thinking toolkit" }} />
+        <Stack.Screen name="toolkit" options={{ title: "Saved ideas" }} />
         <Stack.Screen name="support" options={{ title: "Cogni Support" }} />
       </Stack.Protected>
 

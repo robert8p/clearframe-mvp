@@ -11,7 +11,7 @@ import { isMobileAudience, MOBILE_AUDIENCES, type MobileAudience } from "@/lib/a
 import { functionLabelForAudience, functionOptionsForAudience, goalOptionsForAudience, INDUSTRY_OPTIONS, ORGANISATION_SCALE_OPTIONS, RESPONSIBILITY_OPTIONS, STUDY_STAGE_OPTIONS } from "@/lib/context-options";
 import { colors, glow, radius, typography } from "@/lib/theme";
 import type { MobileProfileResponse } from "@/lib/types";
-import { Body, EditorialPanel, Eyebrow, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
+import { Body, EditorialPanel, Eyebrow, HeroPanel, LoadingState, PrimaryButton, Screen, Title } from "@/components/ui";
 
 function audienceMotif(slug: string, index: number): MotifKind { const v = slug.toLowerCase(); if (/student|study|learn/.test(v)) return "growth"; if (/leader|manager|professional|work/.test(v)) return "decisions"; return (["perspective", "reasoning", "growth", "decisions"] as MotifKind[])[index % 4]; }
 
@@ -51,11 +51,7 @@ export default function OnboardingScreen() {
   return <Screen>
     <View style={{ alignItems: "center", marginBottom: 2 }}><CogniLogo compact centered animated={false} /></View>
 
-    <LinearGradient colors={["rgba(37,99,235,.32)", "rgba(139,92,246,.18)", "rgba(15,23,42,.94)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ minHeight: 250, borderRadius: radius.xl, borderWidth: 1, borderColor: "rgba(111,168,255,.36)", padding: 20, overflow: "hidden", boxShadow: glow.blue }}>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", right: -18, top: 12, opacity: .78 }}><CogniMark size={142} /></View>
-      <View style={{ maxWidth: "70%", gap: 8 }}><Eyebrow>Personalised learning</Eyebrow><Title size={31}>Make Cogni relevant to you</Title><Body muted style={{ fontSize: 14.5, lineHeight: 21 }}>Choose the situations and goals that matter now. Cogni uses that context to make practice feel useful from the start.</Body></View>
-      <View style={{ position: "absolute", left: 20, right: 20, bottom: 18, flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: colors.cyan }} /><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: "rgba(71,85,105,.42)" }} /><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: "rgba(71,85,105,.42)" }} /></View>
-    </LinearGradient>
+    <HeroPanel eyebrow="Personalised learning" title="Make Cogni relevant to you" body="Choose the situations and goals that matter now. Cogni uses that context to make practice feel useful from the start." minHeight={0} renderArtwork={(size) => <CogniMark size={size} />} footer={<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: colors.cyan }} /><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: "rgba(71,85,105,.42)" }} /><View style={{ flex: 1, height: 5, borderRadius: 999, backgroundColor: "rgba(71,85,105,.42)" }} /></View>} />
 
     <EditorialPanel style={{ padding: 17 }}><Eyebrow>Which situations matter to you?</Eyebrow><Body muted>This is about context—not ability—and you can change it later without losing progress.</Body></EditorialPanel>
 
@@ -79,6 +75,6 @@ export default function OnboardingScreen() {
     {selectedAudience ? <EditorialPanel style={{ borderColor: "rgba(34,211,238,.28)" }}><View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}><CogniMark size={52} animated={false} /><View style={{ flex: 1 }}><Eyebrow>What happens next</Eyebrow><Title size={23}>A short starting check</Title></View></View><Body muted>Plan for about 4–6 minutes. Cogni uses those answers to choose a useful starting focus. Your early scores become more reliable as you practise.</Body><Body muted style={{ fontSize: 13.5, lineHeight: 20 }}>It is not a pass/fail test. Your learning context changes which situations feel relevant; it does not raise or lower your assumed ability.</Body></EditorialPanel> : null}
 
     {error ? <Text accessibilityLiveRegion="assertive" selectable style={{ color: colors.danger, lineHeight: 22, ...typography.body }}>{error}</Text> : null}
-    <PrimaryButton label={busy ? "Saving…" : "Continue to Cogni"} disabled={busy || !selectedAudience} loading={busy} trailingArrow onPress={() => void save()} />
+    <PrimaryButton label={busy ? "Saving…" : "Continue to Cogni"} disabled={busy} loading={busy} trailingArrow onPress={() => void save()} />
   </Screen>;
 }

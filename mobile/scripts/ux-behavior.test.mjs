@@ -3,16 +3,19 @@ import { test } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
+const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(scriptsDir, '..');
 const cache = new Map();
 function load(relative) {
-  const filename = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', relative);
+  const filename = path.resolve(rootDir, relative);
   if (cache.has(filename)) return cache.get(filename);
   const source = fs.readFileSync(filename, 'utf8');
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
   const module = { exports: {} }; cache.set(filename, module.exports);
-  const localRequire = (name) => name === 'react-native' ? { Platform: { OS: 'android' } } : name.startsWith('.') ? load(path.relative(path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'), path.resolve(path.dirname(filename), name + '.ts'))) : require(name);
+  const localRequire = (name) => name === 'react-native' ? { Platform: { OS: 'android' } } : name.startsWith('.') ? load(path.relative(rootDir, path.resolve(path.dirname(filename), name + '.ts'))) : require(name);
   new Function('require', 'module', 'exports', outputText)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -92,7 +95,7 @@ test('Home training action reflects actual progress and opens next activity dire
   assert.equal(getTrainingAction({state:'training',session:{answeredChallengeIds:[]}}).label,'Train now');
   assert.equal(getTrainingAction({state:'training',session:{answeredChallengeIds:['a']}}).label,'Continue training');
   for(const state of ['diagnostic','training']) assert.equal(getTrainingAction({state}).href,'/(tabs)/train/session');
-  assert.equal(getTrainingAction({state:'lesson'}).href,'/(tabs)/train/lesson');assert.equal(getTrainingAction({state:'complete'}).href,'/(tabs)/skills');
+  assert.equal(getTrainingAction({state:'lesson'}).href,'/(tabs)/train/lesson');assert.equal(getTrainingAction({state:'complete'}).href,'/(tabs)/skills');assert.equal(getTrainingAction({state:'complete'}).label,'Discover topics');
   assert.equal(getTrainingAction({state:'unavailable'}).href,null);assert.equal(getTrainingAction(null).href,null);
 });
 test('Display repair fixes nested escaped whitespace without mutating the original',()=>{

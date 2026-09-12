@@ -59,6 +59,17 @@ export type SkillScore = {
   last_seen_at?: string | null;
   skills?: { name?: string; slug?: string; description?: string } | { name?: string; slug?: string; description?: string }[] | null;
 };
+export type AchievementTone = "common" | "uncommon" | "rare" | "epic" | "legendary";
+export type AchievementProgress = {
+  slug: string;
+  name: string;
+  description: string;
+  tone: AchievementTone;
+  target: number;
+  current: number;
+  unlocked: boolean;
+  earnedAt?: string | null;
+};
 export type MobileProfileResponse = {
   profile: {
     id: string;
@@ -78,5 +89,13 @@ export type MobileProfileResponse = {
     last_session_date?: string | null;
   };
   skillScores: SkillScore[];
-  summary: { answers: number; averageScore: number | null };
+  achievements?: AchievementProgress[];
+  summary: {
+    answers: number;
+    averageScore: number | null;
+    completedSessions?: number;
+    completedLessons?: number;
+    measuredSkills?: number;
+    masteryScore?: number | null;
+  };
 };

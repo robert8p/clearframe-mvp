@@ -1,18 +1,51 @@
 import React from "react";
-import { Image, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { colors, radius } from "@/lib/theme";
+import { CogniMark } from "@/components/brand";
+import { colors, glow, radius } from "@/lib/theme";
 
 const decorative={accessible:false,importantForAccessibility:"no-hide-descendants" as const,pointerEvents:"none" as const};
 
-/** Portrait artwork taken from the approved concept and bundled for deterministic offline rendering. */
-export function HeroArtwork({height=340,style}:{height?:number;style?:StyleProp<ImageStyle>}) {
-  return <Image {...decorative} source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={[{width:"100%",height},style]}/>;
+const stars=[
+  {left:"9%",top:34,size:1.5,opacity:.44},{left:"18%",top:92,size:1,opacity:.32},{left:"31%",top:48,size:1.5,opacity:.50},
+  {left:"44%",top:128,size:1,opacity:.28},{left:"62%",top:44,size:2,opacity:.46},{left:"74%",top:104,size:1.4,opacity:.36},
+  {left:"86%",top:66,size:1,opacity:.42},{left:"92%",top:152,size:1.5,opacity:.26}
+] as const;
+
+function StarField({opacity=1}:{opacity?:number}) {
+  return <>{stars.map((star,index)=><View key={index} style={{position:"absolute",left:star.left,top:star.top,width:star.size,height:star.size,borderRadius:star.size,backgroundColor:`rgba(248,250,252,${star.opacity*opacity})`}}/>)}</>;
 }
 
-/** Atmospheric concept-derived artwork for editorial panels and image-led cards. */
+function HorizonBand({height}:{height:number}) {
+  const bandHeight=Math.max(84,height*.38);
+  return <>
+    <View style={{position:"absolute",left:"-22%",right:"-22%",bottom:-bandHeight*.68,height:bandHeight,borderTopLeftRadius:999,borderTopRightRadius:999,borderWidth:1,borderColor:"rgba(111,168,255,.34)",backgroundColor:"rgba(8,26,55,.68)",boxShadow:"0 -12px 36px rgba(37,99,235,.20)"}}/>
+    <LinearGradient colors={["transparent","rgba(34,211,238,.32)","rgba(248,250,252,.10)","transparent"]} locations={[0,.42,.50,1]} start={{x:0,y:0}} end={{x:1,y:0}} style={{position:"absolute",left:"-16%",right:"-16%",bottom:bandHeight*.12,height:3}}/>
+  </>;
+}
+
+/** Abstract orbital brand artwork rendered natively, with no character imagery. */
+export function HeroArtwork({height=340,style}:{height?:number;style?:StyleProp<ViewStyle>}) {
+  const markSize=Math.min(190,Math.max(118,height*.52));
+  return <View {...decorative} style={[{width:"100%",height,overflow:"hidden",backgroundColor:colors.bgDeep},style]}>
+    <LinearGradient colors={[colors.bgDeep,"#0A2147",colors.bg]} start={{x:.08,y:0}} end={{x:.94,y:1}} style={{position:"absolute",inset:0}}/>
+    <StarField opacity={.9}/>
+    <HorizonBand height={height}/>
+    <LinearGradient colors={["transparent","rgba(245,158,11,.16)","rgba(37,99,235,.08)"]} locations={[0,.68,1]} start={{x:0,y:.45}} end={{x:1,y:.45}} style={{position:"absolute",left:"28%",right:"-12%",bottom:Math.max(14,height*.13),height:Math.max(58,height*.20)}}/>
+    <View style={{position:"absolute",right:"9%",top:Math.max(30,height*.16),opacity:.95,boxShadow:glow.blue}}><CogniMark size={markSize}/></View>
+  </View>;
+}
+
+/** Atmospheric abstract artwork for editorial panels and image-led cards. */
 export function LandscapeArtwork({height=188}:{height?:number}) {
-  return <View {...decorative} style={{height,width:"100%",overflow:"hidden",backgroundColor:colors.bgRaised}}><Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:"100%",height}}/><LinearGradient colors={["rgba(6,13,31,.04)","rgba(7,16,34,.78)"]} locations={[.25,1]} style={{position:"absolute",inset:0}}/></View>;
+  const markSize=Math.min(104,Math.max(68,height*.54));
+  return <View {...decorative} style={{height,width:"100%",overflow:"hidden",backgroundColor:colors.bgRaised}}>
+    <LinearGradient colors={["#061026","#0B2247","#081026"]} start={{x:0,y:0}} end={{x:1,y:1}} style={{position:"absolute",inset:0}}/>
+    <StarField opacity={.56}/>
+    <HorizonBand height={height}/>
+    <View style={{position:"absolute",right:24,top:Math.max(18,height*.16),opacity:.86}}><CogniMark size={markSize}/></View>
+    <LinearGradient colors={["rgba(6,13,31,.04)","rgba(7,16,34,.78)"]} locations={[.25,1]} style={{position:"absolute",inset:0}}/>
+  </View>;
 }
 
 /** Compatibility export: old cards that ask for a mountain scene now receive real artwork. */
@@ -36,7 +69,12 @@ export function motifForSkill(name:string):MotifKind {const v=name.toLowerCase()
 
 /** Small image-led thumbnail for saved ideas/editorial rows. */
 export function InsightArtwork({kind="perspective",size=58}:{kind?:MotifKind;size?:number}) {
-  return <View {...decorative} style={{width:size,height:size,borderRadius:radius.md,overflow:"hidden",backgroundColor:colors.panel2}}><Image source={require("../assets/approved-dreamscape.png")} resizeMode="cover" fadeDuration={0} style={{width:size,height:size,transform:[{scale:kind==="growth"?1.35:kind==="decisions"?1.18:1.5}]}}/><LinearGradient colors={kind==="growth"?["rgba(44,159,128,.04)","rgba(18,57,58,.44)"]:kind==="decisions"?["rgba(213,158,92,.03)","rgba(57,41,70,.45)"]:["rgba(63,169,219,.02)","rgba(21,41,76,.46)"]} style={{position:"absolute",inset:0}}/></View>;
+  const bg=kind==="growth"?["rgba(20,184,166,.30)","rgba(18,57,58,.80)"]:kind==="decisions"?["rgba(245,158,11,.26)","rgba(57,41,70,.82)"]:["rgba(59,130,246,.28)","rgba(21,41,76,.86)"];
+  return <View {...decorative} style={{width:size,height:size,borderRadius:radius.md,overflow:"hidden",backgroundColor:colors.panel2,alignItems:"center",justifyContent:"center"}}>
+    <LinearGradient colors={bg as [string,string]} start={{x:0,y:0}} end={{x:1,y:1}} style={{position:"absolute",inset:0}}/>
+    <SkillMotif kind={kind} size={size*.68}/>
+    <LinearGradient colors={["rgba(255,255,255,.06)","transparent"]} style={{position:"absolute",inset:0}}/>
+  </View>;
 }
 
 export type CogniIconName="home"|"skills"|"train"|"progress"|"profile"|"bookmark"|"arrow"|"spark";

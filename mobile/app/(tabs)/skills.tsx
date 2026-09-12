@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { Redirect, router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { FormField } from "@/components/form-field";
 import { RefreshNotice, SkillTile } from "@/components/learning-surfaces";
-import { ActionLink, Body, EditorialPanel, Eyebrow, ErrorState, LoadingState, Screen, SectionHeader, Title } from "@/components/ui";
+import { ActionLink, Body, EditorialPanel, ErrorState, HeroPanel, LoadingState, Screen, SectionHeader, Title } from "@/components/ui";
 import { CogniMark } from "@/components/brand";
 import { SkillMotif } from "@/components/visuals";
 import { apiFetch } from "@/lib/api";
@@ -15,36 +14,32 @@ import { colors, glow, radius, typography } from "@/lib/theme";
 import type { MobileProfileResponse } from "@/lib/types";
 
 const loadSkills = (signal: AbortSignal) => apiFetch<MobileProfileResponse>("/api/mobile/profile", { signal });
-const filters = [{ id: "all", label: "All skills" }, { id: "practised", label: "Practised" }, { id: "new", label: "New" }] as const;
+const filters = [{ id: "all", label: "All topics" }, { id: "practised", label: "In progress" }, { id: "new", label: "New" }] as const;
 
 export default function SkillsScreen() {
   const { data, loading, refreshing, error, reload } = useFocusResource(loadSkills);
   const { needsProForFocusedPractice, openFocusedPractice } = useProGate();
   const [query, setQuery] = useState(""); const [filter, setFilter] = useState<"all" | "practised" | "new">("all");
   if (loading) return <LoadingState />;
-  if (!data) return <ErrorState message={error || "Could not load skills."} onRetry={() => void reload()} />;
+  if (!data) return <ErrorState message={error || "Could not load topics."} onRetry={() => void reload()} />;
   if (!data.profile.audience_segment) return <Redirect href="/onboarding" />;
   const rows = selectSkills(data.skillScores, query, filter);
 
   return <Screen refreshing={refreshing} onRefresh={() => void reload()}>
-    <LinearGradient colors={["rgba(37,99,235,.30)", "rgba(139,92,246,.18)", "rgba(15,23,42,.94)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ minHeight: 190, padding: 20, borderRadius: radius.xl, borderWidth: 1, borderColor: "rgba(111,168,255,.34)", overflow: "hidden", boxShadow: glow.blue }}>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", right: -10, top: 8, opacity: .65 }}><CogniMark size={120} /></View>
-      <View style={{ maxWidth: "72%", gap: 7 }}><Eyebrow>Explore your thinking</Eyebrow><Title size={30}>Find your next focus</Title><Body muted style={{ fontSize: 14.5, lineHeight: 21 }}>Choose a skill for a focused round. A score is a starting point for practice, not a label.</Body></View>
-      <View pointerEvents="none" accessible={false} style={{ position: "absolute", left: 20, bottom: 16, flexDirection: "row", gap: 7 }}><SkillMotif kind="reasoning" size={38} /><SkillMotif kind="perspective" size={38} /><SkillMotif kind="growth" size={38} /></View>
-    </LinearGradient>
+    <HeroPanel eyebrow="Discovery / library" title="Discover" body="Explore a universe of thinking topics. Cogni adapts what you see to your goals, progress and recent practice." minHeight={0} renderArtwork={(size) => <CogniMark size={size} />} footer={<View pointerEvents="none" accessible={false} style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}><SkillMotif kind="reasoning" size={38} /><SkillMotif kind="perspective" size={38} /><SkillMotif kind="growth" size={38} /></View>} />
 
     {error ? <RefreshNotice message={error} onRetry={() => void reload()} /> : null}
-    <FormField label="Search skills" accessibilityLabel="Search skills" placeholder="Try evidence, reasoning or AI" placeholderTextColor={colors.soft} value={query} onChangeText={setQuery} autoCorrect={false} returnKeyType="search" />
+    <FormField label="Search topics" accessibilityLabel="Search topics" placeholder="Try evidence, reasoning or AI" placeholderTextColor={colors.soft} value={query} onChangeText={setQuery} autoCorrect={false} returnKeyType="search" />
 
-    <View accessibilityRole="radiogroup" accessibilityLabel="Filter skills" style={{ flexDirection: "row", padding: 4, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(15,23,42,.82)", gap: 4 }}>
+    <View accessibilityRole="radiogroup" accessibilityLabel="Filter topics" style={{ flexDirection: "row", padding: 4, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(15,23,42,.82)", gap: 4 }}>
       {filters.map(item => <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={item.label} accessibilityState={{ checked: filter === item.id }} onPress={() => setFilter(item.id)} style={({ pressed }) => ({ flex: 1, minHeight: 48, paddingVertical: 11, paddingHorizontal: 8, borderRadius: 14, borderWidth: filter === item.id ? 1 : 0, borderColor: filter === item.id ? "rgba(34,211,238,.40)" : "transparent", backgroundColor: filter === item.id ? "rgba(37,99,235,.28)" : "transparent", opacity: pressed ? .8 : 1, alignItems: "center", justifyContent: "center", boxShadow: filter === item.id ? glow.cyan : undefined })}><Text style={{ color: filter === item.id ? colors.text : colors.muted, fontSize: 13.5, lineHeight: 19, ...typography.label }}>{item.label}</Text></Pressable>)}
     </View>
 
-    <SectionHeader title={`${rows.length} ${rows.length === 1 ? "skill" : "skills"}`} />
-    {needsProForFocusedPractice ? <Text style={{ color: colors.muted, fontSize: 12.5, lineHeight: 18, ...typography.body }}>Focused practice is a Cogni Pro feature. Your daily core practice remains available.</Text> : null}
-    <View style={{ gap: 11 }}>{rows.map(row => <SkillTile key={row.skill_id} row={row} pro={needsProForFocusedPractice} onPress={() => { const slug = skillDetails(row)?.slug; if (slug) openFocusedPractice(slug, "skills_map"); }} />)}</View>
+    <SectionHeader title={`${rows.length} ${rows.length === 1 ? "topic" : "topics"}`} />
+    {needsProForFocusedPractice ? <Text style={{ color: colors.muted, fontSize: 12.5, lineHeight: 18, ...typography.body }}>Focused topic practice is a Cogni Pro feature. Your daily core practice remains available.</Text> : null}
+    <View style={{ gap: 11 }}>{rows.map(row => <SkillTile key={row.skill_id} row={row} pro={needsProForFocusedPractice} onPress={() => { const slug = skillDetails(row)?.slug; if (slug) openFocusedPractice(slug, "discover_map"); }} />)}</View>
 
-    {!rows.length ? <EditorialPanel><View style={{ alignSelf: "center", padding: 12 }}><CogniMark size={86} animated={false} /></View><Title size={22}>{data.skillScores.length ? "No skills match yet" : "Your map starts here"}</Title><Body muted>{data.skillScores.length ? "Try a broader search or switch to All skills." : "Complete the starting check to begin your personal skill map."}</Body>{data.skillScores.length ? <ActionLink label="Reset filters" onPress={() => { setQuery(""); setFilter("all"); }} /> : <ActionLink label="Go to Train" onPress={() => router.navigate("/(tabs)/train")} />}</EditorialPanel> : null}
+    {!rows.length ? <EditorialPanel><View style={{ alignSelf: "center", padding: 12 }}><CogniMark size={86} animated={false} /></View><Title size={22}>{data.skillScores.length ? "No topics match yet" : "Your map starts here"}</Title><Body muted>{data.skillScores.length ? "Try a broader search or switch to All topics." : "Complete the starting check to begin your personal topic map."}</Body>{data.skillScores.length ? <ActionLink label="Reset filters" onPress={() => { setQuery(""); setFilter("all"); }} /> : <ActionLink label="Go to Train" onPress={() => router.navigate("/(tabs)/train")} />}</EditorialPanel> : null}
     <Body muted style={{ fontSize: 12.5, lineHeight: 19 }}>Evidence describes the practice behind a score. It is not a formal assessment or a statistical confidence rating.</Body>
   </Screen>;
 }

@@ -1,4 +1,5 @@
 import {
+  buildAchievementProgress,
   contentContextScore,
   contentEligibleForMoment,
   contextMode,
@@ -88,4 +89,15 @@ Deno.test("derived moment and labels are consistent with timezone", () => {
 Deno.test("invalid timezone falls back safely", () => {
   assert(safeTimeZone("Not/AZone") === "Europe/London", "invalid timezone should use safe fallback");
   assert(safeTimeZone("Australia/Sydney") === "Australia/Sydney", "valid timezone should survive validation");
+});
+
+Deno.test("achievement rules expose visible progress without inventing unlocks", () => {
+  const achievements = buildAchievementProgress({ xp: 120, answers: 24, streak: 7, completedSessions: 5, completedLessons: 1, measuredSkills: 4, masteredSkills: 0 });
+  const bySlug = new Map(achievements.map((achievement) => [achievement.slug, achievement]));
+  assert(bySlug.get("first-lesson")?.unlocked === true, "first lesson should unlock from completed lessons");
+  assert(bySlug.get("first-principles")?.unlocked === true, "50 XP achievement should unlock");
+  assert(bySlug.get("seven-day-signal")?.unlocked === true, "7-day streak achievement should unlock");
+  assert(bySlug.get("concept-explorer")?.unlocked === false, "24 answers should not unlock the 25-answer achievement");
+  assert(bySlug.get("concept-explorer")?.current === 24, "partial achievement progress should be returned");
+  assert(bySlug.get("galaxy-mind")?.unlocked === false, "mastery should come from mastered topics, not total XP");
 });

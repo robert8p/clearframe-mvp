@@ -306,17 +306,17 @@ def test_all_tabs() -> None:
     wait_for("A brighter day, Cogni", timeout=45, scroll=True)
     assert_absent("Something went wrong")
 
-    tap("Skills")
-    wait_for("Find your focus", timeout=45)
-    wait_for("Search skills", timeout=45, scroll=True)
+    tap("Discover")
+    wait_for("Discover", timeout=45)
+    wait_for("Search topics", timeout=45, scroll=True)
     capture_evidence("skills-search-and-filters")
-    # The shared input helper already dismisses the keyboard; a second Back leaves Skills.
-    input_text("Search skills", "zzzcogninomatch", scroll=True)
-    wait_for("No skills match yet", timeout=30, scroll=True)
+    # The shared input helper already dismisses the keyboard; a second Back leaves Discover.
+    input_text("Search topics", "zzzcogninomatch", scroll=True)
+    wait_for("No topics match yet", timeout=30, scroll=True)
     tap("Reset filters", scroll=True)
     scroll_to_top()
-    wait_for("Find your focus", timeout=30)
-    wait_for("Skills", timeout=45)
+    wait_for("Discover", timeout=30)
+    wait_for("All topics", timeout=45)
     assert_absent("Something went wrong")
 
     tap("Train")
@@ -325,7 +325,7 @@ def test_all_tabs() -> None:
     assert_absent("Something went wrong")
 
     tap("Progress")
-    wait_for("Your progress, in perspective", timeout=45)
+    wait_for("Your learning, in orbit", timeout=45)
     assert_absent("Something went wrong")
 
     tap("Profile")

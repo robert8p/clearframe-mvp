@@ -166,7 +166,7 @@ def assert_no_literal_controls(label: str) -> None:
 
 def assert_equal_navigation_destinations() -> None:
     nodes = dump_ui("train-navigation")
-    labels = ["Home tab", "Skills tab", "Train tab", "Progress tab", "Profile tab"]
+    labels = ["Home tab", "Discover tab", "Train tab", "Progress tab", "Profile tab"]
     destinations: list[Node] = []
     for label in labels:
         matches_for_label = [node for node in nodes if label.casefold() in node.description.casefold()]
@@ -348,11 +348,12 @@ def main() -> int:
         wait_for("Continue starting check", timeout=45, scroll=True)
         live_large_action_size = training_action_dimensions("Continue starting check")
         capture("home-large-text-primary-action")
-        tap("Skills")
-        wait_for("Find your focus", timeout=45, scroll=True)
+        tap("Discover")
+        wait_for("Discover", timeout=45, scroll=True)
+        wait_for("Search topics", timeout=45, scroll=True)
         capture("skills-large-text")
         tap("Progress")
-        wait_for("See what’s changing", timeout=45, scroll=True)
+        wait_for("Your learning, in orbit", timeout=45, scroll=True)
         capture("progress-large-text")
         # Check a cold launch at the same scale as well as the live font change.
         # Earlier heading-only checks missed clipped Home text in screenshots.
